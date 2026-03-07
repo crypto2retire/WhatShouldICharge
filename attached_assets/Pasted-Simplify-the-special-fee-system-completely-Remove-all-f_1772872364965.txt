@@ -1,0 +1,139 @@
+Simplify the special fee system completely. Remove all 
+fee_confirmed logic and Pass 2 verification. Replace with 
+a clean flagging system and disclaimers.
+
+## THE NEW APPROACH
+
+Special items (TVs, mattresses, tires, propane tanks, 
+hazmat) are NEVER added to the price total.
+They are flagged in a separate section with a note.
+Two disclaimers are always shown on every estimate.
+
+## PART 1: UPDATE AI PROMPT
+
+Remove all fee_confirmed fields from the JSON format.
+Simplify special item handling:
+
+For any item that typically has a recycling or disposal fee,
+set is_special: true and include it in the items list normally.
+Do NOT calculate or mention dollar amounts for these items.
+Just identify them.
+
+Items that are always is_special: true:
+- Any flat screen TV (all sizes)
+- Any CRT television  
+- Mattress or box spring (any size)
+- Car tire or truck tire
+- Propane tank (any size)
+- Car battery
+- Paint cans or chemicals
+- Refrigerator with freon
+- Air conditioner (contains freon)
+- Fluorescent light tubes
+- Electronics with circuit boards
+
+Updated item JSON format - remove fee fields entirely:
+{
+  "name": "large flat screen tv",
+  "quantity": 1,
+  "category": "electronics",
+  "cubic_yards": 0.6,
+  "is_special": true
+}
+
+No special_fee, no fee_confirmed, no fee_note needed.
+
+## PART 2: UPDATE PRICING LOGIC
+
+Remove ALL special fee calculations from compute_pricing.
+Price is based ONLY on cubic yards and job type.
+```python
+def compute_pricing(items, cy_low, cy_mid, cy_high,
+                    rate_low, rate_high, premium_rate,
+                    min_charge, is_premium):
+    
+    if is_premium:
+        price_low = cy_low * premium_rate
+        price_high = cy_high * premium_rate
+    else:
+        price_low = cy_low * rate_low
+        price_high = cy_high * rate_high
+    
+    # Apply minimum charge
+    price_low = max(price_low, min_charge)
+    price_high = max(price_high, min_charge)
+    
+    # Collect special items for display only - no fee added
+    special_items = [
+        item for item in items 
+        if item.get('is_special')
+    ]
+    
+    return {
+        'price_low': round(price_low, 2),
+        'price_high': round(price_high, 2),
+        'special_items': special_items
+    }
+```
+
+## PART 3: UPDATE RESULTS DISPLAY
+
+### Price section — clean, no fee additions:
+Estimated Price Range
+$685 – $850
+Based on volume only
+
+### Special items section — shown separately:
+If any special items found, show a yellow/amber box 
+BELOW the price:
+♻️  Recycling Fee Items Detected
+The following items may have additional recycling
+or disposal fees:
+
+Large flat screen TV  ×1
+Paint cans and chemicals  ×1
+
+Recycling fees are not included in the estimate above.
+Your technician will confirm exact fees on arrival.
+
+Style: amber/yellow background (#78350f background, 
+#fef3c7 text), warning icon, rounded corners, 
+clearly separated from the price
+
+### Disclaimers section — always shown on every estimate:
+Show two disclaimers at the bottom of every result, 
+regardless of whether special items were found.
+Style: subtle, small text, gray, below everything else.
+📋 Important Notes
+♻️  Recycling & Disposal Fees
+Certain items require special handling and carry
+additional recycling or disposal fees regardless
+of whether they appear in these photos. This includes
+televisions, monitors, mattresses, tires, propane tanks,
+refrigerators, air conditioners, and hazardous materials.
+These fees are not reflected in the estimate above and
+will be confirmed by your technician on arrival.
+📸  Photo-Based Estimate
+This estimate is based solely on items visible in the
+provided photos. Any additional items not pictured will
+be assessed at standard rates upon arrival. Final pricing
+may vary based on actual job conditions.
+
+## PART 4: UPDATE ESTIMATE STORAGE
+
+When saving to estimates table, store special_items 
+as a JSON field so history shows which items were flagged.
+
+## PART 5: REMOVE PASS 2 ENTIRELY
+
+Remove the second Claude API call completely.
+Single pass only on every estimate.
+This cuts API cost in half.
+
+The disclaimers replace the need for AI verification 
+of special items — legally and practically.
+
+## PART 6: PDF / SHARE VIEW
+
+When estimate is shared or printed, both disclaimers 
+must appear. They are not optional. Always included.

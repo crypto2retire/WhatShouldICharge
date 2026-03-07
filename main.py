@@ -615,43 +615,15 @@ def calculate_price(result_data: dict, rate_low=35.0, rate_high=40.0, rate_premi
     price_low = cy_low * r_low
     price_high = cy_high * r_high
 
-    confirmed_fees = []
-    unconfirmed_warnings = []
-
-    for item in items:
-        if item.get("is_special"):
-            qty = int(item.get("quantity", 1))
-            fee = item.get("special_fee", 25.0) or 25.0
-            total_fee = qty * fee
-
-            if item.get("fee_confirmed", False):
-                confirmed_fees.append({
-                    "name": item.get("name", "Unknown"),
-                    "fee": total_fee,
-                    "note": item.get("fee_note", ""),
-                })
-                price_low += total_fee
-                price_high += total_fee
-            else:
-                unconfirmed_warnings.append({
-                    "name": item.get("name", "Unknown"),
-                    "potential_fee": total_fee,
-                    "note": item.get("fee_note", "Verify on site"),
-                })
-
     price_low = max(price_low, min_charge)
     price_high = max(price_high, min_charge)
 
-    potential_fees_total = sum(w["potential_fee"] for w in unconfirmed_warnings)
+    special_items = [
+        {"name": item.get("name", "Unknown"), "quantity": int(item.get("quantity", 1))}
+        for item in items if item.get("is_special")
+    ]
 
-    return (
-        round(price_low, 2),
-        round(price_high, 2),
-        round(cy_mid, 1),
-        confirmed_fees,
-        unconfirmed_warnings,
-        potential_fees_total,
-    )
+    return round(price_low, 2), round(price_high, 2), round(cy_mid, 1), special_items
 
 
 def compress_image(image_bytes: bytes, max_size_kb: int = 1000) -> bytes:
@@ -731,10 +703,7 @@ REQUIRED JSON FORMAT:
       "quantity": 1,
       "category": "furniture|appliance|electronics|debris|hazardous|other",
       "cubic_yards": 0.5,
-      "is_special": false,
-      "special_reason": "",
-      "fee_confirmed": false,
-      "fee_note": ""
+      "is_special": false
     }
   ],
   "totals": {
@@ -752,28 +721,23 @@ ITEM IDENTIFICATION RULES:
 - Identify every visible item individually, do not group unless identical
 - Assign cubic_yards to each item based on actual physical size
 - Look specifically along walls, in corners, behind other items
-- FLAT SCREEN TVs vs WINDOW SCREENS: Dark rectangular objects leaning against walls may be TVs OR window screens — distinguish carefully. A TV will have a visible stand base, port connections on the back/side, a brand logo, a glossy screen surface, or a thick plastic bezel. A window screen has a thin metal or wooden frame with mesh visible through it. Only flag as is_special: true with special_reason: "TV disposal fee" when you can positively identify TV features. When uncertain, do NOT flag as TV — instead add "possible TV or window screen, verify on site" in the notes field for the crew to check.
-- Mattresses/box springs = is_special: true
-- Tires = is_special: true
-- Propane tanks = is_special: true, special_reason: "hazardous"
+- FLAT SCREEN TVs vs WINDOW SCREENS: Dark rectangular objects leaning against walls may be TVs OR window screens — distinguish carefully. A TV will have a visible stand base, port connections on the back/side, a brand logo, a glossy screen surface, or a thick plastic bezel. A window screen has a thin metal or wooden frame with mesh visible through it. When uncertain, add "possible TV or window screen, verify on site" in the notes field for the crew to check.
 - Wheelchairs and medical equipment: note in items, not special fee but flag in notes for crew (may be donateable)
 
-SPECIAL FEE CONFIDENCE RULES:
-For any item with is_special: true (TV, mattress, tire, propane tank, hazmat):
-Set fee_confirmed: true ONLY if you can see at least TWO of these visual confirmations:
-- Clear item shape matching exactly what the item should look like
-- Brand name or logo visible
-- Associated accessories visible (remote, power cord, stand, packaging)
-- Item is in an expected location (TV on stand/shelf, mattress on bed frame)
-- Multiple angles confirm the same item
+SPECIAL ITEM FLAGGING — set is_special: true for ANY of these (do NOT calculate fees, just flag them):
+- Any flat screen TV (all sizes)
+- Any CRT television
+- Mattress or box spring (any size)
+- Car tire or truck tire
+- Propane tank (any size)
+- Car battery
+- Paint cans or chemicals
+- Refrigerator with freon
+- Air conditioner (contains freon)
+- Fluorescent light tubes
+- Electronics with circuit boards
 
-Set fee_confirmed: false if:
-- Item is partially obscured
-- Could be confused with another item (e.g. TV vs window screen)
-- Only one visual confirmation available
-- Poor lighting makes identification uncertain
-
-When fee_confirmed is false, add a fee_note explaining why (e.g. "dark rectangle visible but could be window screen — verify on site")
+These items may have recycling or disposal fees that vary by location. Just identify them and set is_special: true.
 
 JOB TYPE RULES — read carefully:
 STANDARD ($35-40/CY): Clean loads, easy access, under 8 CY, no stairs, no heavy items, no clutter
@@ -859,8 +823,8 @@ YOUR JOB — look at the photos carefully and verify:
    - If the report includes a flat screen TV, find it in the photos
    - A TV has: visible stand/base, ports on back/side, brand logo, power cable, or retail packaging nearby
    - A window screen has: thin metal or wooden frame, mesh/screen material visible through it, no stand
-   - If you see a window screen NOT a TV, remove the TV from the list, add window screen (no special fee)
-   - Only keep TV + $25 fee if you can visually confirm it is a TV
+   - If you see a window screen NOT a TV, remove the TV, add window screen (set is_special: false)
+   - Only keep is_special: true if you can visually confirm it is a TV
    - Add to verification_notes: what you saw and why you kept or removed the TV
 
    CARPET vs AREA RUG vs CARPET ROLL:
@@ -882,18 +846,10 @@ YOUR JOB — look at the photos carefully and verify:
    Look carefully for items the first estimator missed.
    Add anything significant you can see that was not listed.
 
-6. VERIFY SPECIAL FEES — use fee_confirmed field
-   For each is_special item, look at the photos and apply the SPECIAL FEE CONFIDENCE RULES:
-   Set fee_confirmed: true ONLY if you can see at least TWO visual confirmations:
-   - Clear item shape matching exactly
-   - Brand name or logo visible
-   - Associated accessories visible (remote, power cord, stand, packaging)
-   - Item is in an expected location (TV on stand/shelf, mattress on bed frame)
-   - Multiple angles confirm the same item
-
-   Set fee_confirmed: false if uncertain. Add fee_note explaining why.
-   For each unconfirmed special item (fee_confirmed: false), reduce confidence by 10 points.
-   Add unconfirmed special items to "verify_on_site" array.
+6. VERIFY SPECIAL ITEM FLAGS
+   For each is_special item, look at the photos and confirm you can actually see it.
+   If you cannot visually confirm a special item, either remove it or set is_special: false.
+   Add any uncertain special items to "verify_on_site" array.
 
 7. SANITY CHECK TOTAL CY
    Does the total CY make sense for what you can see?
@@ -1030,7 +986,7 @@ async def update_library_from_estimate(items: list):
                         item_category=item.get("category", "other"),
                         cubic_yards=cy,
                         is_special=bool(item.get("is_special", False)),
-                        special_fee=25.0 if item.get("is_special") else 0.0,
+                        special_fee=0.0,
                         confidence=0.7,
                         source="ai_learned",
                         times_seen=1,
@@ -1244,7 +1200,7 @@ async def run_two_pass_estimate(
         except Exception:
             pass
 
-        price_low, price_high, cy_mid, confirmed_fees, unconfirmed_warnings, potential_fees_total = calculate_price(
+        price_low, price_high, cy_mid, special_items = calculate_price(
             result_data,
             rate_low=user.price_per_cy_low or 35.0,
             rate_high=user.price_per_cy_high or 40.0,
@@ -1276,12 +1232,6 @@ async def run_two_pass_estimate(
 
         remaining = max(0, user.estimates_limit - user.estimates_used)
 
-        notes = result_data.get("notes", "")
-        if unconfirmed_warnings:
-            verify_lines = [f"  - {w['name']} (${w['potential_fee']:.0f} fee if confirmed)" for w in unconfirmed_warnings]
-            crew_note = "\n\nVERIFY BEFORE QUOTING:\n" + "\n".join(verify_lines) + "\nThese items could not be confirmed from photos alone. Confirm with customer before giving final price."
-            notes = notes.rstrip() + crew_note
-
         resp = {
             "id": estimate_id,
             "price_low": price_low,
@@ -1290,14 +1240,12 @@ async def run_two_pass_estimate(
             "items": result_data.get("items", []),
             "job_type": result_data.get("job_type", "standard"),
             "conditions": result_data.get("conditions", []),
-            "notes": notes,
+            "notes": result_data.get("notes", ""),
             "confidence": result_data.get("confidence", 75),
             "estimates_remaining": remaining,
             "verification_notes": result_data.get("verification_notes", ""),
             "verify_on_site": result_data.get("verify_on_site", []),
-            "confirmed_fees": confirmed_fees,
-            "unconfirmed_warnings": unconfirmed_warnings,
-            "potential_fees_total": potential_fees_total,
+            "special_items": special_items,
             "items_looked_up": lookups_done,
             "two_pass_verified": bool(pass2_json_str),
         }

@@ -457,7 +457,7 @@ ITEM IDENTIFICATION RULES:
 - Identify every visible item individually, do not group unless identical
 - Assign cubic_yards to each item based on actual physical size
 - Look specifically along walls, in corners, behind other items
-- FLAT SCREEN TVs: look carefully — often leaning against walls or furniture. Any TV = is_special: true, special_reason: "TV disposal fee"
+- FLAT SCREEN TVs: Examine ALL dark rectangular shapes carefully — TVs are often dark colored and blend into backgrounds. Look for the bezel edge, stand base, or screen glare. Any flat rectangular object leaning against a wall that could be a TV MUST be flagged as is_special: true, special_reason: "TV disposal fee". Check behind furniture and along walls — TVs are frequently missed. When in doubt, flag it as a TV.
 - Mattresses/box springs = is_special: true
 - Tires = is_special: true
 - Propane tanks = is_special: true, special_reason: "hazardous"

@@ -533,8 +533,6 @@
   .nav-link:hover { color: var(--text); }
   .market-info { background: rgba(22,163,74,0.08); border: 1px solid rgba(22,163,74,0.2); border-radius: 8px; padding: 10px 14px; font-size: 0.83rem; color: #22c55e; margin-top: 14px; display: none; }
   .market-info.visible { display: block; }
-  #verification-notes-card .notes-box { display: none; }
-  #verification-notes-card.expanded .notes-box { display: block; }
   .item-looked-up { color: #818cf8; font-size: 0.7rem; margin-left: 4px; }
 </style>
 <div class="nav-bar">
@@ -647,22 +645,27 @@
       <div class="items-grid" id="res-items"></div>
     </div>
 
-    <div id="res-verification" style="display:none;margin-top:14px;padding:10px 14px;border-radius:8px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);font-size:0.83rem;color:#22c55e;font-weight:500;"></div>
+    <div id="res-special-items" style="display:none;margin-top:14px;padding:14px 16px;border-radius:10px;background:rgba(120,53,15,0.15);border:1px solid rgba(245,158,11,0.3);"></div>
+
     <div id="res-lookups" style="display:none;margin-top:8px;padding:10px 14px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);font-size:0.83rem;color:#818cf8;font-weight:500;"></div>
-    <div id="res-verify-onsite" style="display:none;margin-top:8px;padding:10px 14px;border-radius:8px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);font-size:0.83rem;color:#f59e0b;font-weight:500;"></div>
-    <div id="res-unconfirmed-fees" style="display:none;margin-top:12px;padding:12px 16px;border-radius:10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);"></div>
-    <div id="res-potential-fees" style="display:none;margin-top:8px;text-align:center;font-size:0.85rem;color:#f59e0b;font-weight:500;"></div>
 
     <div class="market-info" id="res-market"></div>
-
-    <div class="card" id="verification-notes-card" style="display:none">
-      <div class="card-title" style="cursor:pointer" onclick="this.parentElement.classList.toggle('expanded')">Verification Details <span style="float:right;font-size:0.75rem;opacity:0.6">click to expand</span></div>
-      <div class="notes-box" id="res-verification-notes" style="display:none"></div>
-    </div>
 
     <div class="card" id="notes-card" style="display:none">
       <div class="card-title">Estimator Notes</div>
       <div class="notes-box" id="res-notes"></div>
+    </div>
+
+    <div id="res-disclaimers" style="margin-top:16px;padding:16px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);">
+      <div style="font-size:0.82rem;font-weight:600;color:var(--muted);margin-bottom:12px;">Important Notes</div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:0.78rem;font-weight:600;color:#f59e0b;margin-bottom:4px;">&#9851; Recycling &amp; Disposal Fees</div>
+        <div style="font-size:0.75rem;color:var(--muted);line-height:1.5;">Certain items require special handling and carry additional recycling or disposal fees regardless of whether they appear in these photos. This includes televisions, monitors, mattresses, tires, propane tanks, refrigerators, air conditioners, and hazardous materials. These fees are not reflected in the estimate above and will be confirmed by your technician on arrival.</div>
+      </div>
+      <div>
+        <div style="font-size:0.78rem;font-weight:600;color:#818cf8;margin-bottom:4px;">&#128247; Photo-Based Estimate</div>
+        <div style="font-size:0.75rem;color:var(--muted);line-height:1.5;">This estimate is based solely on items visible in the provided photos. Any additional items not pictured will be assessed at standard rates upon arrival. Final pricing may vary based on actual job conditions.</div>
+      </div>
     </div>
 
     <button id="new-estimate-btn">+ New Estimate</button>
@@ -871,8 +874,7 @@ function updateSubmitBtn() {
 submitBtn.addEventListener('click', submitEstimate);
 
 const STATUS_MESSAGES = {
-  analyzing: { text: 'Analyzing photos...', sub: 'Pass 1: AI is identifying all items' },
-  verifying: { text: 'Verifying estimate...', sub: 'Pass 2: Senior AI is double-checking accuracy' },
+  analyzing: { text: 'Analyzing photos...', sub: 'AI is identifying all items and estimating volume' },
   looking_up: { text: 'Looking up unknown items...', sub: 'Searching web for dimensions of new items' },
   complete: { text: 'Estimate ready!', sub: '' },
 };
@@ -964,7 +966,8 @@ function showResults(data) {
   resultsEl.classList.add('visible');
 
   document.getElementById('res-price').innerHTML =
-    `$${data.price_low.toLocaleString()} <span>–</span> $${data.price_high.toLocaleString()}`;
+    `$${data.price_low.toLocaleString()} <span>–</span> $${data.price_high.toLocaleString()}`
+    + `<div style="font-size:0.75rem;color:var(--muted);font-weight:400;margin-top:4px;">Based on volume only</div>`;
 
   document.getElementById('res-cy').textContent = data.cy_estimate + ' CY';
   document.getElementById('res-photos').textContent = photos.length;
@@ -1016,33 +1019,30 @@ function showResults(data) {
   (data.items || []).forEach(item => {
     const cat = item.category || 'other';
     const cyText = item.cubic_yards ? `${item.cubic_yards} CY` : '';
-    let specialText = '';
-    if (item.is_special) {
-      const fee = item.special_fee || 25;
-      if (item.fee_confirmed) {
-        specialText = `<div class="item-special" style="color:#22c55e">+$${fee} · ${item.special_reason || 'disposal fee'} ✓</div>`;
-      } else {
-        specialText = `<div class="item-special" style="color:#f59e0b">⚠️ +$${fee} if confirmed · ${item.fee_note || 'verify on site'}</div>`;
-      }
-    }
+    const specialTag = item.is_special ? `<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:4px;background:rgba(245,158,11,0.15);color:#f59e0b;font-size:0.68rem;font-weight:600;vertical-align:middle;">♻️ SPECIAL</span>` : '';
     const lookedUp = item.looked_up ? '<span class="item-looked-up" title="Dimensions found via web search">🔍</span>' : '';
     const row = document.createElement('div');
     row.className = 'item-row';
     row.innerHTML = `
       <div class="item-icon cat-${cat}">${catMap[cat] || '📦'}</div>
-      <div class="item-name">${item.name || 'Unknown item'}${lookedUp}${cyText ? ' <span style="color:var(--muted);font-size:0.78rem;font-weight:400">(' + cyText + ')</span>' : ''}</div>
+      <div class="item-name">${item.name || 'Unknown item'}${specialTag}${lookedUp}${cyText ? ' <span style="color:var(--muted);font-size:0.78rem;font-weight:400">(' + cyText + ')</span>' : ''}</div>
       <div class="item-qty">×${item.quantity || 1}</div>
-      ${specialText}
     `;
     itemsEl.appendChild(row);
   });
 
-  const verEl = document.getElementById('res-verification');
-  if (data.two_pass_verified) {
-    verEl.textContent = '✅ Verified by second-pass AI review';
-    verEl.style.display = 'block';
+  const specialEl = document.getElementById('res-special-items');
+  if (data.special_items && data.special_items.length > 0) {
+    let html = `<div style="font-weight:600;color:#fef3c7;margin-bottom:10px;font-size:0.85rem;">♻️ Recycling Fee Items Detected</div>`;
+    html += `<div style="font-size:0.78rem;color:#fde68a;margin-bottom:10px;">The following items may have additional recycling or disposal fees:</div>`;
+    data.special_items.forEach(si => {
+      html += `<div style="padding:4px 0;font-size:0.83rem;color:#fef3c7;font-weight:500;">${si.name}  ×${si.quantity}</div>`;
+    });
+    html += `<div style="font-size:0.75rem;color:#d4a050;margin-top:10px;font-style:italic;">Recycling fees are not included in the estimate above. Your technician will confirm exact fees on arrival.</div>`;
+    specialEl.innerHTML = html;
+    specialEl.style.display = 'block';
   } else {
-    verEl.style.display = 'none';
+    specialEl.style.display = 'none';
   }
 
   const lookupEl = document.getElementById('res-lookups');
@@ -1051,44 +1051,6 @@ function showResults(data) {
     lookupEl.style.display = 'block';
   } else {
     lookupEl.style.display = 'none';
-  }
-
-  const onsiteEl = document.getElementById('res-verify-onsite');
-  if (data.verify_on_site && data.verify_on_site.length > 0) {
-    onsiteEl.innerHTML = `⚠️ Verify on site:<br>` + data.verify_on_site.map(v => `• ${v}`).join('<br>');
-    onsiteEl.style.display = 'block';
-  } else {
-    onsiteEl.style.display = 'none';
-  }
-
-  const unconfFeesEl = document.getElementById('res-unconfirmed-fees');
-  if (data.unconfirmed_warnings && data.unconfirmed_warnings.length > 0) {
-    let html = `<div style="font-weight:600;color:#f59e0b;margin-bottom:8px;font-size:0.85rem;">📋 Verify on site before finalizing price:</div>`;
-    data.unconfirmed_warnings.forEach(w => {
-      html += `<div style="padding:4px 0;font-size:0.83rem;color:#d4a050;">⚠️ ${w.name} ($${w.potential_fee} fee if confirmed)${w.note ? ' — ' + w.note : ''}</div>`;
-    });
-    unconfFeesEl.innerHTML = html;
-    unconfFeesEl.style.display = 'block';
-  } else {
-    unconfFeesEl.style.display = 'none';
-  }
-
-  const potFeesEl = document.getElementById('res-potential-fees');
-  if (data.potential_fees_total && data.potential_fees_total > 0) {
-    potFeesEl.textContent = `+ Potential fees if confirmed on site: up to $${data.potential_fees_total}`;
-    potFeesEl.style.display = 'block';
-  } else {
-    potFeesEl.style.display = 'none';
-  }
-
-  const vnCard = document.getElementById('verification-notes-card');
-  const vnBox = document.getElementById('res-verification-notes');
-  if (data.verification_notes) {
-    vnBox.textContent = typeof data.verification_notes === 'string' ? data.verification_notes : JSON.stringify(data.verification_notes, null, 2);
-    vnCard.style.display = 'block';
-    vnCard.classList.remove('expanded');
-  } else {
-    vnCard.style.display = 'none';
   }
 
   const marketEl = document.getElementById('res-market');

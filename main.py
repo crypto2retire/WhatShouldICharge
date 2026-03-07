@@ -790,90 +790,10 @@ async def get_library_context() -> str:
     for item in items:
         line = f"- {item.item_name}: {item.cubic_yards} CY"
         if item.is_special:
-            line += f" [SPECIAL FEE: ${item.special_fee}]"
+            line += " [SPECIAL ITEM - flag for recycling/disposal]"
         lines.append(line)
     return "\n".join(lines)
 
-
-def build_pass2_content(pass1_result: dict, library_context: str, photo_contents: list) -> list:
-    text = f"""You are a senior junk removal estimator doing a second-pass verification. You can see the same photos the first estimator analyzed. Look at them carefully.
-
-FIRST ESTIMATOR'S REPORT:
-{json.dumps(pass1_result, indent=2)}
-
-YOUR JOB — look at the photos carefully and verify:
-
-1. VISUALLY CONFIRM EACH ITEM
-   Look at the actual photos. For each item in the report:
-   - Can you actually see it in the photos?
-   - Does the CY estimate look right for what you see?
-   - If you cannot find it in the photos, remove it
-
-2. VERIFY CY VALUES against the known reference library:
-   {library_context}
-
-   For each item:
-   - If it matches a known item, use the library CY value
-   - If CY differs from library by more than 25%, flag it
-   - If item is unknown (not in library), mark needs_lookup: true
-
-3. COMMON MISIDENTIFICATION FLAGS — look at the photos for these:
-
-   TV vs WINDOW SCREEN — LOOK CAREFULLY:
-   - If the report includes a flat screen TV, find it in the photos
-   - A TV has: visible stand/base, ports on back/side, brand logo, power cable, or retail packaging nearby
-   - A window screen has: thin metal or wooden frame, mesh/screen material visible through it, no stand
-   - If you see a window screen NOT a TV, remove the TV, add window screen (set is_special: false)
-   - Only keep is_special: true if you can visually confirm it is a TV
-   - Add to verification_notes: what you saw and why you kept or removed the TV
-
-   CARPET vs AREA RUG vs CARPET ROLL:
-   - Look at the photos — is it a loose area rug, rolled carpet, or installed carpet?
-   - Rolled carpet = likely building material leftover
-   - Only flag as large CY if clearly a full room carpet
-
-   LUMBER vs SHELVING vs PEGBOARD:
-   - Look at the photos — is it actual lumber pile, or shelving units / pegboard panels leaning against wall?
-
-   GENERAL RULE: When in doubt about ANY item, mark it as "verify on site" rather than confidently including it with a fee attached.
-
-4. RECOUNT BAGS AND BOXES
-   Actually count visible bags and boxes in the photos.
-   Correct the numbers if the first estimator was wrong.
-   Use 0.15 CY per full bag, 0.15 CY per large box, 0.08 CY per small box.
-
-5. CHECK FOR MISSED ITEMS
-   Look carefully for items the first estimator missed.
-   Add anything significant you can see that was not listed.
-
-6. VERIFY SPECIAL ITEM FLAGS
-   For each is_special item, look at the photos and confirm you can actually see it.
-   If you cannot visually confirm a special item, either remove it or set is_special: false.
-   Add any uncertain special items to "verify_on_site" array.
-
-7. SANITY CHECK TOTAL CY
-   Does the total CY make sense for what you can see?
-   A full 16 CY truck looks like a completely packed pickup truck bed floor to top.
-   A single bedroom with furniture = typically 5-8 CY.
-   Adjust if the total seems significantly off (more than 20%).
-
-   If confidence < 70%:
-   - List exactly which items you cannot verify
-   - Add to notes: "Recommend additional photos of [specific areas]"
-
-8. FINAL ADJUSTMENTS
-   - Adjust any CY values that seem wrong
-   - Recalculate totals (low/mid/high)
-   - Update job_type if needed
-   - Update conditions if needed
-
-Return the corrected JSON in the SAME format as the first estimator's report.
-Add "verification_notes" explaining what you changed and why.
-Add "items_needing_lookup": ["item name"] for unknown items.
-Add "verify_on_site": ["description"] for anything uncertain.
-Return ONLY raw JSON, no markdown, no explanation, no code blocks."""
-
-    return photo_contents + [{"type": "text", "text": text}]
 
 
 def parse_ai_json(raw_text: str) -> dict:
@@ -1069,7 +989,7 @@ async def create_estimate(
         "created_at": now,
     }
 
-    asyncio.create_task(run_two_pass_estimate(
+    asyncio.create_task(run_estimate(
         job_id=job_id,
         user=user,
         image_content=image_content,
@@ -1080,7 +1000,7 @@ async def create_estimate(
     return {"job_id": job_id}
 
 
-async def run_two_pass_estimate(
+async def run_estimate(
     job_id: str,
     user,
     image_content: list,
@@ -1089,7 +1009,6 @@ async def run_two_pass_estimate(
 ):
     job = estimate_jobs[job_id]
     pass1_json_str = ""
-    pass2_json_str = ""
     lookups_json_str = ""
 
     try:
@@ -1123,29 +1042,6 @@ async def run_two_pass_estimate(
         pass1_json_str = json.dumps(pass1_result)
 
         result_data = pass1_result
-
-        job["status"] = "verifying"
-        job["message"] = "Verifying estimate..."
-
-        try:
-            pass2_content = build_pass2_content(pass1_result, library_context, image_content)
-
-            def run_pass2():
-                return client.messages.create(
-                    model="claude-sonnet-4-20250514",
-                    max_tokens=2048,
-                    messages=[{
-                        "role": "user",
-                        "content": pass2_content
-                    }]
-                )
-
-            pass2_message = await asyncio.to_thread(run_pass2)
-            pass2_result = parse_ai_json(pass2_message.content[0].text)
-            pass2_json_str = json.dumps(pass2_result)
-            result_data = pass2_result
-        except Exception as e:
-            print(f"Pass 2 failed, using Pass 1 result: {e}")
 
         items_needing_lookup = result_data.get("items_needing_lookup", [])
         lookups_done = []
@@ -1217,7 +1113,7 @@ async def run_two_pass_estimate(
                 price_high=price_high,
                 cy_estimate=cy_mid,
                 pass1_json=pass1_json_str,
-                pass2_json=pass2_json_str,
+                pass2_json="",
                 lookups_json=lookups_json_str,
             )
             db.add(est)
@@ -1243,11 +1139,8 @@ async def run_two_pass_estimate(
             "notes": result_data.get("notes", ""),
             "confidence": result_data.get("confidence", 75),
             "estimates_remaining": remaining,
-            "verification_notes": result_data.get("verification_notes", ""),
-            "verify_on_site": result_data.get("verify_on_site", []),
             "special_items": special_items,
             "items_looked_up": lookups_done,
-            "two_pass_verified": bool(pass2_json_str),
         }
 
         if market_context:

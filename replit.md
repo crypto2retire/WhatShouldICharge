@@ -12,18 +12,23 @@ An AI-powered junk removal job estimator. Users upload customer photos, Claude v
 - **Market Data**: Tavily API for live market rate fetching + item dimension lookups
 - **Server**: uvicorn on port 5000
 
-## Two-Pass Estimation Engine
-1. **Pass 1**: Claude analyzes photos with the reference library injected into the system prompt. Identifies items, estimates CY, classifies job type.
-2. **Pass 2**: A second Claude call receives the SAME photos plus Pass 1 results. Acts as a skeptical senior reviewer who can visually verify items, recount bags/boxes, catch misidentifications (TV vs window screen, carpet vs rug, lumber vs shelving), and confirm special item fees. Produces verification_notes and verify_on_site lists.
-3. **Pass 3 (Web Lookup)**: For items flagged as `items_needing_lookup`, parallel Tavily searches find real-world dimensions. Claude extracts CY from search results. New items are saved to the reference library.
-4. **Library Learning**: After each estimate, all identified items update the reference library (increment times_seen or add new AI-learned items).
+## Single-Pass Estimation Engine
+1. **Pass 1**: Claude analyzes photos with the reference library injected into the system prompt. Identifies items, estimates CY, classifies job type. Special items (TVs, mattresses, tires, etc.) are flagged with `is_special: true` but NO fees are calculated.
+2. **Web Lookup**: For items flagged as `items_needing_lookup`, parallel Tavily searches find real-world dimensions. Claude extracts CY from search results. New items are saved to the reference library.
+3. **Library Learning**: After each estimate, all identified items update the reference library (increment times_seen or add new AI-learned items).
+
+## Special Item Handling
+- Special items are flagged but NEVER added to price totals
+- Price is based ONLY on cubic yards and job type
+- Special items shown in a separate amber section with recycling fee notice
+- Two disclaimers always shown on every estimate: recycling fees disclaimer and photo-based estimate disclaimer
 
 ## Estimation Flow
 - `POST /api/estimate` returns `{ job_id }` immediately
-- Background task runs two-pass estimation
+- Background task runs single-pass estimation
 - Frontend polls `GET /api/estimate/status/{job_id}` every second
-- Status progresses: analyzing → verifying → looking_up → complete
-- If Pass 2 or lookups fail, silently falls back to Pass 1 result
+- Status progresses: analyzing → looking_up → complete
+- If lookups fail, silently falls back to base result
 
 ## Routes
 - `GET /` — Marketing landing page (`static/landing.html`)

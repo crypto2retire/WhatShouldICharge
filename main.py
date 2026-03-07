@@ -58,6 +58,11 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
+    return FileResponse("static/landing.html")
+
+
+@app.get("/estimate", response_class=HTMLResponse)
+async def estimator():
     return FileResponse("static/index.html")
 
 

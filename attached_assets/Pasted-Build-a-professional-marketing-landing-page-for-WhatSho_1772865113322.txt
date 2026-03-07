@@ -1,0 +1,75 @@
+Build a professional marketing landing page for WhatShouldICharge 
+(whatshouldicharge.app) — an AI-powered job estimator for junk removal 
+businesses. Save it as static/landing.html
+
+## BRAND
+- Name: WhatShouldICharge
+- Tagline: "Stop Guessing. Start Winning."
+- Secondary: "AI-powered estimates from customer photos in seconds"
+- Dark theme: background #0d1117, accent green #16a34a
+- Clean, modern, professional — not cartoonish
+
+## PAGE SECTIONS (in order)
+
+### 1. Hero
+- Big headline: "Stop Guessing. Start Winning."
+- Subheadline: "Upload customer photos. Get an instant AI price estimate. 
+  Close more jobs."
+- Two buttons: "Try It Free" (links to /estimate) and "See How It Works" 
+  (scrolls down)
+- Show a mockup or screenshot placeholder of the estimator UI
+
+### 2. The Problem (3 columns)
+- "Quoting too low?" — you're leaving money on the table
+- "Quoting too high?" — you're losing jobs to competitors  
+- "Wasting time on site visits?" — just to give a ballpark price
+- Each with an icon and 2-3 sentences
+
+### 3. How It Works (3 steps)
+- Step 1: Customer sends photos (phone icon)
+- Step 2: AI analyzes the job — cubic yards, item types, access 
+  conditions (brain/AI icon)
+- Step 3: You get a price range in seconds (dollar sign icon)
+- Clean step-by-step visual flow
+
+### 4. Features Grid (6 boxes)
+- 📸 Photo-Based Estimates — no site visit needed
+- 🎯 Accurate Pricing — AI trained on junk removal jobs
+- ⚡ Premium Detection — automatically flags hoarder, heavy, 
+  stairs jobs
+- 🚛 Truck Load Calculator — fill % slider, instant CY calculation
+- 📋 Item Breakdown — every item identified and measured
+- 💰 Your Rates — set your own price per cubic yard
+
+### 5. Pricing (3 tiers)
+- Starter: $39/mo — 20 estimates/month
+- Professional: $69/mo — 40 estimates/month  
+- Business: $99/mo — 80 estimates/month
+- All tiers: AI photo estimates, item breakdown, premium detection
+- Highlight Professional as "Most Popular"
+- Each with a "Get Started" button
+
+### 6. Social Proof
+- 3 fake-but-realistic testimonials from junk removal owners
+- Names like "Mike R., Dallas TX" — "Sarah K., Phoenix AZ"
+- Talk about time saved, jobs won, pricing confidence
+
+### 7. FAQ (5 questions)
+- How accurate are the estimates?
+- What types of jobs does it work for?
+- Do customers upload photos themselves?
+- Can I set my own pricing?
+- Is there a free trial?
+
+### 8. Footer CTA
+- "Ready to stop guessing?" 
+- Big "Start Free Trial" button
+- Links: Home, Estimator, Pricing, Login
+
+## DESIGN REQUIREMENTS
+- Fully responsive mobile-first
+- Smooth scroll between sections
+- CSS animations on scroll (fade in sections)
+- No external dependencies except Google Fonts (Inter)
+- Fast loading — inline CSS, no framework
+- Navigation bar: logo left, "Try It Free" button right, sticky on scroll

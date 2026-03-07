@@ -521,13 +521,30 @@
 </head>
 <body>
 
-<header>
-  <div class="logo-icon">🗑️</div>
-  <div>
-    <h1>JunkEstimate AI</h1>
-    <p>Instant pricing from photos — powered by AI</p>
+<style>
+  .nav-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; }
+  .nav-left { display: flex; align-items: center; gap: 10px; }
+  .nav-dot { width: 8px; height: 8px; background: #16a34a; border-radius: 50%; box-shadow: 0 0 8px #16a34a; }
+  .nav-brand { font-size: 1rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text); text-decoration: none; }
+  .nav-right { display: flex; align-items: center; gap: 16px; font-size: 0.83rem; }
+  .nav-company { font-weight: 600; color: var(--text); }
+  .nav-estimates { color: #22c55e; font-weight: 600; }
+  .nav-link { color: var(--muted); text-decoration: none; cursor: pointer; transition: color 0.15s; }
+  .nav-link:hover { color: var(--text); }
+  .market-info { background: rgba(22,163,74,0.08); border: 1px solid rgba(22,163,74,0.2); border-radius: 8px; padding: 10px 14px; font-size: 0.83rem; color: #22c55e; margin-top: 14px; display: none; }
+  .market-info.visible { display: block; }
+</style>
+<div class="nav-bar">
+  <div class="nav-left">
+    <span class="nav-dot"></span>
+    <a href="/" class="nav-brand">WhatShouldICharge</a>
   </div>
-</header>
+  <div class="nav-right" id="nav-user" style="display:none">
+    <span class="nav-company" id="nav-company-name"></span>
+    <span class="nav-estimates" id="nav-estimates"></span>
+    <a class="nav-link" id="nav-logout">Logout</a>
+  </div>
+</div>
 
 <div class="main-wrap">
 
@@ -627,6 +644,8 @@
       <div class="items-grid" id="res-items"></div>
     </div>
 
+    <div class="market-info" id="res-market"></div>
+
     <div class="card" id="notes-card" style="display:none">
       <div class="card-title">Estimator Notes</div>
       <div class="notes-box" id="res-notes"></div>
@@ -638,6 +657,37 @@
 </div>
 
 <script>
+let currentUser = null;
+
+(async () => {
+  try {
+    const resp = await fetch('/api/auth/me');
+    const data = await resp.json();
+    if (!data.authenticated) {
+      window.location.href = '/login';
+      return;
+    }
+    currentUser = data;
+    document.getElementById('nav-user').style.display = 'flex';
+    document.getElementById('nav-company-name').textContent = data.company_name || data.email;
+    const remaining = Math.max(0, data.estimates_limit - data.estimates_used);
+    document.getElementById('nav-estimates').textContent = remaining + ' estimates remaining';
+
+    if (remaining <= 0) {
+      window.location.href = '/upgrade';
+      return;
+    }
+  } catch (e) {
+    window.location.href = '/login';
+    return;
+  }
+})();
+
+document.getElementById('nav-logout').addEventListener('click', async () => {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+});
+
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 const previews = document.getElementById('previews');
@@ -652,9 +702,9 @@ const errorBox = document.getElementById('error-box');
 const uploadCard = document.getElementById('upload-card');
 const submitSection = document.getElementById('submit-section');
 
-let photos = []; // {file, url, room}
+let photos = [];
 let selectedPhotoIdx = null;
-let truckLoadPct = null; // global truck load percentage (if any photo is truck load)
+let truckLoadPct = null;
 
 const ROOMS = ['Living Room','Bedroom','Garage','Basement','Kitchen','Outdoor','Other','Truck Load'];
 
@@ -828,7 +878,19 @@ async function submitEstimate() {
     const data = await resp.json();
 
     if (!resp.ok) {
+      if (data.detail === 'estimate_limit_reached') {
+        window.location.href = '/upgrade';
+        return;
+      }
+      if (resp.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
       throw new Error(data.detail || 'Unknown error');
+    }
+
+    if (data.estimates_remaining !== undefined) {
+      document.getElementById('nav-estimates').textContent = data.estimates_remaining + ' estimates remaining';
     }
 
     showResults(data);
@@ -910,6 +972,15 @@ function showResults(data) {
     `;
     itemsEl.appendChild(row);
   });
+
+  const marketEl = document.getElementById('res-market');
+  if (data.market_context) {
+    const mc = data.market_context;
+    marketEl.textContent = `📊 Market rates in ${mc.city}, ${mc.state}: $${mc.market_low}–$${mc.market_high}/CY (avg $${mc.market_avg}/CY)`;
+    marketEl.classList.add('visible');
+  } else {
+    marketEl.classList.remove('visible');
+  }
 
   if (data.notes) {
     document.getElementById('res-notes').textContent = data.notes;

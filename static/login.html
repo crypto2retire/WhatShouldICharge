@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — WhatShouldICharge</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --border: #2e3352;
+    --green: #16a34a; --green-light: #22c55e;
+    --text: #e8eaf0; --muted: #7b82a0; --red: #ef4444;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px; width: 100%; max-width: 420px; }
+  .logo { text-align: center; margin-bottom: 32px; }
+  .logo-dot { display: inline-block; width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 8px var(--green); margin-right: 8px; vertical-align: middle; }
+  .logo-text { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.03em; }
+  .auth-title { font-size: 1.5rem; font-weight: 800; text-align: center; margin-bottom: 8px; }
+  .auth-sub { text-align: center; color: var(--muted); font-size: 0.9rem; margin-bottom: 28px; }
+  .form-group { margin-bottom: 18px; }
+  .form-group label { display: block; font-size: 0.83rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+  .form-group input { width: 100%; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.95rem; font-family: inherit; transition: border-color 0.15s; }
+  .form-group input:focus { outline: none; border-color: var(--green); }
+  .btn-submit { width: 100%; padding: 13px; border-radius: 10px; border: none; background: var(--green); color: #fff; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.15s; margin-top: 8px; }
+  .btn-submit:hover { background: var(--green-light); }
+  .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+  .auth-footer { text-align: center; margin-top: 22px; font-size: 0.85rem; color: var(--muted); }
+  .auth-footer a { color: var(--green-light); text-decoration: none; font-weight: 600; }
+  .auth-footer a:hover { text-decoration: underline; }
+  .error-msg { display: none; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; color: var(--red); font-size: 0.85rem; margin-bottom: 16px; }
+  .error-msg.visible { display: block; }
+  .forgot { text-align: right; margin-top: -10px; margin-bottom: 16px; }
+  .forgot a { font-size: 0.8rem; color: var(--muted); text-decoration: none; }
+  .forgot a:hover { color: var(--green-light); }
+</style>
+</head>
+<body>
+<div class="auth-card">
+  <div class="logo"><span class="logo-dot"></span><span class="logo-text">WhatShouldICharge</span></div>
+  <div class="auth-title">Welcome back</div>
+  <div class="auth-sub">Log in to your account</div>
+  <div class="error-msg" id="error-msg"></div>
+  <form id="login-form">
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="email" required autocomplete="email" placeholder="you@company.com">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="password" required autocomplete="current-password" placeholder="Enter your password">
+    </div>
+    <div class="forgot"><a href="#">Forgot password?</a></div>
+    <button type="submit" class="btn-submit" id="submit-btn">Log In</button>
+  </form>
+  <div class="auth-footer">Don't have an account? <a href="/signup">Sign up free</a></div>
+</div>
+<script>
+const form = document.getElementById('login-form');
+const errorMsg = document.getElementById('error-msg');
+const submitBtn = document.getElementById('submit-btn');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorMsg.classList.remove('visible');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Logging in...';
+
+  try {
+    const resp = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value,
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Login failed');
+    window.location.href = data.redirect || '/estimate';
+  } catch (err) {
+    errorMsg.textContent = err.message;
+    errorMsg.classList.add('visible');
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Log In';
+  }
+});
+</script>
+</body>
+</html>

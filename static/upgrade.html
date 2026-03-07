@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Upgrade — WhatShouldICharge</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --border: #21262d;
+    --green: #16a34a; --green-light: #22c55e;
+    --text: #e6edf3; --muted: #8b949e; --muted2: #6e7681;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; min-height: 100vh; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 60px 24px 80px; text-align: center; }
+  .icon-big { font-size: 3rem; margin-bottom: 16px; }
+  h1 { font-size: 2rem; font-weight: 800; margin-bottom: 10px; letter-spacing: -0.03em; }
+  .sub { font-size: 1.05rem; color: var(--muted); margin-bottom: 48px; }
+  .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 20px; align-items: start; }
+  .pricing-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 32px; position: relative; text-align: left; transition: border-color 0.2s; }
+  .pricing-card.popular { background: linear-gradient(180deg, #0a1f0f 0%, var(--bg2) 100%); border-color: rgba(22,163,74,0.5); transform: scale(1.03); }
+  .popular-badge { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: var(--green); color: #fff; padding: 4px 16px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+  .tier { font-size: 0.78rem; font-weight: 700; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; }
+  .price { font-size: 2.6rem; font-weight: 900; letter-spacing: -0.04em; line-height: 1; margin-bottom: 4px; }
+  .price sup { font-size: 1.2rem; font-weight: 700; vertical-align: super; }
+  .period { font-size: 0.82rem; color: var(--muted2); margin-bottom: 22px; }
+  .estimates { font-size: 0.9rem; font-weight: 600; color: var(--green-light); margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .features { list-style: none; margin-bottom: 28px; }
+  .features li { font-size: 0.87rem; color: var(--muted); padding: 6px 0; display: flex; gap: 10px; align-items: flex-start; }
+  .features li::before { content: '\2713'; color: var(--green-light); font-weight: 700; flex-shrink: 0; }
+  .btn-sub { display: block; width: 100%; padding: 12px; border-radius: 8px; font-size: 0.9rem; font-weight: 700; cursor: pointer; text-align: center; border: 1px solid var(--border); background: transparent; color: var(--text); transition: all 0.15s; font-family: inherit; }
+  .btn-sub:hover { border-color: var(--green); color: var(--green-light); }
+  .btn-sub:disabled { opacity: 0.5; cursor: wait; }
+  .pricing-card.popular .btn-sub { background: var(--green); border-color: var(--green); color: #fff; }
+  .pricing-card.popular .btn-sub:hover { background: var(--green-light); box-shadow: 0 4px 20px rgba(22,163,74,0.3); }
+  .back-link { display: inline-block; margin-top: 32px; color: var(--muted); font-size: 0.85rem; text-decoration: none; }
+  .back-link:hover { color: var(--text); }
+  @media (max-width: 700px) { .pricing-card.popular { transform: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="icon-big">🔒</div>
+  <h1>You've used your free estimates</h1>
+  <div class="sub">Choose a plan to keep estimating with AI-powered pricing</div>
+  <div class="pricing-grid">
+    <div class="pricing-card">
+      <div class="tier">Starter</div>
+      <div class="price"><sup>$</sup>39</div>
+      <div class="period">per month</div>
+      <div class="estimates">20 estimates / month</div>
+      <ul class="features">
+        <li>AI photo estimates</li>
+        <li>Full item breakdown</li>
+        <li>Premium job detection</li>
+        <li>Estimate history</li>
+        <li>Email support</li>
+      </ul>
+      <button class="btn-sub" onclick="subscribe('price_1T7PXXAPEzwLONiqIIrAtsQZ','starter')">Subscribe</button>
+    </div>
+    <div class="pricing-card popular">
+      <div class="popular-badge">Most Popular</div>
+      <div class="tier">Professional</div>
+      <div class="price"><sup>$</sup>69</div>
+      <div class="period">per month</div>
+      <div class="estimates">40 estimates / month</div>
+      <ul class="features">
+        <li>Everything in Starter</li>
+        <li>Truck load calculator</li>
+        <li>Market rate insights</li>
+        <li>Custom rate settings</li>
+        <li>Priority support</li>
+      </ul>
+      <button class="btn-sub" onclick="subscribe('price_1T6iUPAPEzwLONiqp31lIw9T','pro')">Subscribe</button>
+    </div>
+    <div class="pricing-card">
+      <div class="tier">Agency</div>
+      <div class="price"><sup>$</sup>399</div>
+      <div class="period">per month</div>
+      <div class="estimates">Unlimited estimates</div>
+      <ul class="features">
+        <li>Everything in Professional</li>
+        <li>Unlimited estimates</li>
+        <li>Multi-user access</li>
+        <li>API access</li>
+        <li>Dedicated onboarding</li>
+      </ul>
+      <button class="btn-sub" onclick="subscribe('price_1T7PXXAPEzwLONiqpQbgpgZ8','agency')">Subscribe</button>
+    </div>
+  </div>
+  <a href="/estimate" class="back-link">Back to estimator</a>
+</div>
+<script>
+async function subscribe(priceId, tierName) {
+  const btns = document.querySelectorAll('.btn-sub');
+  btns.forEach(b => { b.disabled = true; b.textContent = 'Loading...'; });
+
+  try {
+    const resp = await fetch('/api/payments/create-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ price_id: priceId, tier_name: tierName }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Failed to create checkout');
+    window.location.href = data.checkout_url;
+  } catch (err) {
+    alert(err.message);
+    btns.forEach((b, i) => {
+      b.disabled = false;
+      b.textContent = 'Subscribe';
+    });
+  }
+}
+
+(async () => {
+  const resp = await fetch('/api/auth/me');
+  const data = await resp.json();
+  if (!data.authenticated) window.location.href = '/login';
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+I need you to upgrade this app to full feature parity with our 
+production version. Make all these changes in one session.
+
+## SECRETS ALREADY ADDED TO REPLIT
+The following are already in Replit Secrets — use them exactly 
+as named:
+- ANTHROPIC_API_KEY
+- STRIPE_SECRET_KEY  
+- STRIPE_PUBLISHABLE_KEY
+- STRIPE_WEBHOOK_SECRET
+- TAVILY_API_KEY
+- SENDGRID_API_KEY
+
+## STRIPE PRICE IDs (already in Stripe, use these exact IDs)
+- Starter ($39/mo, 20 estimates): price_1T7PXXAPEzwLONiqIIrAtsQZ
+- Professional ($69/mo, 40 estimates): price_1T6iUPAPEzwLONiqp31lIw9T
+- Agency ($399/mo, unlimited): price_1T7PXXAPEzwLONiqpQbgpgZ8
+- Launch coupon code: UYmrJ2Kg
+
+---
+
+## PART 1: USER AUTH
+
+Add complete login/signup system.
+
+### New database tables:
+users:
+- id, email, password_hash, company_name, company_city, 
+  company_state, created_at, subscription_tier (free/starter/
+  pro/agency), estimates_used, estimates_limit, 
+  stripe_customer_id, stripe_subscription_id,
+  price_per_cy_low (default 35.00),
+  price_per_cy_high (default 40.00),
+  price_per_cy_premium (default 55.00),
+  min_charge (default 75.00),
+  truck_capacity_cy (default 16.0)
+
+sessions:
+- id, user_id, token, created_at, expires_at
+
+### Endpoints:
+- POST /api/auth/signup
+  - fields: email, password, company_name, company_city, 
+    company_state
+  - hash password with bcrypt
+  - set tier=free, estimates_limit=3
+  - send welcome email via SendGrid (simple HTML email:
+    "Welcome to WhatShouldICharge! You have 3 free estimates.")
+  - return session token in httponly cookie
+
+- POST /api/auth/login
+  - verify password with bcrypt
+  - create session token (32 random bytes, hex encoded)
+  - store in sessions table, expires 30 days
+  - return httponly cookie
+
+- POST /api/auth/logout
+  - clear session cookie
+  - delete session from DB
+
+- GET /api/auth/me
+  - return user object from session cookie
+  - include: email, company_name, subscription_tier, 
+    estimates_used, estimates_limit, pricing settings
+
+### Pages:
+- /login — dark theme, email + password, link to signup,
+  "Forgot password?" link (placeholder for now)
+- /signup — dark theme, email, password, company name, 
+  city, state, link to login
+- After signup/login → redirect to /estimate
+- Show in navbar when logged in: company name, 
+  "X estimates remaining", logout link
+
+### Access rules:
+- /estimate requires login → redirect to /login if not logged in
+- After 3 free estimates show paywall → redirect to /upgrade
+- Free tier limit: 3 estimates total (not monthly, one time trial)
+
+---
+
+## PART 2: STRIPE SUBSCRIPTIONS
+
+### Endpoints:
+- POST /api/payments/create-checkout
+  - body: { price_id, tier_name }
+  - create Stripe checkout session
+  - success_url: /payment-success
+  - cancel_url: /upgrade
+  - attach stripe_customer_id if user already has one
+
+- POST /api/payments/webhook
+  - verify signature with STRIPE_WEBHOOK_SECRET
+  - handle checkout.session.completed:
+    - update user.subscription_tier
+    - update user.stripe_customer_id
+    - update user.stripe_subscription_id
+    - set estimates_limit based on tier:
+      - starter: 20
+      - pro: 40  
+      - agency: 999
+    - reset estimates_used to 0
+    - send confirmation email via SendGrid
+  - handle customer.subscription.deleted:
+    - downgrade to free tier
+    - set estimates_limit to 0
+    - send cancellation email
+
+- GET /payment-success
+  - nice confirmation page, dark theme
+  - "You're all set! Your [tier] plan is active."
+  - Button: "Start Estimating →" links to /estimate
+
+### Upgrade page (/upgrade):
+- Show when free trial used up
+- Header: "You've used your 3 free estimates"
+- Subheader: "Choose a plan to keep estimating"
+- Show 3 pricing cards matching landing page style:
+  - Starter: $39/mo, 20 estimates
+  - Professional: $69/mo, 40 estimates
+  - Agency: $399/mo, unlimited estimates
+- Each card has "Subscribe" button → calls create-checkout
+- Dark theme, green accents, Professional highlighted
+
+---
+
+## PART 3: LIVE MARKET PRICING
+
+Add Tavily market search to get local junk removal rates 
+before each estimate.
+
+### New function: get_market_rates(city, state)
+```python
+async def get_market_rates(city: str, state: str) -> dict:
+    """Search Tavily for local junk removal pricing"""
+    import httpx
+    
+    if not city or not state:
+        return {"low": 35, "high": 40, "premium": 55}
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.tavily.com/search",
+                json={
+                    "api_key": os.getenv("TAVILY_API_KEY"),
+                    "query": f"junk removal prices cost per cubic yard {city} {state} 2024 2025",
+                    "search_depth": "basic",
+                    "max_results": 5
+                },
+                timeout=8.0
+            )
+            data = response.json()
+            
+            # Extract price mentions from results
+            content = " ".join([r.get("content", "") 
+                               for r in data.get("results", [])])
+            
+            # Look for cubic yard pricing mentions
+            import re
+            cy_prices = re.findall(
+                r'\$(\d+(?:\.\d+)?)\s*(?:per|/)\s*cubic\s*yard', 
+                content, re.IGNORECASE
+            )
+            
+            if cy_prices:
+                prices = [float(p) for p in cy_prices]
+                avg = sum(prices) / len(prices)
+                return {
+                    "low": round(avg * 0.85, 2),
+                    "high": round(avg * 1.15, 2), 
+                    "premium": round(avg * 1.5, 2),
+                    "market_avg": round(avg, 2),
+                    "source": "live_market_search"
+                }
+    except Exception:
+        pass
+    
+    # Fallback to defaults
+    return {
+        "low": 35, 
+        "high": 40, 
+        "premium": 55,
+        "source": "default_rates"
+    }
+```
+
+### Use market rates in estimate endpoint:
+- Call get_market_rates(user.company_city, user.company_state)
+  before running AI estimate
+- If market rates found AND higher than user's set rates,
+  include in response as "market_context"
+- Show in results: "Market rates in [City]: $X-$Y/CY"
+- Still use user's own rates for actual pricing
+- If Tavily fails or times out, silently use defaults
+
+---
+
+## PART 4: IMPROVED AI PROMPT
+
+Replace the current system prompt with this production-tuned version:

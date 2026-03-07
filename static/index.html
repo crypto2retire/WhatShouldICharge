@@ -612,7 +612,12 @@
           <div class="val" id="res-photos"></div>
           <div class="lbl">Photos Analyzed</div>
         </div>
+        <div class="price-meta-item">
+          <div class="val" id="res-confidence"></div>
+          <div class="lbl">AI Confidence</div>
+        </div>
       </div>
+      <div id="res-confidence-warn" style="display:none;margin-top:12px;padding:8px 14px;border-radius:8px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;font-size:0.83rem;font-weight:500;">⚠ Low confidence — recommend requesting additional photos</div>
       <div id="res-badge"></div>
       <div class="conditions-row" id="res-conditions"></div>
     </div>
@@ -845,6 +850,14 @@ function showResults(data) {
   document.getElementById('res-cy').textContent = data.cy_estimate + ' CY';
   document.getElementById('res-photos').textContent = photos.length;
 
+  const confidence = data.confidence || 75;
+  const confEl = document.getElementById('res-confidence');
+  confEl.textContent = confidence + '%';
+  confEl.style.color = confidence >= 80 ? '#22c55e' : confidence >= 70 ? '#f59e0b' : '#ef4444';
+
+  const warnEl = document.getElementById('res-confidence-warn');
+  warnEl.style.display = confidence < 70 ? 'block' : 'none';
+
   const jobType = data.job_type || 'standard';
   const badgeLabels = {
     standard: '✅ Standard Job',
@@ -861,7 +874,15 @@ function showResults(data) {
     stairs: '⚡ Stairs',
     heavy_items: '🏋️ Heavy Items',
     outdoor: '🌳 Outdoor',
-    hoarder: '🚨 Hoarder'
+    hoarder: '🚨 Hoarder',
+    disassembly_needed: '🔧 Disassembly',
+    multiple_floors: '🏢 Multi-Floor',
+    elevator_available: '🛗 Elevator',
+    long_carry: '🚶 Long Carry',
+    truck_load: '🚛 Truck Load',
+    hazardous_materials: '☣️ Hazardous',
+    electronics: '💻 Electronics',
+    donation_possible: '🎁 Donations'
   };
   (data.conditions || []).forEach(c => {
     const pill = document.createElement('div');
@@ -872,15 +893,20 @@ function showResults(data) {
 
   const itemsEl = document.getElementById('res-items');
   itemsEl.innerHTML = '';
+  const catMap = { ...catIcons, electronics: '💻', hazardous: '☣️' };
   (data.items || []).forEach(item => {
     const cat = item.category || 'other';
+    const cyText = item.cubic_yards ? `${item.cubic_yards} CY` : '';
+    const specialText = item.is_special
+      ? `<div class="item-special">+$25${item.special_reason ? ' · ' + item.special_reason : ''}</div>`
+      : '';
     const row = document.createElement('div');
     row.className = 'item-row';
     row.innerHTML = `
-      <div class="item-icon cat-${cat}">${catIcons[cat] || '📦'}</div>
-      <div class="item-name">${item.name || 'Unknown item'}</div>
+      <div class="item-icon cat-${cat}">${catMap[cat] || '📦'}</div>
+      <div class="item-name">${item.name || 'Unknown item'}${cyText ? ' <span style="color:var(--muted);font-size:0.78rem;font-weight:400">(' + cyText + ')</span>' : ''}</div>
       <div class="item-qty">×${item.quantity || 1}</div>
-      ${item.is_special ? '<div class="item-special">+$25 surcharge</div>' : ''}
+      ${specialText}
     `;
     itemsEl.appendChild(row);
   });

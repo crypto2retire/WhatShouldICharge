@@ -320,6 +320,8 @@ Always err toward the higher end of CY when visibility is limited. Better to quo
         await session.refresh(est)
         estimate_id = est.id
 
+    confidence = result_data.get("confidence", 75)
+
     return {
         "id": estimate_id,
         "price_low": price_low,
@@ -329,6 +331,7 @@ Always err toward the higher end of CY when visibility is limited. Better to quo
         "job_type": result_data.get("job_type", "standard"),
         "conditions": result_data.get("conditions", []),
         "notes": result_data.get("notes", ""),
+        "confidence": confidence,
     }
 
 

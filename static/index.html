@@ -649,6 +649,7 @@
 
     <div id="res-verification" style="display:none;margin-top:14px;padding:10px 14px;border-radius:8px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);font-size:0.83rem;color:#22c55e;font-weight:500;"></div>
     <div id="res-lookups" style="display:none;margin-top:8px;padding:10px 14px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);font-size:0.83rem;color:#818cf8;font-weight:500;"></div>
+    <div id="res-verify-onsite" style="display:none;margin-top:8px;padding:10px 14px;border-radius:8px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);font-size:0.83rem;color:#f59e0b;font-weight:500;"></div>
 
     <div class="market-info" id="res-market"></div>
 
@@ -1042,6 +1043,14 @@ function showResults(data) {
     lookupEl.style.display = 'block';
   } else {
     lookupEl.style.display = 'none';
+  }
+
+  const onsiteEl = document.getElementById('res-verify-onsite');
+  if (data.verify_on_site && data.verify_on_site.length > 0) {
+    onsiteEl.innerHTML = `⚠️ Verify on site:<br>` + data.verify_on_site.map(v => `• ${v}`).join('<br>');
+    onsiteEl.style.display = 'block';
+  } else {
+    onsiteEl.style.display = 'none';
   }
 
   const vnCard = document.getElementById('verification-notes-card');

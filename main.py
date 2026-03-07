@@ -809,14 +809,38 @@ YOUR JOB - be skeptical and verify:
    - If CY differs from library by more than 25%, flag it
    - If item is unknown (not in library), mark needs_lookup: true
 
-3. CHECK FOR COMMON MISIDENTIFICATIONS
-   - Dark rectangles could be window screens NOT TVs
-   - Verify TV identification: must have visible stand, ports, or brand logo — otherwise mark as "possible TV/screen, verify on site"
+3. COMMON MISIDENTIFICATION FLAGS — be extra skeptical of these:
+
+   TV vs WINDOW SCREEN:
+   - Flat screen TVs and window screens look nearly identical in photos — both are dark rectangles with a frame
+   - A TV requires visual confirmation of AT LEAST ONE of: brand logo, visible stand/base, port connections, power cable, remote nearby, or retail packaging
+   - If none of these are confirmed in the Pass 1 notes or item descriptions, REMOVE the TV from the item list
+   - Replace with: "possible TV or window screen — verify on site"
+   - Do NOT charge the $25 TV fee unless confirmed
+   - Add to verification_notes: "TV flagged but not visually confirmed — marked for on-site verification"
+
+   CARPET vs AREA RUG vs CARPET ROLL:
+   - Loose area rugs are different from rolled carpet
+   - Rolled carpet = likely building material leftover
+   - Only flag as large CY if clearly a full room carpet
+
+   LUMBER vs SHELVING vs PEGBOARD:
+   - Verify lumber is actual lumber pile, not shelving units or pegboard panels leaning against wall
+
+   GENERAL RULE: When in doubt about ANY item, mark it as "verify on site" rather than confidently including it with a fee attached.
+
    - Bags: recount visible bags, use 0.15 CY each
    - Boxes: recount visible boxes
 
-4. CONFIDENCE GATES
+4. CONFIDENCE GATES & SPECIAL ITEM VERIFICATION
    You must be able to verify at least 70% of the total CY from known/confident items.
+
+   For EVERY is_special item (TV, mattress, tire, propane, etc.):
+   - Check if Pass 1 description provides enough visual evidence to confirm identification
+   - If an is_special item CANNOT be visually confirmed from the Pass 1 description, reduce confidence by 10 points per unconfirmed special item
+   - Add all unconfirmed special items to a new field: "verify_on_site" (array of strings describing what needs checking, e.g. "large flat screen TV — possible window screen")
+   - Remove the special fee for unconfirmed items (set is_special: false) until verified on site
+
    If confidence < 70%:
    - List exactly which items you cannot verify
    - Reduce confidence score accordingly
@@ -831,6 +855,7 @@ YOUR JOB - be skeptical and verify:
 Return the SAME JSON format as the junior's report but with corrections applied.
 Add a new field: "verification_notes" listing what you changed and why.
 Add "items_needing_lookup": ["item name 1", "item name 2"] for any items not in the reference library.
+Add "verify_on_site": ["description of item needing on-site verification"] for any unconfirmed special items.
 Return ONLY valid JSON with no markdown, no explanation, no code blocks — raw JSON only."""
 
 
@@ -1202,6 +1227,7 @@ async def run_two_pass_estimate(
             "confidence": result_data.get("confidence", 75),
             "estimates_remaining": remaining,
             "verification_notes": result_data.get("verification_notes", ""),
+            "verify_on_site": result_data.get("verify_on_site", []),
             "items_looked_up": lookups_done,
             "two_pass_verified": bool(pass2_json_str),
         }

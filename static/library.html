@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reference Library — WhatShouldICharge</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --border: #2a2d3a;
+    --text: #e2e8f0; --muted: #8892a4; --accent: #22c55e;
+    --blue: #818cf8; --amber: #f59e0b;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .nav-bar { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .nav-left { display: flex; align-items: center; gap: 8px; }
+  .nav-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+  .nav-brand { font-weight: 700; font-size: 1.05rem; color: var(--text); text-decoration: none; }
+  .nav-right { display: flex; align-items: center; gap: 16px; }
+  .nav-link { color: var(--muted); text-decoration: none; cursor: pointer; transition: color 0.15s; font-size: 0.9rem; }
+  .nav-link:hover { color: var(--text); }
+  .nav-link.active { color: var(--accent); }
+
+  .container { max-width: 1000px; margin: 0 auto; padding: 24px 16px; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+  .page-title { font-size: 1.4rem; font-weight: 700; }
+
+  .stats-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; flex: 1; min-width: 140px; }
+  .stat-val { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+  .stat-label { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+
+  .controls { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .search-input { flex: 1; min-width: 200px; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.9rem; outline: none; }
+  .search-input:focus { border-color: var(--accent); }
+  .sort-btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; font-size: 0.82rem; transition: all 0.15s; }
+  .sort-btn:hover, .sort-btn.active { border-color: var(--accent); color: var(--accent); }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th { text-align: left; padding: 10px 12px; color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+  td { padding: 10px 12px; border-bottom: 1px solid rgba(42,45,58,0.5); }
+  tr:hover td { background: rgba(34,197,94,0.03); }
+  .source-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; }
+  .source-builtin { background: rgba(34,197,94,0.12); color: #22c55e; }
+  .source-ai_learned { background: rgba(245,158,11,0.12); color: #f59e0b; }
+  .source-web_search { background: rgba(129,140,248,0.12); color: #818cf8; }
+  .source-manual { background: rgba(226,232,240,0.12); color: #e2e8f0; }
+  .special-tag { color: #ef4444; font-weight: 600; font-size: 0.8rem; }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .cy-val { font-weight: 600; color: var(--accent); }
+  .times-seen { font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="nav-bar">
+  <div class="nav-left">
+    <span class="nav-dot"></span>
+    <a href="/" class="nav-brand">WhatShouldICharge</a>
+  </div>
+  <div class="nav-right">
+    <a href="/estimate" class="nav-link">Estimator</a>
+    <a href="/library" class="nav-link active">Library</a>
+    <a href="#" class="nav-link" id="nav-logout">Logout</a>
+  </div>
+</div>
+
+<div class="container">
+  <div class="page-header">
+    <h1 class="page-title">Reference Library</h1>
+  </div>
+
+  <div class="stats-row" id="stats-row">
+    <div class="stat-card"><div class="stat-val" id="stat-total">—</div><div class="stat-label">Total Items</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-builtin">—</div><div class="stat-label">Built-in</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-learned">—</div><div class="stat-label">AI Learned</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-web">—</div><div class="stat-label">Web Search</div></div>
+  </div>
+
+  <div class="controls">
+    <input type="text" class="search-input" id="search-input" placeholder="Search items...">
+    <button class="sort-btn active" data-sort="times_seen">Most Seen</button>
+    <button class="sort-btn" data-sort="name">Name</button>
+    <button class="sort-btn" data-sort="recent">Recent</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Item Name</th>
+          <th>Category</th>
+          <th>CY</th>
+          <th>Source</th>
+          <th>Seen</th>
+          <th>Special</th>
+        </tr>
+      </thead>
+      <tbody id="library-body"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="empty-state" style="display:none">No items found</div>
+</div>
+
+<script>
+let allItems = [];
+let currentSort = 'times_seen';
+
+document.getElementById('nav-logout').addEventListener('click', async () => {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+});
+
+async function loadLibrary() {
+  try {
+    const [itemsResp, statsResp] = await Promise.all([
+      fetch('/api/library'),
+      fetch('/api/library/stats')
+    ]);
+    if (itemsResp.status === 401) { window.location.href = '/login'; return; }
+    allItems = await itemsResp.json();
+    const stats = await statsResp.json();
+
+    document.getElementById('stat-total').textContent = stats.total_items || 0;
+    document.getElementById('stat-builtin').textContent = stats.by_source?.builtin || 0;
+    document.getElementById('stat-learned').textContent = stats.by_source?.ai_learned || 0;
+    document.getElementById('stat-web').textContent = stats.by_source?.web_search || 0;
+
+    renderTable(allItems);
+  } catch (e) {
+    console.error('Failed to load library:', e);
+  }
+}
+
+function renderTable(items) {
+  const tbody = document.getElementById('library-body');
+  const empty = document.getElementById('empty-state');
+  tbody.innerHTML = '';
+
+  if (!items.length) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  items.forEach(item => {
+    const tr = document.createElement('tr');
+    const specialHtml = item.is_special
+      ? `<span class="special-tag">$${item.special_fee}</span>`
+      : '<span style="color:var(--muted)">—</span>';
+    tr.innerHTML = `
+      <td>${item.item_name}</td>
+      <td style="color:var(--muted)">${item.item_category}</td>
+      <td><span class="cy-val">${item.cubic_yards}</span></td>
+      <td><span class="source-badge source-${item.source}">${item.source.replace('_', ' ')}</span></td>
+      <td><span class="times-seen">${item.times_seen}</span></td>
+      <td>${specialHtml}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById('search-input').addEventListener('input', (e) => {
+  const q = e.target.value.toLowerCase().trim();
+  const filtered = q ? allItems.filter(i => i.item_name.includes(q)) : allItems;
+  renderTable(sortItems(filtered, currentSort));
+});
+
+document.querySelectorAll('.sort-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentSort = btn.dataset.sort;
+    const q = document.getElementById('search-input').value.toLowerCase().trim();
+    const filtered = q ? allItems.filter(i => i.item_name.includes(q)) : allItems;
+    renderTable(sortItems(filtered, currentSort));
+  });
+});
+
+function sortItems(items, sort) {
+  const copy = [...items];
+  if (sort === 'name') copy.sort((a, b) => a.item_name.localeCompare(b.item_name));
+  else if (sort === 'recent') copy.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  else copy.sort((a, b) => b.times_seen - a.times_seen);
+  return copy;
+}
+
+loadLibrary();
+</script>
+</body>
+</html>

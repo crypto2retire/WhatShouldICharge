@@ -533,6 +533,9 @@
   .nav-link:hover { color: var(--text); }
   .market-info { background: rgba(22,163,74,0.08); border: 1px solid rgba(22,163,74,0.2); border-radius: 8px; padding: 10px 14px; font-size: 0.83rem; color: #22c55e; margin-top: 14px; display: none; }
   .market-info.visible { display: block; }
+  #verification-notes-card .notes-box { display: none; }
+  #verification-notes-card.expanded .notes-box { display: block; }
+  .item-looked-up { color: #818cf8; font-size: 0.7rem; margin-left: 4px; }
 </style>
 <div class="nav-bar">
   <div class="nav-left">
@@ -611,8 +614,8 @@
   <!-- Loading -->
   <div id="loading">
     <div class="spinner"></div>
-    <div class="loading-text">Analyzing your photos...</div>
-    <div class="loading-sub">AI is estimating cubic yards and pricing</div>
+    <div class="loading-text" id="loading-text">Analyzing your photos...</div>
+    <div class="loading-sub" id="loading-sub">AI is estimating cubic yards and pricing</div>
   </div>
 
   <!-- Results -->
@@ -644,7 +647,15 @@
       <div class="items-grid" id="res-items"></div>
     </div>
 
+    <div id="res-verification" style="display:none;margin-top:14px;padding:10px 14px;border-radius:8px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);font-size:0.83rem;color:#22c55e;font-weight:500;"></div>
+    <div id="res-lookups" style="display:none;margin-top:8px;padding:10px 14px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);font-size:0.83rem;color:#818cf8;font-weight:500;"></div>
+
     <div class="market-info" id="res-market"></div>
+
+    <div class="card" id="verification-notes-card" style="display:none">
+      <div class="card-title" style="cursor:pointer" onclick="this.parentElement.classList.toggle('expanded')">Verification Details <span style="float:right;font-size:0.75rem;opacity:0.6">click to expand</span></div>
+      <div class="notes-box" id="res-verification-notes" style="display:none"></div>
+    </div>
 
     <div class="card" id="notes-card" style="display:none">
       <div class="card-title">Estimator Notes</div>
@@ -856,12 +867,26 @@ function updateSubmitBtn() {
 
 submitBtn.addEventListener('click', submitEstimate);
 
+const STATUS_MESSAGES = {
+  analyzing: { text: 'Analyzing photos...', sub: 'Pass 1: AI is identifying all items' },
+  verifying: { text: 'Verifying estimate...', sub: 'Pass 2: Senior AI is double-checking accuracy' },
+  looking_up: { text: 'Looking up unknown items...', sub: 'Searching web for dimensions of new items' },
+  complete: { text: 'Estimate ready!', sub: '' },
+};
+
+function updateLoadingStatus(status, message) {
+  const info = STATUS_MESSAGES[status] || { text: message || 'Processing...', sub: '' };
+  document.getElementById('loading-text').textContent = info.text;
+  document.getElementById('loading-sub').textContent = info.sub;
+}
+
 async function submitEstimate() {
   hideError();
   submitSection.style.display = 'none';
   uploadCard.style.display = 'none';
   loadingEl.classList.add('visible');
   resultsEl.classList.remove('visible');
+  updateLoadingStatus('analyzing');
 
   const formData = new FormData();
   const rooms = photos.map(p => p.room);
@@ -889,11 +914,40 @@ async function submitEstimate() {
       throw new Error(data.detail || 'Unknown error');
     }
 
-    if (data.estimates_remaining !== undefined) {
-      document.getElementById('nav-estimates').textContent = data.estimates_remaining + ' estimates remaining';
-    }
+    const jobId = data.job_id;
+    if (!jobId) throw new Error('No job ID returned');
 
-    showResults(data);
+    let pollCount = 0;
+    const MAX_POLLS = 120;
+
+    while (pollCount < MAX_POLLS) {
+      pollCount++;
+      await new Promise(r => setTimeout(r, 1000));
+      const statusResp = await fetch(`/api/estimate/status/${jobId}`);
+      const statusData = await statusResp.json();
+
+      if (!statusResp.ok) {
+        throw new Error(statusData.detail || 'Status check failed');
+      }
+
+      updateLoadingStatus(statusData.status, statusData.message);
+
+      if (statusData.status === 'complete') {
+        const result = statusData.result;
+        if (result.estimates_remaining !== undefined) {
+          document.getElementById('nav-estimates').textContent = result.estimates_remaining + ' estimates remaining';
+        }
+        showResults(result);
+        break;
+      }
+
+      if (statusData.status === 'error') {
+        throw new Error(statusData.message || 'Estimation failed');
+      }
+    }
+    if (pollCount >= MAX_POLLS) {
+      throw new Error('Estimate timed out. Please try again.');
+    }
   } catch (err) {
     loadingEl.classList.remove('visible');
     submitSection.style.display = 'block';
@@ -962,16 +1016,43 @@ function showResults(data) {
     const specialText = item.is_special
       ? `<div class="item-special">+$25${item.special_reason ? ' · ' + item.special_reason : ''}</div>`
       : '';
+    const lookedUp = item.looked_up ? '<span class="item-looked-up" title="Dimensions found via web search">🔍</span>' : '';
     const row = document.createElement('div');
     row.className = 'item-row';
     row.innerHTML = `
       <div class="item-icon cat-${cat}">${catMap[cat] || '📦'}</div>
-      <div class="item-name">${item.name || 'Unknown item'}${cyText ? ' <span style="color:var(--muted);font-size:0.78rem;font-weight:400">(' + cyText + ')</span>' : ''}</div>
+      <div class="item-name">${item.name || 'Unknown item'}${lookedUp}${cyText ? ' <span style="color:var(--muted);font-size:0.78rem;font-weight:400">(' + cyText + ')</span>' : ''}</div>
       <div class="item-qty">×${item.quantity || 1}</div>
       ${specialText}
     `;
     itemsEl.appendChild(row);
   });
+
+  const verEl = document.getElementById('res-verification');
+  if (data.two_pass_verified) {
+    verEl.textContent = '✅ Verified by second-pass AI review';
+    verEl.style.display = 'block';
+  } else {
+    verEl.style.display = 'none';
+  }
+
+  const lookupEl = document.getElementById('res-lookups');
+  if (data.items_looked_up && data.items_looked_up.length > 0) {
+    lookupEl.textContent = `🔍 ${data.items_looked_up.length} item${data.items_looked_up.length > 1 ? 's' : ''} looked up and added to reference library`;
+    lookupEl.style.display = 'block';
+  } else {
+    lookupEl.style.display = 'none';
+  }
+
+  const vnCard = document.getElementById('verification-notes-card');
+  const vnBox = document.getElementById('res-verification-notes');
+  if (data.verification_notes) {
+    vnBox.textContent = typeof data.verification_notes === 'string' ? data.verification_notes : JSON.stringify(data.verification_notes, null, 2);
+    vnCard.style.display = 'block';
+    vnCard.classList.remove('expanded');
+  } else {
+    vnCard.style.display = 'none';
+  }
 
   const marketEl = document.getElementById('res-market');
   if (data.market_context) {

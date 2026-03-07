@@ -16,7 +16,8 @@ import stripe
 import httpx
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy import Column, Integer, Float, DateTime, Text, String, select
+from sqlalchemy import Column, Integer, Float, DateTime, Text, String, Boolean, select
+import asyncio
 from PIL import Image
 import io
 
@@ -91,6 +92,25 @@ class Estimate(Base):
     price_low = Column(Float)
     price_high = Column(Float)
     cy_estimate = Column(Float)
+    pass1_json = Column(Text, default="")
+    pass2_json = Column(Text, default="")
+    lookups_json = Column(Text, default="")
+
+
+class ItemReferenceLibrary(Base):
+    __tablename__ = "item_reference_library"
+    id = Column(Integer, primary_key=True, index=True)
+    item_name = Column(String, unique=True, nullable=False, index=True)
+    item_category = Column(String, default="other")
+    cubic_yards = Column(Float, nullable=False)
+    is_special = Column(Boolean, default=False)
+    special_fee = Column(Float, default=0.0)
+    confidence = Column(Float, default=1.0)
+    source = Column(String, default="builtin")
+    search_query_used = Column(String, default="")
+    times_seen = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 async def init_db():
@@ -98,9 +118,119 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
 
 
+SEED_ITEMS = [
+    ("king mattress", "furniture", 2.5, True, 25.0),
+    ("queen mattress", "furniture", 2.0, True, 25.0),
+    ("full mattress", "furniture", 1.5, True, 25.0),
+    ("twin mattress", "furniture", 1.5, True, 25.0),
+    ("box spring", "furniture", 1.5, True, 25.0),
+    ("large sectional sofa", "furniture", 5.0, False, 0),
+    ("sofa", "furniture", 3.5, False, 0),
+    ("loveseat", "furniture", 2.0, False, 0),
+    ("recliner", "furniture", 1.5, False, 0),
+    ("armchair", "furniture", 1.2, False, 0),
+    ("king bed frame", "furniture", 3.0, False, 0),
+    ("queen bed frame", "furniture", 2.5, False, 0),
+    ("twin bed frame", "furniture", 1.5, False, 0),
+    ("large dresser", "furniture", 2.0, False, 0),
+    ("small dresser", "furniture", 1.0, False, 0),
+    ("nightstand", "furniture", 0.5, False, 0),
+    ("coffee table", "furniture", 0.8, False, 0),
+    ("dining table large", "furniture", 3.0, False, 0),
+    ("dining table small", "furniture", 1.5, False, 0),
+    ("dining chair", "furniture", 0.4, False, 0),
+    ("large workbench", "furniture", 4.5, False, 0),
+    ("small workbench", "furniture", 2.0, False, 0),
+    ("bookshelf large", "furniture", 1.5, False, 0),
+    ("bookshelf small", "furniture", 0.8, False, 0),
+    ("desk large", "furniture", 2.5, False, 0),
+    ("desk small", "furniture", 1.2, False, 0),
+    ("refrigerator large", "appliance", 2.5, False, 0),
+    ("refrigerator small", "appliance", 1.5, False, 0),
+    ("washing machine", "appliance", 2.0, False, 0),
+    ("dryer", "appliance", 2.0, False, 0),
+    ("dishwasher", "appliance", 1.5, False, 0),
+    ("stove", "appliance", 2.0, False, 0),
+    ("microwave large", "appliance", 0.5, False, 0),
+    ("microwave small", "appliance", 0.3, False, 0),
+    ("air conditioner window unit", "appliance", 0.8, False, 0),
+    ("dehumidifier", "appliance", 0.6, False, 0),
+    ("water heater", "appliance", 1.5, False, 0),
+    ("large flat screen tv 55+", "electronics", 0.6, True, 25.0),
+    ("medium flat screen tv 32-54", "electronics", 0.4, True, 25.0),
+    ("small flat screen tv under 32", "electronics", 0.25, True, 25.0),
+    ("crt television", "electronics", 0.8, True, 25.0),
+    ("desktop computer tower", "electronics", 0.2, False, 0),
+    ("monitor", "electronics", 0.2, False, 0),
+    ("printer large", "electronics", 0.3, False, 0),
+    ("large cardboard box", "debris", 0.15, False, 0),
+    ("medium cardboard box", "debris", 0.10, False, 0),
+    ("small cardboard box", "debris", 0.06, False, 0),
+    ("large plastic tote with lid", "debris", 0.25, False, 0),
+    ("small plastic tote", "debris", 0.15, False, 0),
+    ("large trash bag full", "debris", 0.15, False, 0),
+    ("small trash bag full", "debris", 0.08, False, 0),
+    ("plastic outdoor chair", "outdoor", 0.5, False, 0),
+    ("metal outdoor chair", "outdoor", 0.5, False, 0),
+    ("outdoor dining set 4 chairs table", "outdoor", 4.0, False, 0),
+    ("plastic outdoor table", "outdoor", 0.8, False, 0),
+    ("riding lawn mower", "outdoor", 4.0, False, 0),
+    ("push lawn mower", "outdoor", 1.0, False, 0),
+    ("gas grill large", "outdoor", 1.5, False, 0),
+    ("gas grill small", "outdoor", 0.8, False, 0),
+    ("trampoline", "outdoor", 5.0, False, 0),
+    ("swing set", "outdoor", 6.0, False, 0),
+    ("hot tub", "outdoor", 15.0, False, 0),
+    ("above ground pool", "outdoor", 8.0, False, 0),
+    ("4 drawer file cabinet", "other", 0.75, False, 0),
+    ("2 drawer file cabinet", "other", 0.4, False, 0),
+    ("lateral file cabinet", "other", 1.0, False, 0),
+    ("treadmill", "sports", 3.0, False, 0),
+    ("elliptical", "sports", 2.5, False, 0),
+    ("stationary bike", "sports", 1.5, False, 0),
+    ("weight bench", "sports", 1.5, False, 0),
+    ("weight set with rack", "sports", 3.0, False, 0),
+    ("ping pong table", "sports", 3.0, False, 0),
+    ("pool table", "sports", 8.0, False, 0),
+    ("wheelchair", "medical", 1.0, False, 0),
+    ("hospital bed", "medical", 4.0, False, 0),
+    ("walker", "medical", 0.3, False, 0),
+    ("propane tank large", "hazardous", 0.5, True, 50.0),
+    ("propane tank small", "hazardous", 0.2, True, 25.0),
+    ("paint cans box", "hazardous", 0.3, True, 25.0),
+    ("car battery", "hazardous", 0.1, True, 15.0),
+    ("tire car", "hazardous", 0.5, True, 15.0),
+    ("tire truck", "hazardous", 0.8, True, 25.0),
+    ("lumber pile small", "debris", 1.0, False, 0),
+    ("lumber pile large", "debris", 3.0, False, 0),
+    ("drywall sheets", "debris", 0.5, False, 0),
+    ("carpet room", "debris", 2.0, False, 0),
+]
+
+
+async def seed_reference_library():
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(ItemReferenceLibrary).limit(1))
+        if result.scalar_one_or_none():
+            return
+        for name, cat, cy, special, fee in SEED_ITEMS:
+            db.add(ItemReferenceLibrary(
+                item_name=name,
+                item_category=cat,
+                cubic_yards=cy,
+                is_special=special,
+                special_fee=fee,
+                confidence=1.0,
+                source="builtin",
+                times_seen=0,
+            ))
+        await db.commit()
+
+
 @app.on_event("startup")
 async def startup():
     await init_db()
+    await seed_reference_library()
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -168,6 +298,14 @@ async def login_page():
 @app.get("/signup", response_class=HTMLResponse)
 async def signup_page():
     return FileResponse("static/signup.html")
+
+
+@app.get("/library", response_class=HTMLResponse)
+async def library_page(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return FileResponse("static/library.html")
 
 
 @app.get("/upgrade", response_class=HTMLResponse)
@@ -318,6 +456,137 @@ async def auth_me(request: Request):
     }
 
 
+@app.get("/api/library")
+async def get_library(request: Request):
+    await require_user(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(ItemReferenceLibrary).order_by(ItemReferenceLibrary.times_seen.desc())
+        )
+        items = result.scalars().all()
+        return [
+            {
+                "id": i.id,
+                "item_name": i.item_name,
+                "item_category": i.item_category,
+                "cubic_yards": i.cubic_yards,
+                "is_special": i.is_special,
+                "special_fee": i.special_fee,
+                "confidence": i.confidence,
+                "source": i.source,
+                "times_seen": i.times_seen,
+                "created_at": i.created_at.isoformat() if i.created_at else None,
+                "updated_at": i.updated_at.isoformat() if i.updated_at else None,
+            }
+            for i in items
+        ]
+
+
+@app.get("/api/library/search")
+async def search_library(request: Request, q: str = ""):
+    await require_user(request)
+    if not q.strip():
+        return []
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(ItemReferenceLibrary)
+            .where(ItemReferenceLibrary.item_name.contains(q.lower().strip()))
+            .order_by(ItemReferenceLibrary.times_seen.desc())
+            .limit(50)
+        )
+        items = result.scalars().all()
+        return [
+            {
+                "id": i.id,
+                "item_name": i.item_name,
+                "item_category": i.item_category,
+                "cubic_yards": i.cubic_yards,
+                "is_special": i.is_special,
+                "special_fee": i.special_fee,
+                "source": i.source,
+                "times_seen": i.times_seen,
+            }
+            for i in items
+        ]
+
+
+@app.post("/api/library/add")
+async def add_library_item(request: Request):
+    user = await require_user(request)
+    body = await request.json()
+    name = body.get("item_name", "").lower().strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="item_name is required.")
+    cy = float(body.get("cubic_yards", 0))
+    if cy <= 0:
+        raise HTTPException(status_code=400, detail="cubic_yards must be positive.")
+
+    async with AsyncSessionLocal() as db:
+        existing = await db.execute(
+            select(ItemReferenceLibrary).where(ItemReferenceLibrary.item_name == name)
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Item already exists in library.")
+        item = ItemReferenceLibrary(
+            item_name=name,
+            item_category=body.get("item_category", "other"),
+            cubic_yards=cy,
+            is_special=bool(body.get("is_special", False)),
+            special_fee=float(body.get("special_fee", 0)),
+            confidence=float(body.get("confidence", 0.9)),
+            source="manual",
+            times_seen=0,
+        )
+        db.add(item)
+        await db.commit()
+        await db.refresh(item)
+        return {"id": item.id, "item_name": item.item_name, "cubic_yards": item.cubic_yards}
+
+
+@app.put("/api/library/{item_id}")
+async def update_library_item(request: Request, item_id: int):
+    await require_user(request)
+    body = await request.json()
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(ItemReferenceLibrary).where(ItemReferenceLibrary.id == item_id)
+        )
+        item = result.scalar_one_or_none()
+        if not item:
+            raise HTTPException(status_code=404, detail="Item not found.")
+        if "cubic_yards" in body:
+            item.cubic_yards = float(body["cubic_yards"])
+        if "is_special" in body:
+            item.is_special = bool(body["is_special"])
+        if "special_fee" in body:
+            item.special_fee = float(body["special_fee"])
+        if "item_category" in body:
+            item.item_category = body["item_category"]
+        item.updated_at = datetime.utcnow()
+        await db.commit()
+        return {"success": True}
+
+
+@app.get("/api/library/stats")
+async def library_stats(request: Request):
+    await require_user(request)
+    async with AsyncSessionLocal() as db:
+        all_items = await db.execute(select(ItemReferenceLibrary))
+        items = all_items.scalars().all()
+        by_source = {}
+        for i in items:
+            by_source[i.source] = by_source.get(i.source, 0) + 1
+        top_seen = sorted(items, key=lambda x: x.times_seen, reverse=True)[:10]
+        return {
+            "total_items": len(items),
+            "by_source": by_source,
+            "top_seen": [
+                {"item_name": i.item_name, "times_seen": i.times_seen, "cubic_yards": i.cubic_yards}
+                for i in top_seen
+            ],
+        }
+
+
 def calculate_price(result_data: dict, rate_low=35.0, rate_high=40.0, rate_premium=55.0, min_charge=75.0) -> tuple:
     job_type = result_data.get("job_type", "standard")
     totals = result_data.get("totals", {})
@@ -427,7 +696,7 @@ async def get_market_rates(city: str, state: str) -> dict:
     return {"low": 35, "high": 40, "premium": 55, "source": "default_rates"}
 
 
-SYSTEM_PROMPT = """You are an expert junk removal estimator with years of field experience.
+SYSTEM_PROMPT_BASE = """You are an expert junk removal estimator with years of field experience.
 Analyze ALL photos carefully and return ONLY valid JSON with no markdown, no explanation, no code blocks — raw JSON only.
 
 REQUIRED JSON FORMAT:
@@ -462,27 +731,6 @@ ITEM IDENTIFICATION RULES:
 - Tires = is_special: true
 - Propane tanks = is_special: true, special_reason: "hazardous"
 - Wheelchairs and medical equipment: note in items, not special fee but flag in notes for crew (may be donateable)
-
-CUBIC YARD REFERENCE GUIDE:
-- King mattress: 2.5 CY
-- Queen mattress: 2.0 CY
-- Full/twin mattress: 1.5 CY
-- Large sofa/sectional: 3-5 CY
-- Loveseat: 2.0 CY
-- Recliner: 1.5 CY
-- Dresser (large): 2.0 CY
-- Dresser (small): 1.0 CY
-- Workbench (large): 3-5 CY
-- File cabinet (4-drawer): 0.75 CY
-- File cabinet (2-drawer): 0.4 CY
-- Refrigerator: 2.5 CY
-- Washer or dryer: 2.0 CY
-- Flat screen TV (large): 0.5 CY
-- Flat screen TV (small): 0.25 CY
-- Cardboard box (large): 0.15 CY
-- Cardboard box (small): 0.08 CY
-- Trash bag (full): 0.15 CY
-- Lumber/wood pieces: measure actual pile volume
 
 JOB TYPE RULES — read carefully:
 STANDARD ($35-40/CY): Clean loads, easy access, under 8 CY, no stairs, no heavy items, no clutter
@@ -521,6 +769,193 @@ CONFIDENCE SCORE:
 Always err toward the higher end of CY when visibility is limited. Better to quote slightly high and come down than to under-quote."""
 
 
+async def get_library_context() -> str:
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(ItemReferenceLibrary)
+            .order_by(ItemReferenceLibrary.times_seen.desc())
+            .limit(150)
+        )
+        items = result.scalars().all()
+    if not items:
+        return ""
+    lines = ["\nKNOWN ITEM REFERENCE LIBRARY (use these CY values when items match):"]
+    for item in items:
+        line = f"- {item.item_name}: {item.cubic_yards} CY"
+        if item.is_special:
+            line += f" [SPECIAL FEE: ${item.special_fee}]"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def build_pass2_prompt(pass1_result: dict, library_context: str) -> str:
+    return f"""You are a skeptical senior junk removal estimator reviewing a junior estimator's work. You have NOT seen the photos.
+
+JUNIOR ESTIMATOR'S REPORT:
+{json.dumps(pass1_result, indent=2)}
+
+YOUR JOB - be skeptical and verify:
+
+1. SANITY CHECK TOTALS
+   - Do the individual item CY values add up to the total?
+   - Does the total CY make sense for a {pass1_result.get('job_type', 'standard')} job?
+   - If total seems off by more than 20%, adjust and explain why
+
+2. VERIFY EACH ITEM against the known reference library:
+   {library_context}
+
+   For each item:
+   - If it matches a known item, use the library CY value
+   - If CY differs from library by more than 25%, flag it
+   - If item is unknown (not in library), mark needs_lookup: true
+
+3. CHECK FOR COMMON MISIDENTIFICATIONS
+   - Dark rectangles could be window screens NOT TVs
+   - Verify TV identification: must have visible stand, ports, or brand logo — otherwise mark as "possible TV/screen, verify on site"
+   - Bags: recount visible bags, use 0.15 CY each
+   - Boxes: recount visible boxes
+
+4. CONFIDENCE GATES
+   You must be able to verify at least 70% of the total CY from known/confident items.
+   If confidence < 70%:
+   - List exactly which items you cannot verify
+   - Reduce confidence score accordingly
+   - Add to notes: "Recommend additional photos of [specific areas]"
+
+5. FINAL ADJUSTMENTS
+   - Adjust any CY values that seem wrong
+   - Recalculate totals
+   - Update job_type if needed
+   - Update conditions if needed
+
+Return the SAME JSON format as the junior's report but with corrections applied.
+Add a new field: "verification_notes" listing what you changed and why.
+Add "items_needing_lookup": ["item name 1", "item name 2"] for any items not in the reference library.
+Return ONLY valid JSON with no markdown, no explanation, no code blocks — raw JSON only."""
+
+
+def parse_ai_json(raw_text: str) -> dict:
+    raw_text = raw_text.strip()
+    if raw_text.startswith("```"):
+        lines = raw_text.split("\n")
+        raw_text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+    return json.loads(raw_text)
+
+
+async def lookup_item_dimensions(item_name: str, api_key: str) -> dict:
+    tavily_key = os.environ.get("TAVILY_API_KEY")
+    if not tavily_key:
+        return {"cubic_yards": 0, "confidence": 0}
+
+    try:
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.post(
+                "https://api.tavily.com/search",
+                json={
+                    "api_key": tavily_key,
+                    "query": f"{item_name} dimensions inches length width height size",
+                    "search_depth": "basic",
+                    "max_results": 3
+                },
+                timeout=8.0
+            )
+            data = response.json()
+            content = " ".join([r.get("content", "") for r in data.get("results", [])])
+
+        client = anthropic.Anthropic(api_key=api_key)
+
+        def run_lookup_call():
+            return client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=200,
+                messages=[{
+                    "role": "user",
+                    "content": f"""From this text, extract the dimensions of a {item_name} and calculate cubic yards.
+
+Text: {content[:2000]}
+
+Return ONLY JSON:
+{{
+    "length_inches": 0,
+    "width_inches": 0,
+    "height_inches": 0,
+    "cubic_yards": 0.0,
+    "confidence": 0.8,
+    "source_note": "brief note on what was found"
+}}
+
+Cubic yards = (L x W x H in inches) / 46656
+Round cubic_yards to 2 decimal places.
+If you cannot find dimensions, return cubic_yards: 0"""
+                }]
+            )
+
+        calc_response = await asyncio.to_thread(run_lookup_call)
+
+        result = json.loads(calc_response.content[0].text.strip())
+
+        if result.get("cubic_yards", 0) > 0:
+            async with AsyncSessionLocal() as db:
+                existing = await db.execute(
+                    select(ItemReferenceLibrary).where(
+                        ItemReferenceLibrary.item_name == item_name.lower().strip()
+                    )
+                )
+                if not existing.scalar_one_or_none():
+                    db.add(ItemReferenceLibrary(
+                        item_name=item_name.lower().strip(),
+                        cubic_yards=result["cubic_yards"],
+                        confidence=result.get("confidence", 0.7),
+                        source="web_search",
+                        search_query_used=f"{item_name} dimensions",
+                        times_seen=1,
+                    ))
+                    await db.commit()
+            return result
+
+    except Exception as e:
+        print(f"Lookup failed for {item_name}: {e}")
+
+    return {"cubic_yards": 0, "confidence": 0}
+
+
+async def update_library_from_estimate(items: list):
+    async with AsyncSessionLocal() as db:
+        for item in items:
+            normalized_name = item.get("name", "").lower().strip()
+            if not normalized_name:
+                continue
+
+            result = await db.execute(
+                select(ItemReferenceLibrary).where(
+                    ItemReferenceLibrary.item_name == normalized_name
+                )
+            )
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                existing.times_seen = existing.times_seen + 1
+                existing.updated_at = datetime.utcnow()
+            else:
+                cy = item.get("cubic_yards", 0)
+                if cy and cy > 0:
+                    db.add(ItemReferenceLibrary(
+                        item_name=normalized_name,
+                        item_category=item.get("category", "other"),
+                        cubic_yards=cy,
+                        is_special=bool(item.get("is_special", False)),
+                        special_fee=25.0 if item.get("is_special") else 0.0,
+                        confidence=0.7,
+                        source="ai_learned",
+                        times_seen=1,
+                    ))
+        await db.commit()
+
+
+estimate_jobs = {}
+JOB_TTL_SECONDS = 300
+
+
 @app.post("/api/estimate")
 async def create_estimate(
     request: Request,
@@ -530,11 +965,14 @@ async def create_estimate(
 ):
     user = await require_user(request)
 
-    if user.estimates_used >= user.estimates_limit:
-        raise HTTPException(
-            status_code=403,
-            detail="estimate_limit_reached"
-        )
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == user.id))
+        fresh_user = result.scalar_one_or_none()
+        if not fresh_user or fresh_user.estimates_used >= fresh_user.estimates_limit:
+            raise HTTPException(status_code=403, detail="estimate_limit_reached")
+        fresh_user.estimates_used = fresh_user.estimates_used + 1
+        await db.commit()
+        user = fresh_user
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -575,102 +1013,230 @@ async def create_estimate(
             )
         })
 
-    market_context = None
-    try:
-        market_rates = await get_market_rates(user.company_city, user.company_state)
-        if market_rates.get("source") == "live_market_search":
-            market_context = {
-                "city": user.company_city,
-                "state": user.company_state,
-                "market_avg": market_rates.get("market_avg"),
-                "market_low": market_rates.get("low"),
-                "market_high": market_rates.get("high"),
-            }
-    except Exception:
-        market_rates = {"low": 35, "high": 40, "premium": 55, "source": "default_rates"}
+    now = datetime.utcnow()
+    expired = [k for k, v in estimate_jobs.items() if (now - v.get("created_at", now)).total_seconds() > JOB_TTL_SECONDS]
+    for k in expired:
+        del estimate_jobs[k]
 
-    client = anthropic.Anthropic(api_key=api_key)
-
-    try:
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=2048,
-            system=SYSTEM_PROMPT,
-            messages=[{
-                "role": "user",
-                "content": image_content + [{
-                    "type": "text",
-                    "text": "Analyze these junk removal photos and provide your estimate as JSON."
-                }]
-            }]
-        )
-    except anthropic.AuthenticationError:
-        raise HTTPException(status_code=401, detail="Invalid ANTHROPIC_API_KEY.")
-    except anthropic.RateLimitError:
-        raise HTTPException(status_code=429, detail="Rate limit reached. Please try again shortly.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
-
-    raw_text = message.content[0].text.strip()
-    if raw_text.startswith("```"):
-        lines = raw_text.split("\n")
-        raw_text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-
-    try:
-        result_data = json.loads(raw_text)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail=f"AI returned invalid response: {raw_text[:200]}")
-
-    price_low, price_high, cy_mid = calculate_price(
-        result_data,
-        rate_low=user.price_per_cy_low or 35.0,
-        rate_high=user.price_per_cy_high or 40.0,
-        rate_premium=user.price_per_cy_premium or 55.0,
-        min_charge=user.min_charge or 75.0,
-    )
-    result_data["price_low"] = price_low
-    result_data["price_high"] = price_high
-    result_data["cy_estimate"] = cy_mid
-
-    async with AsyncSessionLocal() as db:
-        est = Estimate(
-            user_id=user.id,
-            photos_count=len(files),
-            result_json=json.dumps(result_data),
-            price_low=price_low,
-            price_high=price_high,
-            cy_estimate=cy_mid,
-        )
-        db.add(est)
-        await db.commit()
-        await db.refresh(est)
-        estimate_id = est.id
-
-        await db.execute(
-            User.__table__.update()
-            .where(User.id == user.id)
-            .values(estimates_used=User.estimates_used + 1)
-        )
-        await db.commit()
-
-    confidence = result_data.get("confidence", 75)
-    remaining = max(0, user.estimates_limit - user.estimates_used - 1)
-
-    resp = {
-        "id": estimate_id,
-        "price_low": price_low,
-        "price_high": price_high,
-        "cy_estimate": cy_mid,
-        "items": result_data.get("items", []),
-        "job_type": result_data.get("job_type", "standard"),
-        "conditions": result_data.get("conditions", []),
-        "notes": result_data.get("notes", ""),
-        "confidence": confidence,
-        "estimates_remaining": remaining,
+    job_id = secrets.token_hex(8)
+    estimate_jobs[job_id] = {
+        "status": "analyzing",
+        "message": "Analyzing photos...",
+        "result": None,
+        "user_id": user.id,
+        "created_at": now,
     }
 
-    if market_context:
-        resp["market_context"] = market_context
+    asyncio.create_task(run_two_pass_estimate(
+        job_id=job_id,
+        user=user,
+        image_content=image_content,
+        api_key=api_key,
+        num_photos=len(files),
+    ))
+
+    return {"job_id": job_id}
+
+
+async def run_two_pass_estimate(
+    job_id: str,
+    user,
+    image_content: list,
+    api_key: str,
+    num_photos: int,
+):
+    job = estimate_jobs[job_id]
+    pass1_json_str = ""
+    pass2_json_str = ""
+    lookups_json_str = ""
+
+    try:
+        library_context = await get_library_context()
+        system_prompt = SYSTEM_PROMPT_BASE
+        if library_context:
+            system_prompt += "\n" + library_context
+
+        job["status"] = "analyzing"
+        job["message"] = "Analyzing photos..."
+
+        client = anthropic.Anthropic(api_key=api_key)
+
+        def run_pass1():
+            return client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=2048,
+                system=system_prompt,
+                messages=[{
+                    "role": "user",
+                    "content": image_content + [{
+                        "type": "text",
+                        "text": "Analyze these junk removal photos and provide your estimate as JSON."
+                    }]
+                }]
+            )
+
+        message = await asyncio.to_thread(run_pass1)
+
+        pass1_result = parse_ai_json(message.content[0].text)
+        pass1_json_str = json.dumps(pass1_result)
+
+        result_data = pass1_result
+
+        job["status"] = "verifying"
+        job["message"] = "Verifying estimate..."
+
+        try:
+            pass2_prompt = build_pass2_prompt(pass1_result, library_context)
+
+            def run_pass2():
+                return client.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=2048,
+                    messages=[{
+                        "role": "user",
+                        "content": pass2_prompt
+                    }]
+                )
+
+            pass2_message = await asyncio.to_thread(run_pass2)
+            pass2_result = parse_ai_json(pass2_message.content[0].text)
+            pass2_json_str = json.dumps(pass2_result)
+            result_data = pass2_result
+        except Exception as e:
+            print(f"Pass 2 failed, using Pass 1 result: {e}")
+
+        items_needing_lookup = result_data.get("items_needing_lookup", [])
+        lookups_done = []
+        if items_needing_lookup:
+            job["status"] = "looking_up"
+            job["message"] = f"Looking up {len(items_needing_lookup)} unknown items..."
+
+            lookup_tasks = [
+                lookup_item_dimensions(item_name, api_key)
+                for item_name in items_needing_lookup[:5]
+            ]
+            lookup_results = await asyncio.gather(*lookup_tasks, return_exceptions=True)
+
+            for i, item_name in enumerate(items_needing_lookup[:5]):
+                lr = lookup_results[i]
+                if isinstance(lr, dict) and lr.get("cubic_yards", 0) > 0:
+                    lookups_done.append({
+                        "item_name": item_name,
+                        "cubic_yards": lr["cubic_yards"],
+                        "source_note": lr.get("source_note", ""),
+                    })
+                    for item in result_data.get("items", []):
+                        if item.get("name", "").lower().strip() == item_name.lower().strip():
+                            item["cubic_yards"] = lr["cubic_yards"]
+                            item["looked_up"] = True
+                            break
+
+            if lookups_done:
+                lookups_json_str = json.dumps(lookups_done)
+                totals = result_data.get("totals", {})
+                item_sum = sum(
+                    it.get("cubic_yards", 0) * it.get("quantity", 1)
+                    for it in result_data.get("items", [])
+                )
+                if item_sum > 0:
+                    totals["cubic_yards_mid"] = round(item_sum, 1)
+                    totals["cubic_yards_low"] = round(item_sum * 0.85, 1)
+                    totals["cubic_yards_high"] = round(item_sum * 1.15, 1)
+                    result_data["totals"] = totals
+
+        market_context = None
+        try:
+            market_rates = await get_market_rates(user.company_city, user.company_state)
+            if market_rates.get("source") == "live_market_search":
+                market_context = {
+                    "city": user.company_city,
+                    "state": user.company_state,
+                    "market_avg": market_rates.get("market_avg"),
+                    "market_low": market_rates.get("low"),
+                    "market_high": market_rates.get("high"),
+                }
+        except Exception:
+            pass
+
+        price_low, price_high, cy_mid = calculate_price(
+            result_data,
+            rate_low=user.price_per_cy_low or 35.0,
+            rate_high=user.price_per_cy_high or 40.0,
+            rate_premium=user.price_per_cy_premium or 55.0,
+            min_charge=user.min_charge or 75.0,
+        )
+
+        async with AsyncSessionLocal() as db:
+            est = Estimate(
+                user_id=user.id,
+                photos_count=num_photos,
+                result_json=json.dumps(result_data),
+                price_low=price_low,
+                price_high=price_high,
+                cy_estimate=cy_mid,
+                pass1_json=pass1_json_str,
+                pass2_json=pass2_json_str,
+                lookups_json=lookups_json_str,
+            )
+            db.add(est)
+            await db.commit()
+            await db.refresh(est)
+            estimate_id = est.id
+
+        try:
+            await update_library_from_estimate(result_data.get("items", []))
+        except Exception:
+            pass
+
+        remaining = max(0, user.estimates_limit - user.estimates_used)
+
+        resp = {
+            "id": estimate_id,
+            "price_low": price_low,
+            "price_high": price_high,
+            "cy_estimate": cy_mid,
+            "items": result_data.get("items", []),
+            "job_type": result_data.get("job_type", "standard"),
+            "conditions": result_data.get("conditions", []),
+            "notes": result_data.get("notes", ""),
+            "confidence": result_data.get("confidence", 75),
+            "estimates_remaining": remaining,
+            "verification_notes": result_data.get("verification_notes", ""),
+            "items_looked_up": lookups_done,
+            "two_pass_verified": bool(pass2_json_str),
+        }
+
+        if market_context:
+            resp["market_context"] = market_context
+
+        job["status"] = "complete"
+        job["message"] = "Estimate ready!"
+        job["result"] = resp
+
+    except Exception as e:
+        job["status"] = "error"
+        job["message"] = str(e)
+        job["result"] = None
+
+
+@app.get("/api/estimate/status/{job_id}")
+async def estimate_status(request: Request, job_id: str):
+    user = await require_user(request)
+    job = estimate_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    if job["user_id"] != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized.")
+
+    resp = {
+        "status": job["status"],
+        "message": job["message"],
+    }
+    if job["status"] == "complete":
+        resp["result"] = job["result"]
+        del estimate_jobs[job_id]
+    elif job["status"] == "error":
+        del estimate_jobs[job_id]
 
     return resp
 

@@ -94,11 +94,9 @@ def calculate_price(result_data: dict) -> tuple:
     price_low = cy_low * rate_low
     price_high = cy_high * rate_high
 
-    special_keywords = {"tv", "television", "mattress", "tire", "tyre"}
     surcharge = 0.0
     for item in items:
-        name_lower = item.get("name", "").lower()
-        if item.get("is_special") or any(kw in name_lower for kw in special_keywords):
+        if item.get("is_special"):
             qty = int(item.get("quantity", 1))
             surcharge += qty * 25.0
 
@@ -179,32 +177,98 @@ async def create_estimate(
             )
         })
 
-    system_prompt = (
-        "You are an expert junk removal estimator. Analyze the photos and "
-        "return ONLY valid JSON (no markdown, no explanation) in this exact format:\n\n"
-        "{\n"
-        '  "items": [\n'
-        '    {"name": "item name", "quantity": 1, "category": "furniture|appliance|debris|other", "is_special": false}\n'
-        "  ],\n"
-        '  "totals": {\n'
-        '    "cubic_yards_low": 3.0,\n'
-        '    "cubic_yards_mid": 4.0,\n'
-        '    "cubic_yards_high": 5.0\n'
-        "  },\n"
-        '  "job_type": "standard|premium|hoarder|truck_load",\n'
-        '  "conditions": ["stairs", "heavy_items", "outdoor", "hoarder"],\n'
-        '  "notes": "Brief description of the job"\n'
-        "}\n\n"
-        "PRICING RULES:\n"
-        "- Standard jobs (clean, easy access, under 8 CY): use standard rate\n"
-        "- Premium jobs (hoarder, heavy, stairs, outdoor piles, 10+ bags, loaded truck, over 10 CY): use premium rate, set job_type=premium\n"
-        "- Truck load photos: set job_type=truck_load, estimate fill % of a 16 CY truck\n"
-        "- Hoarder jobs: multiply normal CY by 1.5-2x\n"
-        "- Packed bedroom = 10-14 CY minimum\n"
-        "- 15+ large bags = 6-8 CY minimum\n"
-        "- Loaded truck bed = 8-14 CY depending on fill level\n"
-        "Mark is_special=true for: TVs, televisions, mattresses, tires."
-    )
+    system_prompt = """You are an expert junk removal estimator with years of field experience.
+Analyze ALL photos carefully and return ONLY valid JSON with no markdown, no explanation, no code blocks — raw JSON only.
+
+REQUIRED JSON FORMAT:
+{
+  "items": [
+    {
+      "name": "specific item name",
+      "quantity": 1,
+      "category": "furniture|appliance|electronics|debris|hazardous|other",
+      "cubic_yards": 0.5,
+      "is_special": false,
+      "special_reason": ""
+    }
+  ],
+  "totals": {
+    "cubic_yards_low": 3.0,
+    "cubic_yards_mid": 4.0,
+    "cubic_yards_high": 5.0
+  },
+  "job_type": "standard|premium|hoarder|truck_load",
+  "conditions": [],
+  "confidence": 75,
+  "notes": "Brief job description for the crew"
+}
+
+ITEM IDENTIFICATION RULES:
+- Identify every visible item individually, do not group unless identical
+- Assign cubic_yards to each item based on actual physical size
+- Look specifically along walls, in corners, behind other items
+- FLAT SCREEN TVs: look carefully — often leaning against walls or furniture. Any TV = is_special: true, special_reason: "TV disposal fee"
+- Mattresses/box springs = is_special: true
+- Tires = is_special: true
+- Propane tanks = is_special: true, special_reason: "hazardous"
+- Wheelchairs and medical equipment: note in items, not special fee but flag in notes for crew (may be donateable)
+
+CUBIC YARD REFERENCE GUIDE:
+- King mattress: 2.5 CY
+- Queen mattress: 2.0 CY
+- Full/twin mattress: 1.5 CY
+- Large sofa/sectional: 3-5 CY
+- Loveseat: 2.0 CY
+- Recliner: 1.5 CY
+- Dresser (large): 2.0 CY
+- Dresser (small): 1.0 CY
+- Workbench (large): 3-5 CY
+- File cabinet (4-drawer): 0.75 CY
+- File cabinet (2-drawer): 0.4 CY
+- Refrigerator: 2.5 CY
+- Washer or dryer: 2.0 CY
+- Flat screen TV (large): 0.5 CY
+- Flat screen TV (small): 0.25 CY
+- Cardboard box (large): 0.15 CY
+- Cardboard box (small): 0.08 CY
+- Trash bag (full): 0.15 CY
+- Lumber/wood pieces: measure actual pile volume
+
+JOB TYPE RULES — read carefully:
+STANDARD ($35-40/CY): Clean loads, easy access, under 8 CY, no stairs, no heavy items, no clutter
+
+PREMIUM ($55/CY) — set job_type premium if ANY of these:
+- Stairs required (basement, upper floor, no elevator)
+- Heavy items (appliances, workbenches, safes, exercise equipment)
+- Outdoor piles or overgrown areas
+- 10+ large trash bags
+- Mixed heavy debris
+- Total job over 10 CY
+
+HOARDER ($55/CY + volume multiplier):
+- Floor to ceiling clutter in multiple rooms
+- Narrow pathways through items
+- Bags and boxes stacked on furniture
+- Multiply estimated CY by 1.5-2.0x
+- Packed bedroom minimum: 10-14 CY
+- 15+ bags visible: minimum 6-8 CY
+
+TRUCK LOAD — if photo shows items loaded in a truck bed:
+- Estimate fill percentage of a standard 16 CY truck
+- Set job_type: truck_load
+- CY = fill_percentage * 16
+- Always premium rate
+
+CONDITIONS LIST — include all that apply:
+stairs, heavy_items, outdoor, hoarder, disassembly_needed, multiple_floors, elevator_available, long_carry, truck_load, hazardous_materials, electronics, donation_possible
+
+CONFIDENCE SCORE:
+- 90-100: Clear photos, all items visible, straightforward job
+- 70-89: Some items obscured, reasonable estimate
+- 50-69: Poor lighting, many items hidden, estimate may vary
+- Under 50: Cannot see enough to estimate accurately
+
+Always err toward the higher end of CY when visibility is limited. Better to quote slightly high and come down than to under-quote."""
 
     client = anthropic.Anthropic(api_key=api_key)
 

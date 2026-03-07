@@ -788,20 +788,21 @@ async def get_library_context() -> str:
     return "\n".join(lines)
 
 
-def build_pass2_prompt(pass1_result: dict, library_context: str) -> str:
-    return f"""You are a skeptical senior junk removal estimator reviewing a junior estimator's work. You have NOT seen the photos.
+def build_pass2_content(pass1_result: dict, library_context: str, photo_contents: list) -> list:
+    text = f"""You are a senior junk removal estimator doing a second-pass verification. You can see the same photos the first estimator analyzed. Look at them carefully.
 
-JUNIOR ESTIMATOR'S REPORT:
+FIRST ESTIMATOR'S REPORT:
 {json.dumps(pass1_result, indent=2)}
 
-YOUR JOB - be skeptical and verify:
+YOUR JOB — look at the photos carefully and verify:
 
-1. SANITY CHECK TOTALS
-   - Do the individual item CY values add up to the total?
-   - Does the total CY make sense for a {pass1_result.get('job_type', 'standard')} job?
-   - If total seems off by more than 20%, adjust and explain why
+1. VISUALLY CONFIRM EACH ITEM
+   Look at the actual photos. For each item in the report:
+   - Can you actually see it in the photos?
+   - Does the CY estimate look right for what you see?
+   - If you cannot find it in the photos, remove it
 
-2. VERIFY EACH ITEM against the known reference library:
+2. VERIFY CY VALUES against the known reference library:
    {library_context}
 
    For each item:
@@ -809,54 +810,64 @@ YOUR JOB - be skeptical and verify:
    - If CY differs from library by more than 25%, flag it
    - If item is unknown (not in library), mark needs_lookup: true
 
-3. COMMON MISIDENTIFICATION FLAGS — be extra skeptical of these:
+3. COMMON MISIDENTIFICATION FLAGS — look at the photos for these:
 
-   TV vs WINDOW SCREEN:
-   - Flat screen TVs and window screens look nearly identical in photos — both are dark rectangles with a frame
-   - A TV requires visual confirmation of AT LEAST ONE of: brand logo, visible stand/base, port connections, power cable, remote nearby, or retail packaging
-   - If none of these are confirmed in the Pass 1 notes or item descriptions, REMOVE the TV from the item list
-   - Replace with: "possible TV or window screen — verify on site"
-   - Do NOT charge the $25 TV fee unless confirmed
-   - Add to verification_notes: "TV flagged but not visually confirmed — marked for on-site verification"
+   TV vs WINDOW SCREEN — LOOK CAREFULLY:
+   - If the report includes a flat screen TV, find it in the photos
+   - A TV has: visible stand/base, ports on back/side, brand logo, power cable, or retail packaging nearby
+   - A window screen has: thin metal or wooden frame, mesh/screen material visible through it, no stand
+   - If you see a window screen NOT a TV, remove the TV from the list, add window screen (no special fee)
+   - Only keep TV + $25 fee if you can visually confirm it is a TV
+   - Add to verification_notes: what you saw and why you kept or removed the TV
 
    CARPET vs AREA RUG vs CARPET ROLL:
-   - Loose area rugs are different from rolled carpet
+   - Look at the photos — is it a loose area rug, rolled carpet, or installed carpet?
    - Rolled carpet = likely building material leftover
    - Only flag as large CY if clearly a full room carpet
 
    LUMBER vs SHELVING vs PEGBOARD:
-   - Verify lumber is actual lumber pile, not shelving units or pegboard panels leaning against wall
+   - Look at the photos — is it actual lumber pile, or shelving units / pegboard panels leaning against wall?
 
    GENERAL RULE: When in doubt about ANY item, mark it as "verify on site" rather than confidently including it with a fee attached.
 
-   - Bags: recount visible bags, use 0.15 CY each
-   - Boxes: recount visible boxes
+4. RECOUNT BAGS AND BOXES
+   Actually count visible bags and boxes in the photos.
+   Correct the numbers if the first estimator was wrong.
+   Use 0.15 CY per full bag, 0.15 CY per large box, 0.08 CY per small box.
 
-4. CONFIDENCE GATES & SPECIAL ITEM VERIFICATION
-   You must be able to verify at least 70% of the total CY from known/confident items.
+5. CHECK FOR MISSED ITEMS
+   Look carefully for items the first estimator missed.
+   Add anything significant you can see that was not listed.
 
-   For EVERY is_special item (TV, mattress, tire, propane, etc.):
-   - Check if Pass 1 description provides enough visual evidence to confirm identification
-   - If an is_special item CANNOT be visually confirmed from the Pass 1 description, reduce confidence by 10 points per unconfirmed special item
-   - Add all unconfirmed special items to a new field: "verify_on_site" (array of strings describing what needs checking, e.g. "large flat screen TV — possible window screen")
-   - Remove the special fee for unconfirmed items (set is_special: false) until verified on site
+6. VERIFY SPECIAL FEES
+   Only keep is_special: true and fees for items you can actually see and confirm in the photos.
+   Remove any special fees for items you cannot visually verify.
+   For each unconfirmed special item, reduce confidence by 10 points.
+   Add unconfirmed special items to "verify_on_site" array.
+
+7. SANITY CHECK TOTAL CY
+   Does the total CY make sense for what you can see?
+   A full 16 CY truck looks like a completely packed pickup truck bed floor to top.
+   A single bedroom with furniture = typically 5-8 CY.
+   Adjust if the total seems significantly off (more than 20%).
 
    If confidence < 70%:
    - List exactly which items you cannot verify
-   - Reduce confidence score accordingly
    - Add to notes: "Recommend additional photos of [specific areas]"
 
-5. FINAL ADJUSTMENTS
+8. FINAL ADJUSTMENTS
    - Adjust any CY values that seem wrong
-   - Recalculate totals
+   - Recalculate totals (low/mid/high)
    - Update job_type if needed
    - Update conditions if needed
 
-Return the SAME JSON format as the junior's report but with corrections applied.
-Add a new field: "verification_notes" listing what you changed and why.
-Add "items_needing_lookup": ["item name 1", "item name 2"] for any items not in the reference library.
-Add "verify_on_site": ["description of item needing on-site verification"] for any unconfirmed special items.
-Return ONLY valid JSON with no markdown, no explanation, no code blocks — raw JSON only."""
+Return the corrected JSON in the SAME format as the first estimator's report.
+Add "verification_notes" explaining what you changed and why.
+Add "items_needing_lookup": ["item name"] for unknown items.
+Add "verify_on_site": ["description"] for anything uncertain.
+Return ONLY raw JSON, no markdown, no explanation, no code blocks."""
+
+    return photo_contents + [{"type": "text", "text": text}]
 
 
 def parse_ai_json(raw_text: str) -> dict:
@@ -1111,7 +1122,7 @@ async def run_two_pass_estimate(
         job["message"] = "Verifying estimate..."
 
         try:
-            pass2_prompt = build_pass2_prompt(pass1_result, library_context)
+            pass2_content = build_pass2_content(pass1_result, library_context, image_content)
 
             def run_pass2():
                 return client.messages.create(
@@ -1119,7 +1130,7 @@ async def run_two_pass_estimate(
                     max_tokens=2048,
                     messages=[{
                         "role": "user",
-                        "content": pass2_prompt
+                        "content": pass2_content
                     }]
                 )
 

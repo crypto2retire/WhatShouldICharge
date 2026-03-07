@@ -14,7 +14,7 @@ An AI-powered junk removal job estimator. Users upload customer photos, Claude v
 
 ## Two-Pass Estimation Engine
 1. **Pass 1**: Claude analyzes photos with the reference library injected into the system prompt. Identifies items, estimates CY, classifies job type.
-2. **Pass 2**: A second Claude call (no photos) acts as a skeptical senior reviewer. Verifies CY values against the library, flags misidentifications, checks totals, produces verification_notes.
+2. **Pass 2**: A second Claude call receives the SAME photos plus Pass 1 results. Acts as a skeptical senior reviewer who can visually verify items, recount bags/boxes, catch misidentifications (TV vs window screen, carpet vs rug, lumber vs shelving), and confirm special item fees. Produces verification_notes and verify_on_site lists.
 3. **Pass 3 (Web Lookup)**: For items flagged as `items_needing_lookup`, parallel Tavily searches find real-world dimensions. Claude extracts CY from search results. New items are saved to the reference library.
 4. **Library Learning**: After each estimate, all identified items update the reference library (increment times_seen or add new AI-learned items).
 

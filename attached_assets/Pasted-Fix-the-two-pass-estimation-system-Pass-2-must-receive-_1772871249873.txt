@@ -1,0 +1,128 @@
+Fix the two-pass estimation system. Pass 2 must receive 
+the original photos, not just Pass 1 text. The current 
+implementation is wrong — a skeptic that cannot see the 
+photos cannot verify anything.
+
+## THE FIX
+
+Pass 2 gets BOTH the original photos AND Pass 1 results.
+
+Update the estimation flow:
+
+### Step 1 — Store photos for reuse
+When photos are received in the estimate endpoint, 
+convert them to base64 and keep them in memory for 
+both passes. Do not re-read from disk for Pass 2.
+```python
+# Convert all photos to base64 once, reuse for both passes
+photo_contents = []
+for photo in photos:
+    img_data = await photo.read()
+    b64 = base64.b64encode(img_data).decode('utf-8')
+    media_type = photo.content_type or 'image/jpeg'
+    photo_contents.append({
+        "type": "image",
+        "source": {
+            "type": "base64",
+            "media_type": media_type,
+            "data": b64
+        }
+    })
+```
+
+### Step 2 — Pass 1 unchanged
+Send photos to Claude, get initial estimate JSON.
+Same as current implementation.
+
+### Step 3 — Pass 2 gets the photos too
+Build the Pass 2 message with BOTH photos and Pass 1 results:
+```python
+pass2_messages = [
+    {
+        "role": "user", 
+        "content": [
+            # Include ALL original photos first
+            *photo_contents,
+            
+            # Then the instruction text
+            {
+                "type": "text",
+                "text": f"""You are a senior junk removal estimator 
+doing a second-pass verification. You can see the same photos 
+the first estimator analyzed.
+
+FIRST ESTIMATOR'S REPORT:
+{json.dumps(pass1_result, indent=2)}
+
+YOUR JOB — look at the photos carefully and verify:
+
+1. VISUALLY CONFIRM EACH ITEM
+   Look at the actual photos. For each item in the report:
+   - Can you actually see it in the photos?
+   - Does the CY estimate look right for what you see?
+   - If you cannot find it in the photos, remove it
+
+2. TV vs WINDOW SCREEN — LOOK CAREFULLY
+   If the report includes a flat screen TV:
+   - Look at the photos for a TV
+   - A TV has: visible stand/base, ports on back/side, 
+     brand logo, power cable, or retail packaging nearby
+   - A window screen has: thin frame, mesh/screen material 
+     visible, no stand
+   - If you see a window screen NOT a TV, remove the TV 
+     from the list, add window screen (no special fee)
+   - Only keep TV + $25 fee if you can visually confirm it
+
+3. RECOUNT BAGS AND BOXES
+   Actually count visible bags and boxes in the photos.
+   Correct the numbers if the first estimator was wrong.
+
+4. CHECK FOR MISSED ITEMS
+   Look carefully for items the first estimator missed.
+   Add anything significant you can see that was not listed.
+
+5. VERIFY SPECIAL FEES
+   Only keep is_special: true and fees for items you can 
+   actually see and confirm in the photos.
+   Remove any special fees for items you cannot visually verify.
+
+6. SANITY CHECK TOTAL CY
+   Does the total CY make sense for what you can see?
+   A full 16 CY truck looks like a completely packed 
+   pickup truck bed floor to top. 
+   Adjust if the total seems significantly off.
+
+Return the corrected JSON in the exact same format as Pass 1.
+Add verification_notes explaining what you changed and why.
+Add verify_on_site list for anything uncertain.
+
+Return ONLY raw JSON, no markdown, no explanation."""
+            }
+        ]
+    }
+]
+
+pass2_result = await anthropic_client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=2000,
+    messages=pass2_messages
+)
+```
+
+### Step 4 — Use Pass 2 result as final answer
+Same as current — Pass 2 output is the final estimate.
+
+## IMPORTANT
+- Both passes use the same photos held in memory
+- Do not re-upload or re-read photos from disk
+- If Pass 2 fails for any reason, fall back to Pass 1 silently
+- Log both results separately for comparison analysis
+- This will roughly double API cost per estimate — 
+  that is expected and acceptable
+
+## TEST AFTER BUILDING
+Run the two basement photos again and check:
+- Does Pass 2 correctly identify the dark rectangle 
+  as a window screen instead of a TV?
+- What changed between Pass 1 and Pass 2?
+- Show me the verification_notes from Pass 2

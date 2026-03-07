@@ -1,0 +1,152 @@
+Fix how unconfirmed special fee items are handled.
+The current system is charging customers $25 for a TV 
+that cannot be visually confirmed. This is a business 
+problem — false fees lose bids.
+
+## THE RULE CHANGE
+
+Special fee items (TV, mattress, tire, propane tank) fall 
+into two categories:
+
+CONFIRMED — item is clearly identifiable beyond doubt:
+- Show fee in the estimate
+- Include in total price
+- Show with the $ badge
+
+UNCONFIRMED — item is ambiguous or uncertain:
+- Do NOT include fee in the price total
+- Show as a warning line instead
+- Never penalize the customer for something uncertain
+
+## PART 1: UPDATE AI PROMPT
+
+Add this to both Pass 1 and Pass 2 system prompts:
+
+SPECIAL FEE CONFIDENCE RULES:
+
+For any item with a special fee (TV, mattress, tire, 
+propane tank, hazmat):
+
+Set fee_confirmed: true ONLY if you can see at least 
+TWO of these visual confirmations:
+- Clear item shape matching exactly
+- Brand name or logo visible
+- Associated accessories visible (remote, power cord, 
+  stand, packaging)
+- Item is in an expected location (TV on stand/shelf, 
+  mattress on bed frame)
+- Multiple angles confirm the same item
+
+Set fee_confirmed: false if:
+- Item is partially obscured
+- Could be confused with another item
+- Only one visual confirmation available
+- Poor lighting makes identification uncertain
+
+Update JSON format to include fee_confirmed:
+{
+  "name": "large flat screen tv",
+  "quantity": 1,
+  "cubic_yards": 0.6,
+  "is_special": true,
+  "special_fee": 25,
+  "fee_confirmed": false,
+  "fee_note": "dark rectangle visible but could be 
+               window screen — verify on site"
+}
+
+## PART 2: UPDATE PRICING LOGIC
+
+In compute_pricing, only add special fees when 
+fee_confirmed is true:
+```python
+def compute_pricing(items, cy_low, cy_mid, cy_high, 
+                    rate_low, rate_high, premium_rate,
+                    min_charge, is_premium):
+    
+    # Base price from CY
+    if is_premium:
+        price_low = cy_low * premium_rate
+        price_high = cy_high * premium_rate
+    else:
+        price_low = cy_low * rate_low
+        price_high = cy_high * rate_high
+    
+    # Only add CONFIRMED special fees to price
+    confirmed_fees = []
+    unconfirmed_warnings = []
+    
+    for item in items:
+        if item.get('is_special') and item.get('special_fee', 0) > 0:
+            if item.get('fee_confirmed', True):
+                confirmed_fees.append({
+                    'name': item['name'],
+                    'fee': item['special_fee'] * item.get('quantity', 1),
+                    'note': item.get('fee_note', '')
+                })
+                price_low += item['special_fee'] * item.get('quantity', 1)
+                price_high += item['special_fee'] * item.get('quantity', 1)
+            else:
+                unconfirmed_warnings.append({
+                    'name': item['name'],
+                    'potential_fee': item['special_fee'],
+                    'note': item.get('fee_note', 
+                                    'Verify on site')
+                })
+    
+    return {
+        'price_low': max(price_low, min_charge),
+        'price_high': max(price_high, min_charge),
+        'confirmed_fees': confirmed_fees,
+        'unconfirmed_warnings': unconfirmed_warnings
+    }
+```
+
+## PART 3: UPDATE RESULTS DISPLAY
+
+Show confirmed fees and unconfirmed warnings differently:
+
+CONFIRMED FEE (included in price):
+💻 Large flat screen TV (0.6 CY)  ×1
++$25 · TV disposal fee ✓
+Green badge, included in total, checkmark
+
+UNCONFIRMED WARNING (NOT in price):
+⚠️ Possible TV or window screen
++$25 if confirmed on site · verify before quoting
+Yellow/amber warning box, NOT in total, no checkmark
+Shown below the item list in a separate section:
+
+"📋 Verify on site before finalizing price:
+  ⚠️  Possible TV ($25 fee if confirmed)
+  ⚠️  Possible propane tank ($50 fee if confirmed)"
+
+## PART 4: UPDATE ESTIMATE NOTES
+
+When unconfirmed items exist, automatically add to 
+crew notes:
+
+"VERIFY BEFORE QUOTING: [item list with potential fees]
+ These items could not be confirmed from photos alone.
+ Confirm with customer before giving final price."
+
+## PART 5: DISPLAY THE PRICE RANGE CLEARLY
+
+Update the price range display to show potential range:
+
+Base estimate: $820 – $985
++ Potential fees if confirmed on site: up to $75
+
+This is honest — the customer sees the base price, 
+knows there might be additional fees, crew verifies 
+on arrival.
+
+## TEST AFTER BUILDING
+
+Run the two basement photos again.
+Expected result:
+- NO $25 TV fee in the price total
+- Yellow warning: "Possible TV or window screen — 
+  verify on site, $25 fee if confirmed"
+- Price should drop by $25 from previous result
+- Crew notes should mention verifying the item

@@ -615,19 +615,43 @@ def calculate_price(result_data: dict, rate_low=35.0, rate_high=40.0, rate_premi
     price_low = cy_low * r_low
     price_high = cy_high * r_high
 
-    surcharge = 0.0
+    confirmed_fees = []
+    unconfirmed_warnings = []
+
     for item in items:
         if item.get("is_special"):
             qty = int(item.get("quantity", 1))
-            surcharge += qty * 25.0
+            fee = item.get("special_fee", 25.0) or 25.0
+            total_fee = qty * fee
 
-    price_low += surcharge
-    price_high += surcharge
+            if item.get("fee_confirmed", False):
+                confirmed_fees.append({
+                    "name": item.get("name", "Unknown"),
+                    "fee": total_fee,
+                    "note": item.get("fee_note", ""),
+                })
+                price_low += total_fee
+                price_high += total_fee
+            else:
+                unconfirmed_warnings.append({
+                    "name": item.get("name", "Unknown"),
+                    "potential_fee": total_fee,
+                    "note": item.get("fee_note", "Verify on site"),
+                })
 
     price_low = max(price_low, min_charge)
     price_high = max(price_high, min_charge)
 
-    return round(price_low, 2), round(price_high, 2), round(cy_mid, 1)
+    potential_fees_total = sum(w["potential_fee"] for w in unconfirmed_warnings)
+
+    return (
+        round(price_low, 2),
+        round(price_high, 2),
+        round(cy_mid, 1),
+        confirmed_fees,
+        unconfirmed_warnings,
+        potential_fees_total,
+    )
 
 
 def compress_image(image_bytes: bytes, max_size_kb: int = 1000) -> bytes:
@@ -708,7 +732,9 @@ REQUIRED JSON FORMAT:
       "category": "furniture|appliance|electronics|debris|hazardous|other",
       "cubic_yards": 0.5,
       "is_special": false,
-      "special_reason": ""
+      "special_reason": "",
+      "fee_confirmed": false,
+      "fee_note": ""
     }
   ],
   "totals": {
@@ -731,6 +757,23 @@ ITEM IDENTIFICATION RULES:
 - Tires = is_special: true
 - Propane tanks = is_special: true, special_reason: "hazardous"
 - Wheelchairs and medical equipment: note in items, not special fee but flag in notes for crew (may be donateable)
+
+SPECIAL FEE CONFIDENCE RULES:
+For any item with is_special: true (TV, mattress, tire, propane tank, hazmat):
+Set fee_confirmed: true ONLY if you can see at least TWO of these visual confirmations:
+- Clear item shape matching exactly what the item should look like
+- Brand name or logo visible
+- Associated accessories visible (remote, power cord, stand, packaging)
+- Item is in an expected location (TV on stand/shelf, mattress on bed frame)
+- Multiple angles confirm the same item
+
+Set fee_confirmed: false if:
+- Item is partially obscured
+- Could be confused with another item (e.g. TV vs window screen)
+- Only one visual confirmation available
+- Poor lighting makes identification uncertain
+
+When fee_confirmed is false, add a fee_note explaining why (e.g. "dark rectangle visible but could be window screen — verify on site")
 
 JOB TYPE RULES — read carefully:
 STANDARD ($35-40/CY): Clean loads, easy access, under 8 CY, no stairs, no heavy items, no clutter
@@ -839,10 +882,17 @@ YOUR JOB — look at the photos carefully and verify:
    Look carefully for items the first estimator missed.
    Add anything significant you can see that was not listed.
 
-6. VERIFY SPECIAL FEES
-   Only keep is_special: true and fees for items you can actually see and confirm in the photos.
-   Remove any special fees for items you cannot visually verify.
-   For each unconfirmed special item, reduce confidence by 10 points.
+6. VERIFY SPECIAL FEES — use fee_confirmed field
+   For each is_special item, look at the photos and apply the SPECIAL FEE CONFIDENCE RULES:
+   Set fee_confirmed: true ONLY if you can see at least TWO visual confirmations:
+   - Clear item shape matching exactly
+   - Brand name or logo visible
+   - Associated accessories visible (remote, power cord, stand, packaging)
+   - Item is in an expected location (TV on stand/shelf, mattress on bed frame)
+   - Multiple angles confirm the same item
+
+   Set fee_confirmed: false if uncertain. Add fee_note explaining why.
+   For each unconfirmed special item (fee_confirmed: false), reduce confidence by 10 points.
    Add unconfirmed special items to "verify_on_site" array.
 
 7. SANITY CHECK TOTAL CY
@@ -1194,7 +1244,7 @@ async def run_two_pass_estimate(
         except Exception:
             pass
 
-        price_low, price_high, cy_mid = calculate_price(
+        price_low, price_high, cy_mid, confirmed_fees, unconfirmed_warnings, potential_fees_total = calculate_price(
             result_data,
             rate_low=user.price_per_cy_low or 35.0,
             rate_high=user.price_per_cy_high or 40.0,
@@ -1226,6 +1276,12 @@ async def run_two_pass_estimate(
 
         remaining = max(0, user.estimates_limit - user.estimates_used)
 
+        notes = result_data.get("notes", "")
+        if unconfirmed_warnings:
+            verify_lines = [f"  - {w['name']} (${w['potential_fee']:.0f} fee if confirmed)" for w in unconfirmed_warnings]
+            crew_note = "\n\nVERIFY BEFORE QUOTING:\n" + "\n".join(verify_lines) + "\nThese items could not be confirmed from photos alone. Confirm with customer before giving final price."
+            notes = notes.rstrip() + crew_note
+
         resp = {
             "id": estimate_id,
             "price_low": price_low,
@@ -1234,11 +1290,14 @@ async def run_two_pass_estimate(
             "items": result_data.get("items", []),
             "job_type": result_data.get("job_type", "standard"),
             "conditions": result_data.get("conditions", []),
-            "notes": result_data.get("notes", ""),
+            "notes": notes,
             "confidence": result_data.get("confidence", 75),
             "estimates_remaining": remaining,
             "verification_notes": result_data.get("verification_notes", ""),
             "verify_on_site": result_data.get("verify_on_site", []),
+            "confirmed_fees": confirmed_fees,
+            "unconfirmed_warnings": unconfirmed_warnings,
+            "potential_fees_total": potential_fees_total,
             "items_looked_up": lookups_done,
             "two_pass_verified": bool(pass2_json_str),
         }

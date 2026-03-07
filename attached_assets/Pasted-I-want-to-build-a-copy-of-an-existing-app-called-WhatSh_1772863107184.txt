@@ -1,0 +1,97 @@
+I want to build a copy of an existing app called WhatShouldICharge 
+(whatshouldicharge.app) — an AI-powered junk removal job estimator. 
+Build me a fully working version on Replit with the following specs:
+
+## WHAT THE APP DOES
+Junk removal businesses use it to get instant price estimates from 
+customer photos. Customer uploads photos of their junk, AI analyzes 
+them using Claude vision, and returns a price range + item breakdown.
+
+## TECH STACK
+- Python FastAPI backend
+- Single HTML frontend (no framework needed)
+- PostgreSQL database (use Replit's built-in DB or SQLite for simplicity)
+- Anthropic Claude API for vision/estimation
+
+## CORE FEATURES TO BUILD
+
+### 1. Estimate Flow (main feature)
+- Upload 1-6 photos of junk
+- Optional: label each photo by room (Living Room, Bedroom, Garage, etc.)
+- Special option: "Truck Load" — slider for fill % (10-100%), 
+  auto-calculates cubic yards (16 CY truck capacity)
+- Send photos to Claude claude-sonnet-4-20250514 with vision
+- Return: price range (low/high), cubic yards estimate, item list, job type
+
+### 2. Pricing Logic
+- Standard rate: $35/CY (low) to $40/CY (high)  
+- Premium rate: $55/CY for: hoarder situations, heavy items, 
+  stairs, loaded truck
+- Minimum charge: $75
+- Special items (TVs, mattresses, tires): flat $25 surcharge each
+- Truck Load rooms: always premium, CY = fill% × 16
+
+### 3. AI Prompt for Estimates
+Send this system prompt to Claude with the photos:
+
+"You are an expert junk removal estimator. Analyze the photos and 
+return ONLY valid JSON (no markdown, no explanation) in this exact format:
+
+{
+  "items": [
+    {"name": "item name", "quantity": 1, "category": "furniture|appliance|debris|other", "is_special": false}
+  ],
+  "totals": {
+    "cubic_yards_low": 3.0,
+    "cubic_yards_mid": 4.0, 
+    "cubic_yards_high": 5.0
+  },
+  "job_type": "standard|premium|hoarder|truck_load",
+  "conditions": ["stairs", "heavy_items", "outdoor", "hoarder"],
+  "notes": "Brief description of the job"
+}
+
+PRICING RULES:
+- Standard jobs (clean, easy access, under 8 CY): use standard rate
+- Premium jobs (hoarder, heavy, stairs, outdoor piles, 10+ bags, 
+  loaded truck, over 10 CY): use premium rate, set job_type=premium
+- Truck load photos: set job_type=truck_load, estimate fill % of 
+  a 16 CY truck
+- Hoarder jobs: multiply normal CY by 1.5-2x
+- Packed bedroom = 10-14 CY minimum
+- 15+ large bags = 6-8 CY minimum
+- Loaded truck bed = 8-14 CY depending on fill level"
+
+### 4. Simple Frontend
+Single HTML page with:
+- Photo upload area (drag and drop or click)
+- Room labeling buttons (Living Room, Bedroom, Garage, Basement, 
+  Kitchen, Other, Truck Load)
+- Truck Load modal: fill % slider, shows live CY and price preview
+- Submit button
+- Results display: price range, item list, job type badge, CY estimate
+- Clean dark theme
+
+### 5. Environment Variables Needed
+- ANTHROPIC_API_KEY (I will provide this)
+
+## DATABASE (keep simple)
+Just store estimates for history:
+- id, created_at, photos_count, result_json, price_low, price_high, cy_estimate
+
+## REPLIT SETUP
+- Use Python 3.11+
+- requirements.txt with: fastapi, uvicorn, anthropic, python-multipart, 
+  pillow, sqlalchemy, aiosqlite
+- Use SQLite (built into Replit, no setup needed)
+- Single main.py for backend
+- Single static/index.html for frontend
+- .replit file configured to run: uvicorn main:app --host 0.0.0.0 --port 8080
+
+## BUILD ORDER
+1. main.py with FastAPI, SQLite setup, /api/estimate endpoint
+2. static/index.html with full UI
+3. Test with a sample estimate
+4. Show me how to add my ANTHROPIC_API_KEY in Replit Secrets
+
+Build the complete working app. Make it clean and professional.

@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JunkEstimate AI — Instant Junk Removal Pricing</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3352;
+    --accent: #4f8ef7;
+    --accent-glow: rgba(79,142,247,0.18);
+    --green: #22c55e;
+    --orange: #f59e0b;
+    --red: #ef4444;
+    --text: #e8eaf0;
+    --muted: #7b82a0;
+    --radius: 14px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo-icon {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, #4f8ef7, #7c3aed);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+
+  header h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
+  header p { font-size: 0.82rem; color: var(--muted); }
+
+  .main-wrap {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+
+  .card-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+
+  /* Upload zone */
+  #drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 48px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--bg);
+  }
+
+  #drop-zone:hover, #drop-zone.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+  }
+
+  #drop-zone .upload-icon { font-size: 2.6rem; margin-bottom: 10px; }
+  #drop-zone .upload-label { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
+  #drop-zone .upload-sub { font-size: 0.83rem; color: var(--muted); }
+
+  #file-input { display: none; }
+
+  /* Photo previews */
+  #previews {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+    margin-top: 18px;
+  }
+
+  .preview-item {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    aspect-ratio: 1;
+    border: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .preview-item img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .preview-item .remove-btn {
+    position: absolute;
+    top: 5px; right: 5px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+
+  .preview-item .remove-btn:hover { background: var(--red); }
+
+  .preview-item .room-badge {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(0,0,0,0.75);
+    font-size: 0.7rem;
+    padding: 4px 6px;
+    text-align: center;
+    backdrop-filter: blur(4px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Room selector */
+  #room-selector {
+    display: none;
+    margin-top: 22px;
+    padding-top: 22px;
+    border-top: 1px solid var(--border);
+  }
+
+  #room-selector.visible { display: block; }
+
+  .room-selector-label {
+    font-size: 0.83rem;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  #room-selector-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+
+  .room-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .room-btn {
+    padding: 7px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.83rem;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+
+  .room-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .room-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .room-btn.truck-btn {
+    background: linear-gradient(135deg, #f59e0b20, #f59e0b10);
+    border-color: #f59e0b66;
+    color: #f59e0b;
+  }
+
+  .room-btn.truck-btn.active {
+    background: #f59e0b;
+    color: #0f1117;
+    border-color: #f59e0b;
+  }
+
+  /* Truck load slider */
+  #truck-panel {
+    display: none;
+    margin-top: 18px;
+    background: var(--bg);
+    border: 1px solid #f59e0b44;
+    border-radius: 10px;
+    padding: 18px;
+  }
+
+  #truck-panel.visible { display: block; }
+
+  .truck-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .truck-header span { font-weight: 600; font-size: 0.9rem; color: #f59e0b; }
+
+  .truck-stats {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 14px;
+  }
+
+  .truck-stat {
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    flex: 1;
+    text-align: center;
+  }
+
+  .truck-stat .stat-val {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #f59e0b;
+    display: block;
+  }
+
+  .truck-stat .stat-label {
+    font-size: 0.73rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  #truck-slider {
+    width: 100%;
+    accent-color: #f59e0b;
+    cursor: pointer;
+    height: 6px;
+  }
+
+  .slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  /* Submit */
+  #submit-btn {
+    width: 100%;
+    padding: 15px;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(135deg, var(--accent), #7c3aed);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    letter-spacing: 0.01em;
+  }
+
+  #submit-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+  #submit-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* Loading */
+  #loading {
+    display: none;
+    text-align: center;
+    padding: 40px 20px;
+  }
+
+  #loading.visible { display: block; }
+
+  .spinner {
+    width: 44px; height: 44px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text { font-size: 1rem; font-weight: 600; }
+  .loading-sub { font-size: 0.83rem; color: var(--muted); margin-top: 6px; }
+
+  /* Results */
+  #results { display: none; }
+  #results.visible { display: block; }
+
+  .price-banner {
+    background: linear-gradient(135deg, #0d2641, #1a1d27);
+    border: 1px solid #4f8ef755;
+    border-radius: 14px;
+    padding: 30px;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+
+  .price-banner .label { font-size: 0.8rem; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 10px; }
+
+  .price-range {
+    font-size: 2.8rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  .price-range span { color: var(--muted); font-size: 1.8rem; font-weight: 400; }
+
+  .price-meta {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 18px;
+    flex-wrap: wrap;
+  }
+
+  .price-meta-item {
+    text-align: center;
+  }
+
+  .price-meta-item .val {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .price-meta-item .lbl {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* Job type badge */
+  .job-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-top: 14px;
+  }
+
+  .badge-standard { background: #22c55e22; color: #22c55e; border: 1px solid #22c55e44; }
+  .badge-premium { background: #f59e0b22; color: #f59e0b; border: 1px solid #f59e0b44; }
+  .badge-hoarder { background: #ef444422; color: #ef4444; border: 1px solid #ef444444; }
+  .badge-truck_load { background: #7c3aed22; color: #a78bfa; border: 1px solid #7c3aed44; }
+
+  /* Conditions */
+  .conditions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .condition-pill {
+    padding: 4px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  /* Item list */
+  .items-grid {
+    display: grid;
+    gap: 8px;
+  }
+
+  .item-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 14px;
+    background: var(--bg);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+
+  .item-icon {
+    width: 30px; height: 30px;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+
+  .cat-furniture { background: #4f8ef722; }
+  .cat-appliance { background: #22c55e22; }
+  .cat-debris { background: #f59e0b22; }
+  .cat-other { background: #7c3aed22; }
+
+  .item-name { flex: 1; font-size: 0.9rem; font-weight: 500; }
+  .item-qty {
+    font-size: 0.8rem;
+    color: var(--muted);
+    background: var(--surface2);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  .item-special {
+    font-size: 0.7rem;
+    background: #f59e0b22;
+    color: #f59e0b;
+    border: 1px solid #f59e0b44;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  /* Notes */
+  .notes-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 0.88rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* Error */
+  #error-box {
+    display: none;
+    background: #ef444415;
+    border: 1px solid #ef444444;
+    border-radius: 10px;
+    padding: 16px;
+    color: #ef4444;
+    font-size: 0.88rem;
+    margin-top: 14px;
+  }
+
+  #error-box.visible { display: block; }
+
+  /* New estimate btn */
+  #new-estimate-btn {
+    width: 100%;
+    padding: 13px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 14px;
+    transition: all 0.15s;
+  }
+
+  #new-estimate-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.visible { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    max-width: 420px;
+    width: 100%;
+  }
+
+  .modal h3 { font-size: 1.1rem; margin-bottom: 6px; }
+  .modal .modal-sub { font-size: 0.83rem; color: var(--muted); margin-bottom: 24px; }
+
+  /* Tooltip for selected photo room */
+  .photo-count {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+
+  @media (max-width: 500px) {
+    .price-range { font-size: 2rem; }
+    .card { padding: 20px; }
+    .truck-stats { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-icon">🗑️</div>
+  <div>
+    <h1>JunkEstimate AI</h1>
+    <p>Instant pricing from photos — powered by AI</p>
+  </div>
+</header>
+
+<div class="main-wrap">
+
+  <!-- Upload Card -->
+  <div class="card" id="upload-card">
+    <div class="card-title">Upload Photos</div>
+
+    <div id="drop-zone">
+      <div class="upload-icon">📷</div>
+      <div class="upload-label">Drop photos here or click to upload</div>
+      <div class="upload-sub">Up to 6 photos • JPG, PNG, WEBP supported</div>
+    </div>
+    <input type="file" id="file-input" accept="image/*" multiple>
+
+    <div id="previews"></div>
+    <div class="photo-count" id="photo-count"></div>
+
+    <!-- Room Selector -->
+    <div id="room-selector">
+      <div id="room-selector-title">Label Photo <span id="current-photo-num">1</span></div>
+      <div class="room-selector-label">Choose the room or source for this photo:</div>
+      <div class="room-grid">
+        <button class="room-btn" data-room="Living Room">🛋️ Living Room</button>
+        <button class="room-btn" data-room="Bedroom">🛏️ Bedroom</button>
+        <button class="room-btn" data-room="Garage">🚗 Garage</button>
+        <button class="room-btn" data-room="Basement">🏚️ Basement</button>
+        <button class="room-btn" data-room="Kitchen">🍳 Kitchen</button>
+        <button class="room-btn" data-room="Outdoor">🌳 Outdoor</button>
+        <button class="room-btn" data-room="Other">📦 Other</button>
+        <button class="room-btn truck-btn" data-room="Truck Load" id="truck-load-btn">🚛 Truck Load</button>
+      </div>
+
+      <!-- Truck Load Panel -->
+      <div id="truck-panel">
+        <div class="truck-header">
+          <span>🚛 Truck Load Estimate</span>
+        </div>
+        <div class="truck-stats">
+          <div class="truck-stat">
+            <span class="stat-val" id="truck-pct-val">50%</span>
+            <div class="stat-label">Fill Level</div>
+          </div>
+          <div class="truck-stat">
+            <span class="stat-val" id="truck-cy-val">8.0</span>
+            <div class="stat-label">Cubic Yards</div>
+          </div>
+          <div class="truck-stat">
+            <span class="stat-val" id="truck-price-val">$440–$440</span>
+            <div class="stat-label">Est. Price</div>
+          </div>
+        </div>
+        <input type="range" id="truck-slider" min="10" max="100" step="5" value="50">
+        <div class="slider-labels"><span>10%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Submit -->
+  <div id="submit-section">
+    <button id="submit-btn" disabled>Upload Photos to Get Estimate</button>
+    <div id="error-box"></div>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <div class="loading-text">Analyzing your photos...</div>
+    <div class="loading-sub">AI is estimating cubic yards and pricing</div>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <div class="price-banner">
+      <div class="label">Estimated Price Range</div>
+      <div class="price-range" id="res-price"></div>
+      <div class="price-meta">
+        <div class="price-meta-item">
+          <div class="val" id="res-cy"></div>
+          <div class="lbl">Cubic Yards (est.)</div>
+        </div>
+        <div class="price-meta-item">
+          <div class="val" id="res-photos"></div>
+          <div class="lbl">Photos Analyzed</div>
+        </div>
+      </div>
+      <div id="res-badge"></div>
+      <div class="conditions-row" id="res-conditions"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Item Breakdown</div>
+      <div class="items-grid" id="res-items"></div>
+    </div>
+
+    <div class="card" id="notes-card" style="display:none">
+      <div class="card-title">Estimator Notes</div>
+      <div class="notes-box" id="res-notes"></div>
+    </div>
+
+    <button id="new-estimate-btn">+ New Estimate</button>
+  </div>
+
+</div>
+
+<script>
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const previews = document.getElementById('previews');
+const photoCount = document.getElementById('photo-count');
+const roomSelector = document.getElementById('room-selector');
+const truckPanel = document.getElementById('truck-panel');
+const truckSlider = document.getElementById('truck-slider');
+const submitBtn = document.getElementById('submit-btn');
+const loadingEl = document.getElementById('loading');
+const resultsEl = document.getElementById('results');
+const errorBox = document.getElementById('error-box');
+const uploadCard = document.getElementById('upload-card');
+const submitSection = document.getElementById('submit-section');
+
+let photos = []; // {file, url, room}
+let selectedPhotoIdx = null;
+let truckLoadPct = null; // global truck load percentage (if any photo is truck load)
+
+const ROOMS = ['Living Room','Bedroom','Garage','Basement','Kitchen','Outdoor','Other','Truck Load'];
+
+const catIcons = {
+  furniture: '🪑',
+  appliance: '🔌',
+  debris: '🗑️',
+  other: '📦'
+};
+
+// Drop zone
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  handleFiles(Array.from(e.dataTransfer.files));
+});
+fileInput.addEventListener('change', e => handleFiles(Array.from(e.target.files)));
+
+function handleFiles(files) {
+  const remaining = 6 - photos.length;
+  if (remaining <= 0) { showError('Maximum 6 photos allowed.'); return; }
+  const toAdd = files.filter(f => f.type.startsWith('image/')).slice(0, remaining);
+  toAdd.forEach(file => {
+    const url = URL.createObjectURL(file);
+    photos.push({ file, url, room: null });
+  });
+  renderPreviews();
+  // Auto-select last added for room labeling
+  if (photos.length > 0) {
+    selectedPhotoIdx = photos.length - 1;
+    showRoomSelector(selectedPhotoIdx);
+  }
+}
+
+function renderPreviews() {
+  previews.innerHTML = '';
+  photos.forEach((p, i) => {
+    const div = document.createElement('div');
+    div.className = 'preview-item';
+    div.innerHTML = `
+      <img src="${p.url}" alt="Photo ${i+1}">
+      <button class="remove-btn" data-idx="${i}" title="Remove">✕</button>
+      <div class="room-badge">${p.room || '⚠ No label'}</div>
+    `;
+    div.addEventListener('click', e => {
+      if (e.target.classList.contains('remove-btn')) return;
+      selectedPhotoIdx = i;
+      showRoomSelector(i);
+    });
+    previews.appendChild(div);
+  });
+
+  photos.length > 0
+    ? previews.querySelectorAll('.remove-btn').forEach(btn => {
+        btn.addEventListener('click', e => { e.stopPropagation(); removePhoto(parseInt(btn.dataset.idx)); });
+      })
+    : null;
+
+  updatePhotoCount();
+  updateSubmitBtn();
+  if (photos.length === 0) roomSelector.classList.remove('visible');
+}
+
+function removePhoto(idx) {
+  URL.revokeObjectURL(photos[idx].url);
+  photos.splice(idx, 1);
+  if (selectedPhotoIdx >= photos.length) selectedPhotoIdx = photos.length - 1;
+  renderPreviews();
+  if (photos.length > 0 && selectedPhotoIdx >= 0) showRoomSelector(selectedPhotoIdx);
+  else roomSelector.classList.remove('visible');
+  updateTruckLoad();
+}
+
+function updatePhotoCount() {
+  photoCount.textContent = photos.length > 0 ? `${photos.length}/6 photo${photos.length !== 1 ? 's' : ''} added` : '';
+}
+
+function showRoomSelector(idx) {
+  if (idx < 0 || idx >= photos.length) return;
+  selectedPhotoIdx = idx;
+  roomSelector.classList.add('visible');
+  document.getElementById('current-photo-num').textContent = idx + 1;
+
+  document.querySelectorAll('.room-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.room === photos[idx].room);
+  });
+
+  const isTruck = photos[idx].room === 'Truck Load';
+  isTruck ? truckPanel.classList.add('visible') : truckPanel.classList.remove('visible');
+}
+
+document.querySelectorAll('.room-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (selectedPhotoIdx === null) return;
+    photos[selectedPhotoIdx].room = btn.dataset.room;
+    document.querySelectorAll('.room-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderPreviews();
+
+    const isTruck = btn.dataset.room === 'Truck Load';
+    isTruck ? truckPanel.classList.add('visible') : truckPanel.classList.remove('visible');
+
+    updateTruckLoad();
+    showRoomSelector(selectedPhotoIdx);
+  });
+});
+
+function updateTruckLoad() {
+  const hasTruck = photos.some(p => p.room === 'Truck Load');
+  if (hasTruck) {
+    truckLoadPct = parseInt(truckSlider.value);
+  } else {
+    truckLoadPct = null;
+    truckPanel.classList.remove('visible');
+  }
+  updateTruckDisplay();
+}
+
+truckSlider.addEventListener('input', () => {
+  truckLoadPct = parseInt(truckSlider.value);
+  updateTruckDisplay();
+});
+
+function updateTruckDisplay() {
+  const pct = parseInt(truckSlider.value);
+  const cy = ((pct / 100) * 16).toFixed(1);
+  const priceLow = Math.max(parseFloat(cy) * 55, 75).toFixed(0);
+  document.getElementById('truck-pct-val').textContent = pct + '%';
+  document.getElementById('truck-cy-val').textContent = cy;
+  document.getElementById('truck-price-val').textContent = '$' + priceLow + '–$' + priceLow;
+}
+
+updateTruckDisplay();
+
+function updateSubmitBtn() {
+  const allLabeled = photos.length > 0 && photos.every(p => p.room);
+  submitBtn.disabled = !allLabeled;
+  if (photos.length === 0) {
+    submitBtn.textContent = 'Upload Photos to Get Estimate';
+  } else if (!allLabeled) {
+    submitBtn.textContent = 'Label All Photos to Continue';
+  } else {
+    submitBtn.textContent = `Get Estimate for ${photos.length} Photo${photos.length !== 1 ? 's' : ''}`;
+  }
+}
+
+submitBtn.addEventListener('click', submitEstimate);
+
+async function submitEstimate() {
+  hideError();
+  submitSection.style.display = 'none';
+  uploadCard.style.display = 'none';
+  loadingEl.classList.add('visible');
+  resultsEl.classList.remove('visible');
+
+  const formData = new FormData();
+  const rooms = photos.map(p => p.room);
+  photos.forEach(p => formData.append('files', p.file));
+  formData.append('rooms', JSON.stringify(rooms));
+
+  const hasTruck = photos.some(p => p.room === 'Truck Load');
+  if (hasTruck && truckLoadPct) {
+    formData.append('truck_load_pct', truckLoadPct);
+  }
+
+  try {
+    const resp = await fetch('/api/estimate', { method: 'POST', body: formData });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      throw new Error(data.detail || 'Unknown error');
+    }
+
+    showResults(data);
+  } catch (err) {
+    loadingEl.classList.remove('visible');
+    submitSection.style.display = 'block';
+    uploadCard.style.display = 'block';
+    showError(err.message || 'Failed to get estimate. Please try again.');
+  }
+}
+
+function showResults(data) {
+  loadingEl.classList.remove('visible');
+  resultsEl.classList.add('visible');
+
+  document.getElementById('res-price').innerHTML =
+    `$${data.price_low.toLocaleString()} <span>–</span> $${data.price_high.toLocaleString()}`;
+
+  document.getElementById('res-cy').textContent = data.cy_estimate + ' CY';
+  document.getElementById('res-photos').textContent = photos.length;
+
+  const jobType = data.job_type || 'standard';
+  const badgeLabels = {
+    standard: '✅ Standard Job',
+    premium: '⚡ Premium Job',
+    hoarder: '🚨 Hoarder Situation',
+    truck_load: '🚛 Truck Load'
+  };
+  const badge = document.getElementById('res-badge');
+  badge.innerHTML = `<span class="job-badge badge-${jobType}">${badgeLabels[jobType] || jobType}</span>`;
+
+  const condEl = document.getElementById('res-conditions');
+  condEl.innerHTML = '';
+  const condLabels = {
+    stairs: '⚡ Stairs',
+    heavy_items: '🏋️ Heavy Items',
+    outdoor: '🌳 Outdoor',
+    hoarder: '🚨 Hoarder'
+  };
+  (data.conditions || []).forEach(c => {
+    const pill = document.createElement('div');
+    pill.className = 'condition-pill';
+    pill.textContent = condLabels[c] || c;
+    condEl.appendChild(pill);
+  });
+
+  const itemsEl = document.getElementById('res-items');
+  itemsEl.innerHTML = '';
+  (data.items || []).forEach(item => {
+    const cat = item.category || 'other';
+    const row = document.createElement('div');
+    row.className = 'item-row';
+    row.innerHTML = `
+      <div class="item-icon cat-${cat}">${catIcons[cat] || '📦'}</div>
+      <div class="item-name">${item.name || 'Unknown item'}</div>
+      <div class="item-qty">×${item.quantity || 1}</div>
+      ${item.is_special ? '<div class="item-special">+$25 surcharge</div>' : ''}
+    `;
+    itemsEl.appendChild(row);
+  });
+
+  if (data.notes) {
+    document.getElementById('res-notes').textContent = data.notes;
+    document.getElementById('notes-card').style.display = 'block';
+  } else {
+    document.getElementById('notes-card').style.display = 'none';
+  }
+}
+
+document.getElementById('new-estimate-btn').addEventListener('click', () => {
+  photos.forEach(p => URL.revokeObjectURL(p.url));
+  photos = [];
+  selectedPhotoIdx = null;
+  truckLoadPct = null;
+  fileInput.value = '';
+  renderPreviews();
+  roomSelector.classList.remove('visible');
+  truckPanel.classList.remove('visible');
+  resultsEl.classList.remove('visible');
+  loadingEl.classList.remove('visible');
+  submitSection.style.display = 'block';
+  uploadCard.style.display = 'block';
+  hideError();
+  updateSubmitBtn();
+});
+
+function showError(msg) {
+  errorBox.textContent = '⚠️ ' + msg;
+  errorBox.classList.add('visible');
+}
+function hideError() {
+  errorBox.classList.remove('visible');
+  errorBox.textContent = '';
+}
+</script>
+</body>
+</html>

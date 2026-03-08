@@ -30,6 +30,15 @@ An AI-powered junk removal job estimator. Users upload customer photos, Claude v
 - Status progresses: analyzing → looking_up → complete
 - If lookups fail, silently falls back to base result
 
+## SEO
+- Landing page has full meta tags: description, canonical, OG, Twitter Card, robots, theme-color
+- JSON-LD structured data: SoftwareApplication (with pricing offers), FAQPage (5 questions), Organization
+- External CSS for browser caching (`landing.css`)
+- SVG favicon with green $ icon
+- robots.txt blocks auth-gated pages, allows landing page
+- sitemap.xml lists indexable pages
+- Routes: `GET /robots.txt`, `GET /sitemap.xml`
+
 ## Routes
 - `GET /` — Marketing landing page (`static/landing.html`)
 - `GET /estimate` — Estimator app (`static/index.html`, requires auth)
@@ -57,11 +66,15 @@ An AI-powered junk removal job estimator. Users upload customer photos, Claude v
 - `main.py` — FastAPI backend, DB models, auth, Stripe, two-pass estimation, reference library, pricing logic
 - `static/index.html` — Estimator UI (auth-aware navbar, upload, room labels, truck load, polling progress, two-pass results with verification badges)
 - `static/library.html` — Reference library viewer (searchable table, sort by seen/name/recent, source badges, stats)
-- `static/landing.html` — Marketing landing page (hero, features, pricing, FAQ, scroll animations)
+- `static/landing.html` — Marketing landing page (hero, features, pricing, FAQ, scroll animations, SEO-optimized)
+- `static/landing.css` — External CSS for landing page (cacheable)
 - `static/login.html` — Login form
 - `static/signup.html` — Signup form (email, password, company name, city, state)
 - `static/upgrade.html` — Subscription tier selection (Starter/Pro/Agency)
 - `static/payment-success.html` — Post-payment confirmation
+- `static/robots.txt` — Search engine crawl directives (blocks auth-gated pages)
+- `static/sitemap.xml` — XML sitemap for search engine indexing
+- `static/favicon.svg` — SVG favicon (green $ icon)
 - `estimates.db` — SQLite database (auto-created on startup)
 
 ## Database Tables

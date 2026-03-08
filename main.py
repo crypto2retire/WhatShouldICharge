@@ -277,6 +277,16 @@ def send_email(to_email: str, subject: str, html_content: str):
         pass
 
 
+@app.get("/robots.txt")
+async def robots_txt():
+    return FileResponse("static/robots.txt", media_type="text/plain")
+
+
+@app.get("/sitemap.xml")
+async def sitemap_xml():
+    return FileResponse("static/sitemap.xml", media_type="application/xml")
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return FileResponse("static/landing.html")

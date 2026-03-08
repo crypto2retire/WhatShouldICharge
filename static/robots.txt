@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+
+Disallow: /api/
+Disallow: /admin/
+Disallow: /estimate
+Disallow: /library
+Disallow: /login
+Disallow: /signup
+Disallow: /upgrade
+Disallow: /payment-success
+
+Sitemap: https://whatshouldicharge.app/sitemap.xml

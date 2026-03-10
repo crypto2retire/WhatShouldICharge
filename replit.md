@@ -180,18 +180,43 @@ Admin user kevin@cleartheclutter.net seeded with is_admin=True.
 - Agency: `price_1T7PXXAPEzwLONiqpQbgpgZ8`
 
 ## Security & Performance Optimizations
+
+### Security Hardening
+- Security headers middleware: X-Content-Type-Options, X-Frame-Options (DENY), X-XSS-Protection, Referrer-Policy, Permissions-Policy, Strict-Transport-Security, Content-Security-Policy
+- Rate limiting on auth endpoints: 10 req/min for login/signup/team-auth, 5 req/5min for forgot-password
+- Input validation: email format/length on signup, password max length (128 chars to prevent bcrypt DoS), file content-type validation (image MIME types only)
 - Stripe webhook derives tier from price_id via `list_line_items` (never trusts client-supplied tier_name)
 - Checkout endpoint validates price_id against server-side `PRICE_TO_TIER` mapping
 - All innerHTML rendering of AI/DB data uses HTML escaping (`esc()` function) to prevent XSS
-- bcrypt hashing runs in thread executor to avoid blocking the event loop
-- Stripe API calls run in thread executor for async compatibility
+- Generic error messages returned to clients (no internal details leaked)
+- Admin user configured via `ADMIN_EMAIL` environment variable (not hardcoded)
+- CORS hardened with explicit methods and headers (no wildcards)
+- Team estimate status endpoint checks ownership before returning results
 - Session cookies set with `secure=True`, `httponly=True`, `samesite=lax`
 - Upload size limit: 20MB per file, 20 files max
-- Estimate quota only incremented after successful AI processing (failed jobs don't consume quota)
+
+### Backend Performance
+- Database connection pool: `pool_pre_ping=True`, `pool_recycle=3600`
+- Database indexes on: Estimate.user_id, Estimate.team_member_id, Estimate.created_at, User.subscription_tier
+- Library stats use SQL COUNT/GROUP BY aggregation instead of loading all items into memory
+- Admin analytics uses single GROUP BY query instead of 4 separate per-tier queries
+- Modern async patterns: `asyncio.to_thread()` instead of deprecated `get_event_loop().run_in_executor()`
+- Lifespan context manager pattern with proper engine disposal on shutdown
+- PIL Image resources properly closed with try/finally in compress_image()
+- Estimate quota only incremented after successful AI processing
 - Library updates use batch IN query instead of N+1 per-item SELECTs
 - Expired estimate jobs cleaned up automatically (5-minute TTL)
-- Admin routes protected by `require_admin()` middleware
-- Team auth uses separate token/cookie system (12hr expiry)
+
+### Frontend Optimization
+- Semantic HTML: proper nav, main, section, header, footer landmarks
+- Skip links on landing page and estimator
+- ARIA labels on all interactive elements (drop zones, modals, loading spinners, error boxes)
+- role="alert" on error containers, role="dialog" on modals, role="status" on live regions
+- Keyboard navigation: Enter/Space on drop zones, Escape closes modals, focus management
+- Proper form label associations across all pages
+- Admin tabs use proper ARIA tab pattern (role="tab", aria-selected, aria-controls)
+- URL.revokeObjectURL cleanup to prevent memory leaks
+- Proper error handling in all fetch() calls
 
 ## Environment Variables
 - `ANTHROPIC_API_KEY` — Required. Claude vision API.
@@ -199,3 +224,4 @@ Admin user kevin@cleartheclutter.net seeded with is_admin=True.
 - `STRIPE_WEBHOOK_SECRET` — Stripe webhook signature verification.
 - `TAVILY_API_KEY` — Optional. For live market rate fetching and item dimension lookups.
 - `SENDGRID_API_KEY` — Optional. For emailing PDF estimates to customers.
+- `ADMIN_EMAIL` — Required. Email address for the admin user (e.g., kevin@cleartheclutter.net).

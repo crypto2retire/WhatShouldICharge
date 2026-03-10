@@ -249,28 +249,28 @@
 </head>
 <body>
 
-<div class="top-bar">
-  <h1><span>●</span> WhatShouldICharge <span style="font-weight:400;color:var(--muted);font-size:0.85rem;">Admin</span></h1>
-  <div class="top-bar-links">
+<header class="top-bar">
+  <h1><span aria-hidden="true">●</span> WhatShouldICharge <span style="font-weight:400;color:var(--muted);font-size:0.85rem;">Admin</span></h1>
+  <nav class="top-bar-links" aria-label="Admin navigation">
     <a href="/estimate">Estimator</a>
     <a href="/library">Library</a>
-    <a href="/" target="_blank">Site</a>
-  </div>
+    <a href="/" target="_blank" rel="noopener">Site</a>
+  </nav>
+</header>
+
+<div class="tabs" role="tablist" aria-label="Admin sections">
+  <button class="tab active" data-panel="analytics" role="tab" aria-selected="true" aria-controls="panel-analytics">Analytics</button>
+  <button class="tab" data-panel="users" role="tab" aria-selected="false" aria-controls="panel-users">Users</button>
+  <button class="tab" data-panel="plans" role="tab" aria-selected="false" aria-controls="panel-plans">Plans</button>
+  <button class="tab" data-panel="team" role="tab" aria-selected="false" aria-controls="panel-team">Team</button>
+  <button class="tab" data-panel="site-config" role="tab" aria-selected="false" aria-controls="panel-site-config">Site Config</button>
+  <button class="tab" data-panel="estimates" role="tab" aria-selected="false" aria-controls="panel-estimates">Estimates</button>
 </div>
 
-<div class="tabs">
-  <div class="tab active" data-panel="analytics">Analytics</div>
-  <div class="tab" data-panel="users">Users</div>
-  <div class="tab" data-panel="plans">Plans</div>
-  <div class="tab" data-panel="team">Team</div>
-  <div class="tab" data-panel="site-config">Site Config</div>
-  <div class="tab" data-panel="estimates">Estimates</div>
-</div>
-
-<div class="content">
+<main class="content">
 
   <!-- Analytics Panel -->
-  <div class="panel active" id="panel-analytics">
+  <div class="panel active" id="panel-analytics" role="tabpanel" aria-labelledby="tab-analytics">
     <div class="stat-grid" id="stats-grid"></div>
     <div class="card">
       <div class="card-title">User Distribution</div>
@@ -287,9 +287,10 @@
   </div>
 
   <!-- Users Panel -->
-  <div class="panel" id="panel-users">
+  <div class="panel" id="panel-users" role="tabpanel" aria-labelledby="tab-users">
     <div class="search-box">
-      <input type="text" id="user-search" placeholder="Search by email or company...">
+      <label for="user-search" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Search users</label>
+    <input type="text" id="user-search" placeholder="Search by email or company..." aria-label="Search users by email or company">
     </div>
     <div class="card">
       <table id="users-table">
@@ -301,12 +302,12 @@
   </div>
 
   <!-- Plans Panel -->
-  <div class="panel" id="panel-plans">
+  <div class="panel" id="panel-plans" role="tabpanel" aria-labelledby="tab-plans">
     <div class="plan-grid" id="plans-grid"></div>
   </div>
 
   <!-- Team Panel -->
-  <div class="panel" id="panel-team">
+  <div class="panel" id="panel-team" role="tabpanel" aria-labelledby="tab-team">
     <div class="card">
       <div class="card-title">Add Team Member</div>
       <div class="team-form">
@@ -326,7 +327,7 @@
   </div>
 
   <!-- Site Config Panel -->
-  <div class="panel" id="panel-site-config">
+  <div class="panel" id="panel-site-config" role="tabpanel" aria-labelledby="tab-site-config">
     <div class="card">
       <div class="card-title">Website Content</div>
       <div class="config-form" id="config-form"></div>
@@ -337,7 +338,7 @@
   </div>
 
   <!-- Estimates Panel -->
-  <div class="panel" id="panel-estimates">
+  <div class="panel" id="panel-estimates" role="tabpanel" aria-labelledby="tab-estimates">
     <div class="card">
       <table id="estimates-table">
         <thead><tr><th>ID</th><th>User</th><th>Photos</th><th>Price Range</th><th>CY</th><th>Date</th></tr></thead>
@@ -349,7 +350,9 @@
 
 </div>
 
-<div class="toast" id="toast"></div>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 function esc(s) { var d = document.createElement('div'); d.textContent = String(s || ''); return d.innerHTML; }
@@ -363,14 +366,16 @@ function showToast(msg) {
 
 document.querySelectorAll('.tab').forEach(function(tab) {
   tab.addEventListener('click', function() {
-    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
     document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
     tab.classList.add('active');
+    tab.setAttribute('aria-selected', 'true');
     document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
   });
 });
 
 async function loadAnalytics() {
+  try {
   var resp = await fetch('/api/admin/analytics');
   if (resp.status === 401 || resp.status === 403) { window.location.href = '/login'; return; }
   var d = await resp.json();
@@ -406,6 +411,7 @@ async function loadAnalytics() {
     tr.innerHTML = '<td>' + esc(u.email) + '</td><td>' + esc(u.company_name) + '</td><td><span class="badge badge-' + u.tier + '">' + esc(u.tier) + '</span></td><td style="color:var(--muted)">' + (u.created_at ? new Date(u.created_at).toLocaleDateString() : '') + '</td>';
     tbody.appendChild(tr);
   });
+  } catch (e) { showToast('Failed to load analytics'); }
 }
 
 var usersPage = 1;

@@ -334,7 +334,7 @@
 </head>
 <body>
 
-<div class="top-bar">
+<header class="top-bar">
   <div class="top-bar-left">
     <div>
       <div class="name" id="team-name">Team Member</div>
@@ -342,31 +342,34 @@
     </div>
   </div>
   <div class="top-bar-right">
-    <span class="remaining" id="team-remaining"></span>
+    <span class="remaining" id="team-remaining" aria-live="polite"></span>
     <button class="logout-btn" onclick="logout()">Logout</button>
   </div>
-</div>
+</header>
 
-<div class="container">
+<main class="container">
 
   <div id="upload-section">
     <div class="section-title">Customer Info (optional)</div>
     <div class="card">
       <div class="customer-fields">
+        <label for="cust-name" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Customer name</label>
         <input type="text" id="cust-name" placeholder="Customer name">
+        <label for="cust-email" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Customer email</label>
         <input type="email" id="cust-email" placeholder="Customer email">
+        <label for="cust-phone" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Customer phone</label>
         <input type="tel" id="cust-phone" placeholder="Customer phone">
       </div>
     </div>
 
     <div class="section-title">Photos</div>
     <div class="card">
-      <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
-        <div class="upload-icon">📸</div>
+      <div class="upload-area" id="upload-area" role="button" tabindex="0" aria-label="Tap to take or upload photos" onclick="document.getElementById('file-input').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('file-input').click();}">
+        <div class="upload-icon" aria-hidden="true">📸</div>
         <div class="upload-text">Tap to take or upload photos</div>
-        <div class="upload-sub" id="photo-count">0 / 20 photos</div>
+        <div class="upload-sub" id="photo-count" aria-live="polite">0 / 20 photos</div>
       </div>
-      <input type="file" id="file-input" accept="image/*" multiple capture="environment" style="display:none">
+      <input type="file" id="file-input" accept="image/*" multiple capture="environment" style="display:none" aria-label="Select photos to upload">
       <div class="preview-grid" id="previews"></div>
     </div>
 
@@ -378,11 +381,11 @@
     </div>
 
     <button class="submit-btn" id="submit-btn" disabled onclick="submitEstimate()">Get Estimate</button>
-    <div class="error-box" id="error-box"></div>
+    <div class="error-box" id="error-box" role="alert"></div>
   </div>
 
-  <div class="loading" id="loading">
-    <div class="spinner"></div>
+  <div class="loading" id="loading" role="status" aria-live="polite">
+    <div class="spinner" aria-hidden="true"></div>
     <div class="loading-text" id="loading-text">Analyzing photos...</div>
     <div class="loading-sub" id="loading-sub">AI is calculating your estimate</div>
   </div>
@@ -422,9 +425,12 @@
 
 </div>
 
-<div class="send-modal" id="send-modal">
+</main>
+
+<div class="send-modal" id="send-modal" role="dialog" aria-modal="true" aria-label="Send estimate to customer">
   <div class="send-modal-content">
     <h3>Send Estimate to Customer</h3>
+    <label for="send-email" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Customer email address</label>
     <input type="email" id="send-email" placeholder="Customer email address">
     <div class="send-modal-btns">
       <button style="background:var(--surface2);color:var(--text);" onclick="closeSendModal()">Cancel</button>
@@ -634,9 +640,15 @@ async function downloadPDF() {
 
 function openSendModal() {
   document.getElementById('send-modal').classList.add('visible');
+  document.getElementById('send-email').focus();
+  document.addEventListener('keydown', sendModalKeyHandler);
 }
 function closeSendModal() {
   document.getElementById('send-modal').classList.remove('visible');
+  document.removeEventListener('keydown', sendModalKeyHandler);
+}
+function sendModalKeyHandler(e) {
+  if (e.key === 'Escape') closeSendModal();
 }
 
 async function sendEstimate() {
@@ -653,11 +665,16 @@ async function sendEstimate() {
       var btn = document.getElementById('send-btn');
       btn.textContent = '✅ Sent!';
       setTimeout(function() { btn.textContent = '📧 Send to Customer'; }, 2500);
+    } else {
+      alert('Failed to send estimate. Please try again.');
     }
-  } catch (e) {}
+  } catch (e) {
+    alert('Connection error. Please try again.');
+  }
 }
 
 function newEstimate() {
+  photos.forEach(function(p) { URL.revokeObjectURL(p.url); });
   photos = [];
   selectedIdx = null;
   currentEstimateId = null;

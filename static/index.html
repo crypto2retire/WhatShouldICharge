@@ -626,7 +626,7 @@
 </style>
 </head>
 <body>
-
+<a href="#upload-card" class="skip-link" style="position:absolute;left:-9999px;top:0;z-index:9999;background:var(--accent);color:#fff;padding:8px 16px;font-size:0.9rem;font-weight:600;border-radius:0 0 8px 0;transition:left 0.2s;" onfocus="this.style.left='0'" onblur="this.style.left='-9999px'">Skip to main content</a>
 <style>
   .nav-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; }
   .nav-left { display: flex; align-items: center; gap: 10px; }
@@ -641,31 +641,31 @@
   .market-info.visible { display: block; }
   .item-looked-up { color: #818cf8; font-size: 0.7rem; margin-left: 4px; }
 </style>
-<div class="nav-bar">
+<nav class="nav-bar" aria-label="Main navigation">
   <div class="nav-left">
-    <span class="nav-dot"></span>
+    <span class="nav-dot" aria-hidden="true"></span>
     <a href="/" class="nav-brand">WhatShouldICharge</a>
   </div>
   <div class="nav-right" id="nav-user" style="display:none">
     <a class="nav-link" id="nav-admin-link" href="/admin" style="display:none;color:var(--amber,#f59e0b);">Admin</a>
     <span class="nav-company" id="nav-company-name"></span>
     <span class="nav-estimates" id="nav-estimates"></span>
-    <a class="nav-link" id="nav-logout">Logout</a>
+    <a class="nav-link" id="nav-logout" role="button" tabindex="0">Logout</a>
   </div>
-</div>
+</nav>
 
-<div class="main-wrap">
+<main class="main-wrap">
 
   <!-- Upload Card -->
   <div class="card" id="upload-card">
     <div class="card-title">Upload Photos</div>
 
-    <div id="drop-zone">
-      <div class="upload-icon">📷</div>
+    <div id="drop-zone" role="button" tabindex="0" aria-label="Upload photos. Drop photos here or click to upload.">
+      <div class="upload-icon" aria-hidden="true">📷</div>
       <div class="upload-label">Drop photos here or click to upload</div>
       <div class="upload-sub">Up to 20 photos • Multiple per room OK • JPG, PNG, WEBP</div>
     </div>
-    <input type="file" id="file-input" accept="image/*" multiple>
+    <input type="file" id="file-input" accept="image/*" multiple aria-label="Select photos to upload">
 
     <div id="previews"></div>
     <div class="photo-count" id="photo-count"></div>
@@ -717,18 +717,18 @@
   <!-- Submit -->
   <div id="submit-section">
     <button id="submit-btn" disabled>Upload Photos to Get Estimate</button>
-    <div id="error-box"></div>
+    <div id="error-box" role="alert"></div>
   </div>
 
   <!-- Loading -->
-  <div id="loading">
-    <div class="spinner"></div>
+  <div id="loading" role="status" aria-live="polite">
+    <div class="spinner" aria-hidden="true"></div>
     <div class="loading-text" id="loading-text">Analyzing your photos...</div>
     <div class="loading-sub" id="loading-sub">AI is estimating cubic yards and pricing</div>
   </div>
 
   <!-- Results -->
-  <div id="results">
+  <section id="results" aria-label="Estimate Results">
     <div id="ref-photos" class="ref-photos" style="display:none;"></div>
     <div class="price-banner">
       <div class="label">Estimated Price Range</div>
@@ -764,11 +764,11 @@
     <div class="market-info" id="res-market"></div>
 
     <div class="card" id="notes-card" style="display:none">
-      <div class="card-title">Estimator Notes</div>
+      <h3 class="card-title">Estimator Notes</h3>
       <div class="notes-box" id="res-notes"></div>
     </div>
 
-    <div id="res-disclaimers" style="margin-top:16px;padding:16px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);">
+    <div id="res-disclaimers" role="note" style="margin-top:16px;padding:16px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);">
       <div style="font-size:0.82rem;font-weight:600;color:var(--muted);margin-bottom:12px;">Important Notes</div>
       <div style="margin-bottom:12px;">
         <div style="font-size:0.78rem;font-weight:600;color:#f59e0b;margin-bottom:4px;">&#9851; Recycling &amp; Disposal Fees</div>
@@ -788,9 +788,10 @@
     <button id="new-estimate-btn">+ New Estimate</button>
   </div>
 
-  <div id="send-modal" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;padding:16px;">
+  <div id="send-modal" role="dialog" aria-modal="true" aria-label="Email estimate to customer" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;padding:16px;">
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:100%;max-width:400px;">
       <h3 style="font-size:1rem;margin-bottom:14px;">Email Estimate to Customer</h3>
+      <label for="send-email-input" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Customer email</label>
       <input type="email" id="send-email-input" placeholder="customer@email.com" style="width:100%;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:0.95rem;margin-bottom:12px;">
       <div style="display:flex;gap:10px;">
         <button onclick="closeSendModal()" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:0.88rem;font-weight:600;cursor:pointer;">Cancel</button>
@@ -799,7 +800,8 @@
     </div>
   </div>
 
-</div>
+</section>
+</main>
 
 <script>
 let currentUser = null;
@@ -862,8 +864,8 @@ const catIcons = {
   other: '📦'
 };
 
-// Drop zone
 dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
 dropZone.addEventListener('drop', e => {
@@ -1175,12 +1177,17 @@ function renderRefPhotos() {
 function showPhotoModal(src) {
   var modal = document.createElement('div');
   modal.className = 'ref-photo-modal';
-  modal.innerHTML = '<img src="' + src + '">';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-label', 'Photo preview. Press Escape to close.');
+  modal.tabIndex = -1;
+  modal.innerHTML = '<img src="' + src + '" alt="Full size photo preview">';
   modal.addEventListener('click', function() { modal.remove(); });
   document.addEventListener('keydown', function handler(e) {
     if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', handler); }
   });
   document.body.appendChild(modal);
+  modal.focus();
 }
 
 function showResults(data) {
@@ -1333,10 +1340,17 @@ async function downloadPDF() {
 }
 
 function openSendModal() {
-  document.getElementById('send-modal').style.display = 'flex';
+  var modal = document.getElementById('send-modal');
+  modal.style.display = 'flex';
+  document.getElementById('send-email-input').focus();
+  document.addEventListener('keydown', sendModalKeyHandler);
 }
 function closeSendModal() {
   document.getElementById('send-modal').style.display = 'none';
+  document.removeEventListener('keydown', sendModalKeyHandler);
+}
+function sendModalKeyHandler(e) {
+  if (e.key === 'Escape') closeSendModal();
 }
 
 async function sendEstimate() {
@@ -1351,8 +1365,13 @@ async function sendEstimate() {
       var btn = document.getElementById('send-btn');
       btn.textContent = '✅ Sent!';
       setTimeout(function() { btn.textContent = '📧 Email to Customer'; }, 2500);
+    } else {
+      var errData = await resp.json().catch(function() { return {}; });
+      alert(errData.detail || 'Failed to send estimate. Please try again.');
     }
-  } catch (e) {}
+  } catch (e) {
+    alert('Connection error. Please try again.');
+  }
 }
 
 function showError(msg) {

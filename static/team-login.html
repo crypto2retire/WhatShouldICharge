@@ -127,45 +127,45 @@
 </head>
 <body>
 
-<div class="login-card">
+<main class="login-card">
   <div class="logo"><span>●</span> WhatShouldICharge</div>
   <h2>Team Login</h2>
   <p class="subtitle">Enter your company email and PIN</p>
 
   <div class="field">
-    <label>Company Email</label>
+    <label for="company-code">Company Email</label>
     <input type="text" id="company-code" placeholder="boss@company.com" autocomplete="off" autocapitalize="none">
   </div>
 
   <div style="font-size:0.82rem;font-weight:600;color:var(--muted);margin-bottom:10px;">Enter PIN</div>
-  <div class="pin-display">
-    <div class="pin-dot" id="dot-0"></div>
-    <div class="pin-dot" id="dot-1"></div>
-    <div class="pin-dot" id="dot-2"></div>
-    <div class="pin-dot" id="dot-3"></div>
-    <div class="pin-dot" id="dot-4"></div>
-    <div class="pin-dot" id="dot-5"></div>
+  <div class="pin-display" role="status" aria-live="polite" aria-label="PIN digits entered">
+    <div class="pin-dot" id="dot-0" aria-hidden="true"></div>
+    <div class="pin-dot" id="dot-1" aria-hidden="true"></div>
+    <div class="pin-dot" id="dot-2" aria-hidden="true"></div>
+    <div class="pin-dot" id="dot-3" aria-hidden="true"></div>
+    <div class="pin-dot" id="dot-4" aria-hidden="true"></div>
+    <div class="pin-dot" id="dot-5" aria-hidden="true"></div>
   </div>
 
-  <div class="numpad">
-    <button onclick="addDigit('1')">1</button>
-    <button onclick="addDigit('2')">2</button>
-    <button onclick="addDigit('3')">3</button>
-    <button onclick="addDigit('4')">4</button>
-    <button onclick="addDigit('5')">5</button>
-    <button onclick="addDigit('6')">6</button>
-    <button onclick="addDigit('7')">7</button>
-    <button onclick="addDigit('8')">8</button>
-    <button onclick="addDigit('9')">9</button>
-    <button class="fn-btn" onclick="clearPin()">Clear</button>
-    <button onclick="addDigit('0')">0</button>
-    <button class="fn-btn" onclick="removeDigit()">⌫</button>
+  <div class="numpad" role="group" aria-label="PIN entry keypad">
+    <button onclick="addDigit('1')" aria-label="1">1</button>
+    <button onclick="addDigit('2')" aria-label="2">2</button>
+    <button onclick="addDigit('3')" aria-label="3">3</button>
+    <button onclick="addDigit('4')" aria-label="4">4</button>
+    <button onclick="addDigit('5')" aria-label="5">5</button>
+    <button onclick="addDigit('6')" aria-label="6">6</button>
+    <button onclick="addDigit('7')" aria-label="7">7</button>
+    <button onclick="addDigit('8')" aria-label="8">8</button>
+    <button onclick="addDigit('9')" aria-label="9">9</button>
+    <button class="fn-btn" onclick="clearPin()" aria-label="Clear PIN">Clear</button>
+    <button onclick="addDigit('0')" aria-label="0">0</button>
+    <button class="fn-btn" onclick="removeDigit()" aria-label="Delete last digit">⌫</button>
   </div>
 
   <button class="submit-btn" id="login-btn" disabled onclick="login()">Sign In</button>
-  <div class="error-msg" id="error-msg"></div>
+  <div class="error-msg" id="error-msg" role="alert"></div>
   <div class="back-link"><a href="/login">Admin login →</a></div>
-</div>
+</main>
 
 <script>
 var pin = '';

@@ -32,6 +32,7 @@
   .error-msg.visible { display: block; }
   .forgot { text-align: right; margin-top: -10px; margin-bottom: 16px; }
   .forgot a { font-size: 0.8rem; color: var(--muted); text-decoration: none; cursor: pointer; }
+  .forgot a:focus, .back-link a:focus { outline: 2px solid var(--green); outline-offset: 2px; }
   .forgot a:hover { color: var(--green-light); }
   .success-msg { display: none; background: rgba(22,197,94,0.1); border: 1px solid rgba(22,197,94,0.3); border-radius: 8px; padding: 10px 14px; color: var(--green-light); font-size: 0.85rem; margin-bottom: 16px; }
   .success-msg.visible { display: block; }
@@ -44,35 +45,35 @@
 </style>
 </head>
 <body>
-<div class="auth-card">
+<main class="auth-card">
   <div class="logo"><span class="logo-dot"></span><span class="logo-text">WhatShouldICharge</span></div>
   <div class="auth-title">Welcome back</div>
   <div class="auth-sub">Log in to your account</div>
-  <div class="error-msg" id="error-msg"></div>
+  <div class="error-msg" id="error-msg" role="alert"></div>
   <div class="success-msg" id="success-msg"></div>
   <form id="login-form">
     <div class="form-group">
-      <label>Email</label>
+      <label for="email">Email</label>
       <input type="email" id="email" required autocomplete="email" placeholder="you@company.com">
     </div>
     <div class="form-group">
-      <label>Password</label>
+      <label for="password">Password</label>
       <input type="password" id="password" required autocomplete="current-password" placeholder="Enter your password">
     </div>
-    <div class="forgot"><a id="forgot-link">Forgot password?</a></div>
+    <div class="forgot"><a id="forgot-link" role="button" tabindex="0">Forgot password?</a></div>
     <button type="submit" class="btn-submit" id="submit-btn">Log In</button>
   </form>
   <form id="forgot-form">
     <div class="form-group">
-      <label>Email</label>
+      <label for="forgot-email">Email</label>
       <input type="email" id="forgot-email" required autocomplete="email" placeholder="you@company.com">
     </div>
     <button type="submit" class="btn-submit" id="forgot-btn">Send New Password</button>
-    <div class="back-link"><a id="back-to-login">Back to login</a></div>
+    <div class="back-link"><a id="back-to-login" role="button" tabindex="0">Back to login</a></div>
   </form>
   <div class="auth-footer">Don't have an account? <a href="/signup">Sign up free</a></div>
   <div style="text-align:center;margin-top:12px;font-size:0.82rem;"><a href="/team" style="color:var(--muted);text-decoration:none;">🔑 Team Member Login</a></div>
-</div>
+</main>
 <script>
 var loginForm = document.getElementById('login-form');
 var forgotForm = document.getElementById('forgot-form');

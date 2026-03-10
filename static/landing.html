@@ -118,7 +118,8 @@
 </head>
 <body>
 
-<nav>
+<a href="#how-it-works" class="skip-link" style="position:absolute;left:-9999px;top:0;z-index:9999;background:#16a34a;color:#fff;padding:8px 16px;font-size:0.9rem;font-weight:600;border-radius:0 0 8px 0;transition:left 0.2s;" onfocus="this.style.left='0'" onblur="this.style.left='-9999px'">Skip to main content</a>
+<nav aria-label="Main navigation">
   <a href="/" class="nav-logo" aria-label="WhatShouldICharge home">
     <span class="logo-dot" aria-hidden="true"></span>
     WhatShouldICharge
@@ -460,9 +461,10 @@
   </div>
 </section>
 
-<footer>
+<footer role="contentinfo">
   <div class="footer-inner">
     <a href="/" class="footer-logo">WhatShouldICharge</a>
+    <nav aria-label="Footer navigation">
     <ul class="footer-links">
       <li><a href="/">Home</a></li>
       <li><a href="#how-it-works">How It Works</a></li>
@@ -472,6 +474,7 @@
       <li><a href="/estimate">Estimator</a></li>
       <li><a href="/login">Login</a></li>
     </ul>
+    </nav>
   </div>
   <div class="footer-copy">&copy; 2026 WhatShouldICharge. All rights reserved.</div>
 </footer>

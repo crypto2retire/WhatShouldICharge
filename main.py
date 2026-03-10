@@ -3,13 +3,17 @@ import re
 import json
 import base64
 import secrets
+import time
+import collections
 from datetime import datetime, timedelta
 from typing import Optional
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request, Response, Cookie
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 import anthropic
 import bcrypt
 import stripe
@@ -23,16 +27,83 @@ import io
 
 app = FastAPI(title="WhatShouldICharge")
 
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://js.stripe.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data: https:; "
+            "connect-src 'self' https://api.stripe.com; "
+            "frame-src https://js.stripe.com; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'"
+        )
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+
+class RateLimiter:
+    def __init__(self, max_requests: int, window_seconds: int):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests: dict[str, list[float]] = collections.defaultdict(list)
+
+    def is_rate_limited(self, key: str) -> bool:
+        now = time.time()
+        window_start = now - self.window_seconds
+        self.requests[key] = [t for t in self.requests[key] if t > window_start]
+        if len(self.requests[key]) >= self.max_requests:
+            return True
+        self.requests[key].append(now)
+        return False
+
+    def cleanup(self):
+        now = time.time()
+        window_start = now - self.window_seconds
+        empty_keys = [k for k, v in self.requests.items() if not v or v[-1] < window_start]
+        for k in empty_keys:
+            del self.requests[k]
+
+
+auth_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
+forgot_password_rate_limiter = RateLimiter(max_requests=5, window_seconds=300)
+
+
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 DATABASE_URL = "sqlite+aiosqlite:///./estimates.db"
-engine = create_async_engine(DATABASE_URL, echo=False)
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
 
@@ -55,7 +126,7 @@ class User(Base):
     company_city = Column(String, default="")
     company_state = Column(String, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
-    subscription_tier = Column(String, default="free")
+    subscription_tier = Column(String, default="free", index=True)
     estimates_used = Column(Integer, default=0)
     estimates_limit = Column(Integer, default=3)
     stripe_customer_id = Column(String, default="")
@@ -121,12 +192,12 @@ class Session(Base):
 class Estimate(Base):
     __tablename__ = "estimates"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, default=0)
-    team_member_id = Column(Integer, default=0)
+    user_id = Column(Integer, default=0, index=True)
+    team_member_id = Column(Integer, default=0, index=True)
     customer_name = Column(String, default="")
     customer_email = Column(String, default="")
     customer_phone = Column(String, default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     photos_count = Column(Integer)
     result_json = Column(Text)
     price_low = Column(Float)
@@ -334,21 +405,29 @@ async def seed_site_config():
 
 
 async def ensure_admin_user():
+    admin_email = os.environ.get("ADMIN_EMAIL", "").strip().lower()
+    if not admin_email:
+        return
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.email == "kevin@cleartheclutter.net"))
+        result = await db.execute(select(User).where(User.email == admin_email))
         user = result.scalar_one_or_none()
         if user and not user.is_admin:
             user.is_admin = True
             await db.commit()
 
 
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app):
     await init_db()
     await seed_reference_library()
     await seed_plan_configs()
     await seed_site_config()
     await ensure_admin_user()
+    yield
+    await engine.dispose()
+
+
+app.router.lifespan_context = lifespan
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -508,6 +587,10 @@ async def payment_success_page():
 
 @app.post("/api/auth/signup")
 async def auth_signup(request: Request):
+    client_ip = get_client_ip(request)
+    if auth_rate_limiter.is_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
     body = await request.json()
     email = body.get("email", "").strip().lower()
     password = body.get("password", "")
@@ -517,12 +600,17 @@ async def auth_signup(request: Request):
 
     if not email or not password:
         raise HTTPException(status_code=400, detail="Email and password are required.")
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        raise HTTPException(status_code=400, detail="Invalid email format.")
+    if len(email) > 254:
+        raise HTTPException(status_code=400, detail="Email address is too long.")
     if len(password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+    if len(password) > 128:
+        raise HTTPException(status_code=400, detail="Password is too long.")
 
-    loop = asyncio.get_event_loop()
-    pw_hash = await loop.run_in_executor(
-        None, lambda: bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    pw_hash = await asyncio.to_thread(
+        lambda: bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     )
 
     async with AsyncSessionLocal() as db:
@@ -572,6 +660,10 @@ async def auth_signup(request: Request):
 
 @app.post("/api/auth/login")
 async def auth_login(request: Request):
+    client_ip = get_client_ip(request)
+    if auth_rate_limiter.is_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
     body = await request.json()
     email = body.get("email", "").strip().lower()
     password = body.get("password", "")
@@ -585,9 +677,8 @@ async def auth_login(request: Request):
         if not user:
             raise HTTPException(status_code=401, detail="Invalid email or password.")
 
-        loop = asyncio.get_event_loop()
-        valid = await loop.run_in_executor(
-            None, lambda: bcrypt.checkpw(password.encode("utf-8"), user.password_hash.encode("utf-8"))
+        valid = await asyncio.to_thread(
+            lambda: bcrypt.checkpw(password.encode("utf-8"), user.password_hash.encode("utf-8"))
         )
         if not valid:
             raise HTTPException(status_code=401, detail="Invalid email or password.")
@@ -611,6 +702,10 @@ async def auth_login(request: Request):
 
 @app.post("/api/auth/forgot-password")
 async def auth_forgot_password(request: Request):
+    client_ip = get_client_ip(request)
+    if forgot_password_rate_limiter.is_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
     body = await request.json()
     email = body.get("email", "").strip().lower()
 
@@ -624,9 +719,8 @@ async def auth_forgot_password(request: Request):
             return JSONResponse({"success": True, "message": "If an account with that email exists, a new password has been sent."})
 
         new_password = secrets.token_urlsafe(12)
-        loop = asyncio.get_event_loop()
-        new_hash = await loop.run_in_executor(
-            None, lambda: bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        new_hash = await asyncio.to_thread(
+            lambda: bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         )
         user.password_hash = new_hash
         await db.commit()
@@ -800,14 +894,25 @@ async def update_library_item(request: Request, item_id: int):
 async def library_stats(request: Request):
     await require_user(request)
     async with AsyncSessionLocal() as db:
-        all_items = await db.execute(select(ItemReferenceLibrary))
-        items = all_items.scalars().all()
-        by_source = {}
-        for i in items:
-            by_source[i.source] = by_source.get(i.source, 0) + 1
-        top_seen = sorted(items, key=lambda x: x.times_seen, reverse=True)[:10]
+        total_count = (await db.execute(
+            select(func.count(ItemReferenceLibrary.id))
+        )).scalar() or 0
+
+        source_counts = (await db.execute(
+            select(ItemReferenceLibrary.source, func.count(ItemReferenceLibrary.id))
+            .group_by(ItemReferenceLibrary.source)
+        )).all()
+        by_source = {row[0]: row[1] for row in source_counts}
+
+        top_result = await db.execute(
+            select(ItemReferenceLibrary)
+            .order_by(ItemReferenceLibrary.times_seen.desc())
+            .limit(10)
+        )
+        top_seen = top_result.scalars().all()
+
         return {
-            "total_items": len(items),
+            "total_items": total_count,
             "by_source": by_source,
             "top_seen": [
                 {"item_name": i.item_name, "times_seen": i.times_seen, "cubic_yards": i.cubic_yards}
@@ -857,23 +962,26 @@ def calculate_price(result_data: dict, rate_low=35.0, rate_high=40.0, rate_premi
 
 def compress_image(image_bytes: bytes, max_size_kb: int = 1000) -> bytes:
     img = Image.open(io.BytesIO(image_bytes))
-    if img.mode in ("RGBA", "P"):
-        img = img.convert("RGB")
+    try:
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
 
-    max_dim = 1600
-    if img.width > max_dim or img.height > max_dim:
-        img.thumbnail((max_dim, max_dim), Image.LANCZOS)
+        max_dim = 1600
+        if img.width > max_dim or img.height > max_dim:
+            img.thumbnail((max_dim, max_dim), Image.LANCZOS)
 
-    output = io.BytesIO()
-    quality = 85
-    img.save(output, format="JPEG", quality=quality)
-
-    while output.tell() > max_size_kb * 1024 and quality > 30:
-        quality -= 10
         output = io.BytesIO()
+        quality = 85
         img.save(output, format="JPEG", quality=quality)
 
-    return output.getvalue()
+        while output.tell() > max_size_kb * 1024 and quality > 30:
+            quality -= 10
+            output = io.BytesIO()
+            img.save(output, format="JPEG", quality=quality)
+
+        return output.getvalue()
+    finally:
+        img.close()
 
 
 async def get_market_rates(city: str, state: str) -> dict:
@@ -1112,8 +1220,8 @@ If you cannot find dimensions, return cubic_yards: 0"""
                     await db.commit()
             return result
 
-    except Exception as e:
-        print(f"Lookup failed for {item_name}: {e}")
+    except Exception:
+        pass
 
     return {"cubic_yards": 0, "confidence": 0}
 
@@ -1187,7 +1295,7 @@ async def create_estimate(
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY is not configured.")
+        raise HTTPException(status_code=500, detail="AI service is not configured. Please contact support.")
 
     if not files:
         raise HTTPException(status_code=400, detail="At least one photo is required.")
@@ -1199,9 +1307,12 @@ async def create_estimate(
     except Exception:
         rooms_list = []
 
+    ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"}
     MAX_FILE_SIZE = 20 * 1024 * 1024
     photo_data = []
     for i, file in enumerate(files):
+        if file.content_type and file.content_type.lower() not in ALLOWED_CONTENT_TYPES:
+            raise HTTPException(status_code=400, detail=f"Photo {i+1} has an unsupported file type. Please upload images only.")
         raw = await file.read()
         if len(raw) > MAX_FILE_SIZE:
             raise HTTPException(status_code=400, detail=f"Photo {i+1} exceeds 20MB limit.")
@@ -1246,18 +1357,13 @@ async def create_estimate(
             )
         })
 
-    now = datetime.utcnow()
-    expired = [k for k, v in estimate_jobs.items() if (now - v.get("created_at", now)).total_seconds() > JOB_TTL_SECONDS]
-    for k in expired:
-        del estimate_jobs[k]
-
     job_id = secrets.token_hex(8)
     estimate_jobs[job_id] = {
         "status": "analyzing",
         "message": "Analyzing photos...",
         "result": None,
         "user_id": user.id,
-        "created_at": now,
+        "created_at": datetime.utcnow(),
     }
 
     asyncio.create_task(run_estimate(
@@ -1435,7 +1541,7 @@ async def run_estimate(
 
     except Exception as e:
         job["status"] = "error"
-        job["message"] = str(e)
+        job["message"] = "An error occurred while processing your estimate. Please try again."
         job["result"] = None
 
 
@@ -1497,12 +1603,12 @@ async def create_checkout(request: Request):
         checkout_params["customer_email"] = user.email
 
     try:
-        session = await asyncio.get_event_loop().run_in_executor(
-            None, lambda: stripe.checkout.Session.create(**checkout_params)
+        session = await asyncio.to_thread(
+            lambda: stripe.checkout.Session.create(**checkout_params)
         )
         return {"checkout_url": session.url}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Payment processing error. Please try again.")
 
 
 @app.post("/api/payments/webhook")
@@ -1626,16 +1732,12 @@ async def admin_analytics(request: Request):
             select(func.count(Estimate.id)).where(Estimate.created_at >= month_ago)
         )).scalar() or 0
 
-        paid_users = (await db.execute(
-            select(func.count(User.id)).where(User.subscription_tier != "free")
-        )).scalar() or 0
-
-        tier_counts = {}
-        for tier in ["free", "starter", "pro", "agency"]:
-            cnt = (await db.execute(
-                select(func.count(User.id)).where(User.subscription_tier == tier)
-            )).scalar() or 0
-            tier_counts[tier] = cnt
+        tier_rows = (await db.execute(
+            select(User.subscription_tier, func.count(User.id))
+            .group_by(User.subscription_tier)
+        )).all()
+        tier_counts = {row[0]: row[1] for row in tier_rows}
+        paid_users = sum(v for k, v in tier_counts.items() if k != "free")
 
         avg_cy = (await db.execute(select(func.avg(Estimate.cy_estimate)))).scalar() or 0
         avg_price = (await db.execute(select(func.avg(Estimate.price_low)))).scalar() or 0
@@ -1811,9 +1913,8 @@ async def create_team_member(request: Request):
     if not name or not pin or len(pin) < 4:
         raise HTTPException(status_code=400, detail="Name and PIN (min 4 digits) required.")
 
-    loop = asyncio.get_event_loop()
-    pin_hash = await loop.run_in_executor(
-        None, lambda: bcrypt.hashpw(pin.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    pin_hash = await asyncio.to_thread(
+        lambda: bcrypt.hashpw(pin.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     )
     async with AsyncSessionLocal() as db:
         member = TeamMember(
@@ -1861,9 +1962,8 @@ async def update_team_member(request: Request, member_id: int):
         if "is_active" in body:
             member.is_active = bool(body["is_active"])
         if "pin" in body and body["pin"]:
-            loop = asyncio.get_event_loop()
-            member.pin_hash = await loop.run_in_executor(
-                None, lambda: bcrypt.hashpw(body["pin"].encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+            member.pin_hash = await asyncio.to_thread(
+                lambda: bcrypt.hashpw(body["pin"].encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
             )
         await db.commit()
         return {"success": True}
@@ -1886,6 +1986,10 @@ async def delete_team_member(request: Request, member_id: int):
 
 @app.post("/api/team/auth")
 async def team_auth(request: Request):
+    client_ip = get_client_ip(request)
+    if auth_rate_limiter.is_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
     body = await request.json()
     company_code = body.get("company_code", "").strip().lower()
     pin = body.get("pin", "").strip()
@@ -1914,11 +2018,10 @@ async def team_auth(request: Request):
         )
         members = result.scalars().all()
 
-        loop = asyncio.get_event_loop()
         matched_member = None
         for m in members:
-            valid = await loop.run_in_executor(
-                None, lambda mem=m: bcrypt.checkpw(pin.encode("utf-8"), mem.pin_hash.encode("utf-8"))
+            valid = await asyncio.to_thread(
+                lambda mem=m: bcrypt.checkpw(pin.encode("utf-8"), mem.pin_hash.encode("utf-8"))
             )
             if valid:
                 matched_member = m
@@ -1986,7 +2089,7 @@ async def team_create_estimate(
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY is not configured.")
+        raise HTTPException(status_code=500, detail="AI service is not configured. Please contact support.")
 
     if not files:
         raise HTTPException(status_code=400, detail="At least one photo is required.")
@@ -1998,9 +2101,12 @@ async def team_create_estimate(
     except Exception:
         rooms_list = []
 
+    ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"}
     MAX_FILE_SIZE = 20 * 1024 * 1024
     photo_data = []
     for i, file in enumerate(files):
+        if file.content_type and file.content_type.lower() not in ALLOWED_CONTENT_TYPES:
+            raise HTTPException(status_code=400, detail=f"Photo {i+1} has an unsupported file type. Please upload images only.")
         raw = await file.read()
         if len(raw) > MAX_FILE_SIZE:
             raise HTTPException(status_code=400, detail=f"Photo {i+1} exceeds 20MB limit.")
@@ -2064,6 +2170,8 @@ async def team_estimate_status(request: Request, job_id: str):
     job = estimate_jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found.")
+    if job.get("user_id") != owner.id:
+        raise HTTPException(status_code=403, detail="Not authorized.")
 
     resp = {
         "status": job["status"],
@@ -2257,12 +2365,10 @@ async def generate_pdf(request: Request, estimate_id: int):
     items = result_data.get("items", [])
     special_items = [i for i in items if i.get("is_special")]
 
-    loop = asyncio.get_event_loop()
-    buffer = await loop.run_in_executor(
-        None, lambda: generate_estimate_pdf(estimate, user, items, special_items)
+    buffer = await asyncio.to_thread(
+        lambda: generate_estimate_pdf(estimate, user, items, special_items)
     )
 
-    from fastapi.responses import StreamingResponse
     return StreamingResponse(
         buffer,
         media_type="application/pdf",

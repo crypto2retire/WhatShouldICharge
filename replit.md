@@ -17,6 +17,13 @@ An AI-powered junk removal job estimator. Users upload customer photos, Claude v
 2. **Web Lookup**: For items flagged as `items_needing_lookup`, parallel Tavily searches find real-world dimensions. Claude extracts CY from search results. New items are saved to the reference library.
 3. **Library Learning**: After each estimate, all identified items update the reference library (increment times_seen or add new AI-learned items).
 
+## Multi-Photo Per Room
+- Users can upload up to 20 photos total (increased from 6), with multiple photos per room
+- Photos are grouped by room label in the preview UI (visual grouping with room headers)
+- Backend groups photos by room before sending to Claude, with explicit per-group headers
+- AI prompt includes dedicated MULTI-PHOTO DEDUPLICATION section: same-room photos are treated as different angles of one space, items visible in multiple angles counted only once
+- When uncertain, AI defaults to assuming items ARE the same (avoids over-counting)
+
 ## Special Item Handling
 - Special items are flagged but NEVER added to price totals
 - Price is based ONLY on cubic yards and job type

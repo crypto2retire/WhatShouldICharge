@@ -727,6 +727,14 @@ REQUIRED JSON FORMAT:
   "notes": "Brief job description for the crew"
 }
 
+MULTI-PHOTO DEDUPLICATION (CRITICAL):
+- Multiple photos may show the SAME room from different angles
+- Photos labeled with the same room name are different views of ONE space
+- If the same item is visible in multiple photos of the same room, count it ONLY ONCE
+- Use visual cues (position, color, size, surroundings) to identify duplicate items across angles
+- When uncertain if an item in two photos is the same, assume it IS the same item and count once
+- Only count an item multiple times if it is clearly a DIFFERENT item (e.g., two distinct chairs in different positions)
+
 ITEM IDENTIFICATION RULES:
 - Identify every visible item individually, do not group unless identical
 - Assign cubic_yards to each item based on actual physical size
@@ -952,26 +960,45 @@ async def create_estimate(
 
     if not files:
         raise HTTPException(status_code=400, detail="At least one photo is required.")
-    if len(files) > 6:
-        raise HTTPException(status_code=400, detail="Maximum 6 photos allowed.")
+    if len(files) > 20:
+        raise HTTPException(status_code=400, detail="Maximum 20 photos allowed.")
 
     try:
         rooms_list = json.loads(rooms)
     except Exception:
         rooms_list = []
 
-    image_content = []
+    photo_data = []
     for i, file in enumerate(files):
         raw = await file.read()
         compressed = compress_image(raw)
         b64 = base64.standard_b64encode(compressed).decode("utf-8")
         room_label = rooms_list[i] if i < len(rooms_list) else "Unknown"
+        photo_data.append({"b64": b64, "room": room_label, "index": i + 1})
 
-        image_content.append({"type": "text", "text": f"Photo {i + 1} (Room: {room_label}):"})
-        image_content.append({
-            "type": "image",
-            "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}
-        })
+    room_groups = {}
+    for pd in photo_data:
+        room = pd["room"]
+        if room not in room_groups:
+            room_groups[room] = []
+        room_groups[room].append(pd)
+
+    image_content = []
+    for room, group_photos in room_groups.items():
+        if len(group_photos) > 1:
+            image_content.append({
+                "type": "text",
+                "text": f"\n--- ROOM: {room} ({len(group_photos)} photos — these show DIFFERENT ANGLES of the SAME space. DO NOT double-count items visible in multiple photos.) ---"
+            })
+        for pd in group_photos:
+            label = f"Photo {pd['index']} (Room: {room})"
+            if len(group_photos) > 1:
+                label += f" [angle {group_photos.index(pd) + 1} of {len(group_photos)} for this room]"
+            image_content.append({"type": "text", "text": f"{label}:"})
+            image_content.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": "image/jpeg", "data": pd["b64"]}
+            })
 
     truck_cap = user.truck_capacity_cy or 16.0
     if truck_load_pct is not None:

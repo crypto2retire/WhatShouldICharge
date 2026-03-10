@@ -97,10 +97,44 @@
 
   /* Photo previews */
   #previews {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
     margin-top: 18px;
+  }
+
+  .room-group {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+  }
+
+  .room-group-header {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .room-group-header .room-photo-count {
+    font-weight: 400;
+    font-size: 0.75rem;
+    color: var(--muted);
+    opacity: 0.7;
+  }
+
+  .room-group-photos {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 8px;
+  }
+
+  .unlabeled-group .room-group-photos {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   }
 
   .preview-item {
@@ -110,6 +144,13 @@
     aspect-ratio: 1;
     border: 1px solid var(--border);
     background: var(--bg);
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+
+  .preview-item.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow);
   }
 
   .preview-item img {
@@ -556,7 +597,7 @@
     <div id="drop-zone">
       <div class="upload-icon">📷</div>
       <div class="upload-label">Drop photos here or click to upload</div>
-      <div class="upload-sub">Up to 6 photos • JPG, PNG, WEBP supported</div>
+      <div class="upload-sub">Up to 20 photos • Multiple per room OK • JPG, PNG, WEBP</div>
     </div>
     <input type="file" id="file-input" accept="image/*" multiple>
 
@@ -566,7 +607,7 @@
     <!-- Room Selector -->
     <div id="room-selector">
       <div id="room-selector-title">Label Photo <span id="current-photo-num">1</span></div>
-      <div class="room-selector-label">Choose the room or source for this photo:</div>
+      <div class="room-selector-label">Choose the room for this photo. Use the same room for multiple angles:</div>
       <div class="room-grid">
         <button class="room-btn" data-room="Living Room">🛋️ Living Room</button>
         <button class="room-btn" data-room="Bedroom">🛏️ Bedroom</button>
@@ -744,15 +785,14 @@ dropZone.addEventListener('drop', e => {
 fileInput.addEventListener('change', e => handleFiles(Array.from(e.target.files)));
 
 function handleFiles(files) {
-  const remaining = 6 - photos.length;
-  if (remaining <= 0) { showError('Maximum 6 photos allowed.'); return; }
-  const toAdd = files.filter(f => f.type.startsWith('image/')).slice(0, remaining);
-  toAdd.forEach(file => {
-    const url = URL.createObjectURL(file);
-    photos.push({ file, url, room: null });
+  var remaining = 20 - photos.length;
+  if (remaining <= 0) { showError('Maximum 20 photos allowed.'); return; }
+  var toAdd = files.filter(function(f) { return f.type.startsWith('image/'); }).slice(0, remaining);
+  toAdd.forEach(function(file) {
+    var url = URL.createObjectURL(file);
+    photos.push({ file: file, url: url, room: null });
   });
   renderPreviews();
-  // Auto-select last added for room labeling
   if (photos.length > 0) {
     selectedPhotoIdx = photos.length - 1;
     showRoomSelector(selectedPhotoIdx);
@@ -761,31 +801,74 @@ function handleFiles(files) {
 
 function renderPreviews() {
   previews.innerHTML = '';
-  photos.forEach((p, i) => {
-    const div = document.createElement('div');
-    div.className = 'preview-item';
-    div.innerHTML = `
-      <img src="${p.url}" alt="Photo ${i+1}">
-      <button class="remove-btn" data-idx="${i}" title="Remove">✕</button>
-      <div class="room-badge">${p.room || '⚠ No label'}</div>
-    `;
-    div.addEventListener('click', e => {
-      if (e.target.classList.contains('remove-btn')) return;
-      selectedPhotoIdx = i;
-      showRoomSelector(i);
-    });
-    previews.appendChild(div);
+
+  var roomGroups = {};
+  var unlabeled = [];
+  photos.forEach(function(p, i) {
+    if (p.room) {
+      if (!roomGroups[p.room]) roomGroups[p.room] = [];
+      roomGroups[p.room].push(i);
+    } else {
+      unlabeled.push(i);
+    }
   });
 
-  photos.length > 0
-    ? previews.querySelectorAll('.remove-btn').forEach(btn => {
-        btn.addEventListener('click', e => { e.stopPropagation(); removePhoto(parseInt(btn.dataset.idx)); });
-      })
-    : null;
+  var roomIcons = {
+    'Living Room': '🛋️', 'Bedroom': '🛏️', 'Garage': '🚗', 'Basement': '🏚️',
+    'Kitchen': '🍳', 'Outdoor': '🌳', 'Other': '📦', 'Truck Load': '🚛'
+  };
+
+  Object.keys(roomGroups).forEach(function(room) {
+    var indices = roomGroups[room];
+    var group = document.createElement('div');
+    group.className = 'room-group';
+    var icon = roomIcons[room] || '📷';
+    group.innerHTML = '<div class="room-group-header">' + icon + ' ' + room +
+      ' <span class="room-photo-count">(' + indices.length + ' photo' + (indices.length !== 1 ? 's' : '') + ')</span></div>' +
+      '<div class="room-group-photos"></div>';
+    var photosDiv = group.querySelector('.room-group-photos');
+    indices.forEach(function(idx) {
+      var div = createPreviewItem(idx);
+      photosDiv.appendChild(div);
+    });
+    previews.appendChild(group);
+  });
+
+  if (unlabeled.length > 0) {
+    var group = document.createElement('div');
+    group.className = 'room-group unlabeled-group';
+    group.innerHTML = '<div class="room-group-header">⚠️ Needs Label <span class="room-photo-count">(' + unlabeled.length + ' photo' + (unlabeled.length !== 1 ? 's' : '') + ')</span></div>' +
+      '<div class="room-group-photos"></div>';
+    var photosDiv = group.querySelector('.room-group-photos');
+    unlabeled.forEach(function(idx) {
+      var div = createPreviewItem(idx);
+      photosDiv.appendChild(div);
+    });
+    previews.appendChild(group);
+  }
 
   updatePhotoCount();
   updateSubmitBtn();
   if (photos.length === 0) roomSelector.classList.remove('visible');
+}
+
+function createPreviewItem(idx) {
+  var p = photos[idx];
+  var div = document.createElement('div');
+  div.className = 'preview-item' + (idx === selectedPhotoIdx ? ' selected' : '');
+  div.innerHTML = '<img src="' + p.url + '" alt="Photo ' + (idx+1) + '">' +
+    '<button class="remove-btn" data-idx="' + idx + '" title="Remove">✕</button>';
+  div.addEventListener('click', function(e) {
+    if (e.target.classList.contains('remove-btn')) {
+      e.stopPropagation();
+      removePhoto(idx);
+      return;
+    }
+    selectedPhotoIdx = idx;
+    showRoomSelector(idx);
+    renderPreviews();
+  });
+  return div;
 }
 
 function removePhoto(idx) {
@@ -799,7 +882,14 @@ function removePhoto(idx) {
 }
 
 function updatePhotoCount() {
-  photoCount.textContent = photos.length > 0 ? `${photos.length}/6 photo${photos.length !== 1 ? 's' : ''} added` : '';
+  if (photos.length === 0) {
+    photoCount.textContent = '';
+  } else {
+    var roomCount = {};
+    photos.forEach(function(p) { if (p.room) roomCount[p.room] = true; });
+    var rooms = Object.keys(roomCount).length;
+    photoCount.textContent = photos.length + '/20 photo' + (photos.length !== 1 ? 's' : '') + ' added' + (rooms > 0 ? ' \u00B7 ' + rooms + ' room' + (rooms !== 1 ? 's' : '') : '');
+  }
 }
 
 function showRoomSelector(idx) {
@@ -867,7 +957,7 @@ function updateSubmitBtn() {
   } else if (!allLabeled) {
     submitBtn.textContent = 'Label All Photos to Continue';
   } else {
-    submitBtn.textContent = `Get Estimate for ${photos.length} Photo${photos.length !== 1 ? 's' : ''}`;
+    submitBtn.textContent = 'Get Estimate for ' + photos.length + ' Photo' + (photos.length !== 1 ? 's' : '');
   }
 }
 

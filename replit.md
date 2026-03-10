@@ -6,7 +6,7 @@ An AI-powered junk removal job estimator. Users upload customer photos, Claude v
 ## Stack
 - **Backend**: Python 3.11, FastAPI, SQLite (via SQLAlchemy + aiosqlite)
 - **Frontend**: Single-page HTML files (no framework), dark theme
-- **AI**: Anthropic Claude (`claude-sonnet-4-20250514`) with vision, two-pass estimation
+- **AI**: Anthropic Claude (`claude-sonnet-4-20250514`) with vision, single-pass estimation
 - **Auth**: bcrypt password hashing (async via executor), secure session cookies (30-day, httponly, samesite, secure)
 - **Payments**: Stripe checkout sessions + webhooks with server-side tier validation from price_id
 - **Market Data**: Tavily API for live market rate fetching + item dimension lookups

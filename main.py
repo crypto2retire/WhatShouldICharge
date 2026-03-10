@@ -16,7 +16,7 @@ import stripe
 import httpx
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy import Column, Integer, Float, DateTime, Text, String, Boolean, select
+from sqlalchemy import Column, Integer, Float, DateTime, Text, String, Boolean, select, text, func
 import asyncio
 from PIL import Image
 import io
@@ -65,6 +65,48 @@ class User(Base):
     price_per_cy_premium = Column(Float, default=55.0)
     min_charge = Column(Float, default=75.0)
     truck_capacity_cy = Column(Float, default=16.0)
+    is_admin = Column(Boolean, default=False)
+
+
+class TeamMember(Base):
+    __tablename__ = "team_members"
+    id = Column(Integer, primary_key=True, index=True)
+    owner_user_id = Column(Integer, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    pin_hash = Column(String, nullable=False)
+    role = Column(String, default="estimator")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class TeamSession(Base):
+    __tablename__ = "team_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    team_member_id = Column(Integer, nullable=False)
+    owner_user_id = Column(Integer, nullable=False)
+    token = Column(String, unique=True, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime)
+
+
+class SiteConfig(Base):
+    __tablename__ = "site_config"
+    id = Column(Integer, primary_key=True, index=True)
+    config_key = Column(String, unique=True, nullable=False, index=True)
+    config_value = Column(Text, default="")
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PlanConfig(Base):
+    __tablename__ = "plan_configs"
+    id = Column(Integer, primary_key=True, index=True)
+    tier_name = Column(String, unique=True, nullable=False)
+    display_name = Column(String, nullable=False)
+    price_cents = Column(Integer, default=0)
+    estimate_limit = Column(Integer, default=3)
+    features_json = Column(Text, default="[]")
+    stripe_price_id = Column(String, default="")
+    is_active = Column(Boolean, default=True)
 
 
 class Session(Base):
@@ -80,6 +122,10 @@ class Estimate(Base):
     __tablename__ = "estimates"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, default=0)
+    team_member_id = Column(Integer, default=0)
+    customer_name = Column(String, default="")
+    customer_email = Column(String, default="")
+    customer_phone = Column(String, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     photos_count = Column(Integer)
     result_json = Column(Text)
@@ -110,6 +156,19 @@ class ItemReferenceLibrary(Base):
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    async with engine.begin() as conn:
+        alter_statements = [
+            "ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0",
+            "ALTER TABLE estimates ADD COLUMN team_member_id INTEGER",
+            "ALTER TABLE estimates ADD COLUMN customer_name TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN customer_email TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN customer_phone TEXT DEFAULT ''",
+        ]
+        for stmt in alter_statements:
+            try:
+                await conn.execute(text(stmt))
+            except Exception:
+                pass
 
 
 SEED_ITEMS = [
@@ -221,10 +280,75 @@ async def seed_reference_library():
         await db.commit()
 
 
+async def seed_plan_configs():
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(PlanConfig).limit(1))
+        if result.scalar_one_or_none():
+            return
+        plans = [
+            PlanConfig(tier_name="free", display_name="Free", price_cents=0, estimate_limit=3,
+                       features_json='["3 estimates total","AI photo analysis","Basic pricing"]',
+                       stripe_price_id="", is_active=True),
+            PlanConfig(tier_name="starter", display_name="Starter", price_cents=2900, estimate_limit=20,
+                       features_json='["20 estimates/month","AI photo analysis","Market rate lookup","Item library","Email support"]',
+                       stripe_price_id="price_1T7PXXAPEzwLONiqIIrAtsQZ", is_active=True),
+            PlanConfig(tier_name="pro", display_name="Pro", price_cents=5900, estimate_limit=40,
+                       features_json='["40 estimates/month","Everything in Starter","Priority analysis","Team dashboard","PDF estimates"]',
+                       stripe_price_id="price_1T6iUPAPEzwLONiqp31lIw9T", is_active=True),
+            PlanConfig(tier_name="agency", display_name="Agency", price_cents=9900, estimate_limit=999,
+                       features_json='["Unlimited estimates","Everything in Pro","Unlimited team members","Custom branding","API access"]',
+                       stripe_price_id="price_1T7PXXAPEzwLONiqpQbgpgZ8", is_active=True),
+        ]
+        for p in plans:
+            db.add(p)
+        await db.commit()
+
+
+async def seed_site_config():
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(SiteConfig).limit(1))
+        if result.scalar_one_or_none():
+            return
+        defaults = {
+            "hero_title": "Junk Removal Pricing.",
+            "hero_subtitle": "Instant AI Estimates.",
+            "hero_description": "Upload customer photos. Get an instant AI price estimate with cubic yard calculations. Close more jobs — without the guesswork.",
+            "cta_primary": "Try It Free →",
+            "cta_secondary": "See How It Works",
+            "feature_1_title": "Upload Photos",
+            "feature_1_desc": "Snap photos of the items. Our AI handles the rest.",
+            "feature_2_title": "Get Instant Pricing",
+            "feature_2_desc": "AI calculates cubic yards and gives you a price range in seconds.",
+            "feature_3_title": "Close More Jobs",
+            "feature_3_desc": "Send professional estimates to customers. Win more bids.",
+            "faq_1_q": "How accurate are the estimates?",
+            "faq_1_a": "Our AI achieves 85-95% accuracy by analyzing items, calculating cubic yards, and applying current market rates for your area.",
+            "faq_2_q": "What types of junk can it estimate?",
+            "faq_2_a": "Furniture, appliances, electronics, yard waste, construction debris, and more. Over 90 item types in our reference library.",
+            "faq_3_q": "How many photos should I upload?",
+            "faq_3_a": "We recommend 2-4 photos per room from different angles. You can upload up to 20 photos total.",
+        }
+        for k, v in defaults.items():
+            db.add(SiteConfig(config_key=k, config_value=v))
+        await db.commit()
+
+
+async def ensure_admin_user():
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.email == "kevin@cleartheclutter.net"))
+        user = result.scalar_one_or_none()
+        if user and not user.is_admin:
+            user.is_admin = True
+            await db.commit()
+
+
 @app.on_event("startup")
 async def startup():
     await init_db()
     await seed_reference_library()
+    await seed_plan_configs()
+    await seed_site_config()
+    await ensure_admin_user()
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -250,6 +374,40 @@ async def require_user(request: Request) -> User:
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
+
+
+async def require_admin(request: Request) -> User:
+    user = await require_user(request)
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+async def get_team_member(request: Request):
+    token = request.cookies.get("team_token")
+    if not token:
+        return None, None
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(TeamSession).where(TeamSession.token == token, TeamSession.expires_at > datetime.utcnow())
+        )
+        sess = result.scalar_one_or_none()
+        if not sess:
+            return None, None
+        result = await db.execute(select(TeamMember).where(TeamMember.id == sess.team_member_id, TeamMember.is_active == True))
+        member = result.scalar_one_or_none()
+        if not member:
+            return None, None
+        result = await db.execute(select(User).where(User.id == sess.owner_user_id))
+        owner = result.scalar_one_or_none()
+        return member, owner
+
+
+async def require_team_member(request: Request):
+    member, owner = await get_team_member(request)
+    if not member or not owner:
+        raise HTTPException(status_code=401, detail="Team authentication required")
+    return member, owner
 
 
 def send_email(to_email: str, subject: str, html_content: str):
@@ -310,6 +468,29 @@ async def library_page(request: Request):
     if not user:
         return RedirectResponse(url="/login", status_code=302)
     return FileResponse("static/library.html")
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    if not user.is_admin:
+        return RedirectResponse(url="/estimate", status_code=302)
+    return FileResponse("static/admin.html")
+
+
+@app.get("/team", response_class=HTMLResponse)
+async def team_login_page():
+    return FileResponse("static/team-login.html")
+
+
+@app.get("/team/app", response_class=HTMLResponse)
+async def team_app_page(request: Request):
+    member, owner = await get_team_member(request)
+    if not member:
+        return RedirectResponse(url="/team", status_code=302)
+    return FileResponse("static/team.html")
 
 
 @app.get("/upgrade", response_class=HTMLResponse)
@@ -500,6 +681,7 @@ async def auth_me(request: Request):
         "price_per_cy_premium": user.price_per_cy_premium,
         "min_charge": user.min_charge,
         "truck_capacity_cy": user.truck_capacity_cy,
+        "is_admin": bool(user.is_admin),
     }
 
 
@@ -1196,6 +1378,10 @@ async def run_estimate(
         async with AsyncSessionLocal() as db:
             est = Estimate(
                 user_id=user.id,
+                team_member_id=job.get("team_member_id", 0),
+                customer_name=job.get("customer_name", ""),
+                customer_email=job.get("customer_email", ""),
+                customer_phone=job.get("customer_phone", ""),
                 photos_count=num_photos,
                 result_json=json.dumps(result_data),
                 price_low=price_low,
@@ -1414,3 +1600,713 @@ async def get_estimates(request: Request):
             }
             for e in estimates
         ]
+
+
+# ============== ADMIN API ==============
+
+
+@app.get("/api/admin/analytics")
+async def admin_analytics(request: Request):
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        now = datetime.utcnow()
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_ago = now - timedelta(days=7)
+        month_ago = now - timedelta(days=30)
+
+        total_users = (await db.execute(select(func.count(User.id)))).scalar() or 0
+        total_estimates = (await db.execute(select(func.count(Estimate.id)))).scalar() or 0
+        estimates_today = (await db.execute(
+            select(func.count(Estimate.id)).where(Estimate.created_at >= today)
+        )).scalar() or 0
+        estimates_week = (await db.execute(
+            select(func.count(Estimate.id)).where(Estimate.created_at >= week_ago)
+        )).scalar() or 0
+        estimates_month = (await db.execute(
+            select(func.count(Estimate.id)).where(Estimate.created_at >= month_ago)
+        )).scalar() or 0
+
+        paid_users = (await db.execute(
+            select(func.count(User.id)).where(User.subscription_tier != "free")
+        )).scalar() or 0
+
+        tier_counts = {}
+        for tier in ["free", "starter", "pro", "agency"]:
+            cnt = (await db.execute(
+                select(func.count(User.id)).where(User.subscription_tier == tier)
+            )).scalar() or 0
+            tier_counts[tier] = cnt
+
+        avg_cy = (await db.execute(select(func.avg(Estimate.cy_estimate)))).scalar() or 0
+        avg_price = (await db.execute(select(func.avg(Estimate.price_low)))).scalar() or 0
+
+        recent_users = (await db.execute(
+            select(User).order_by(User.created_at.desc()).limit(10)
+        )).scalars().all()
+
+        team_count = (await db.execute(select(func.count(TeamMember.id)))).scalar() or 0
+
+        return {
+            "total_users": total_users,
+            "paid_users": paid_users,
+            "total_estimates": total_estimates,
+            "estimates_today": estimates_today,
+            "estimates_week": estimates_week,
+            "estimates_month": estimates_month,
+            "tier_counts": tier_counts,
+            "avg_cy": round(float(avg_cy), 1),
+            "avg_price": round(float(avg_price), 2),
+            "team_members": team_count,
+            "recent_users": [
+                {"id": u.id, "email": u.email, "company_name": u.company_name,
+                 "tier": u.subscription_tier, "created_at": u.created_at.isoformat() if u.created_at else None}
+                for u in recent_users
+            ]
+        }
+
+
+@app.get("/api/admin/users")
+async def admin_users(request: Request, q: str = "", page: int = 1):
+    await require_admin(request)
+    limit = 25
+    offset = (page - 1) * limit
+    async with AsyncSessionLocal() as db:
+        query = select(User)
+        if q:
+            query = query.where(User.email.contains(q) | User.company_name.contains(q))
+        total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar() or 0
+        result = await db.execute(query.order_by(User.created_at.desc()).offset(offset).limit(limit))
+        users = result.scalars().all()
+        return {
+            "users": [
+                {"id": u.id, "email": u.email, "company_name": u.company_name,
+                 "company_city": u.company_city, "company_state": u.company_state,
+                 "tier": u.subscription_tier, "estimates_used": u.estimates_used,
+                 "estimates_limit": u.estimates_limit, "is_admin": u.is_admin,
+                 "created_at": u.created_at.isoformat() if u.created_at else None}
+                for u in users
+            ],
+            "total": total,
+            "page": page,
+            "pages": max(1, (total + limit - 1) // limit),
+        }
+
+
+@app.get("/api/admin/plans")
+async def admin_plans(request: Request):
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(PlanConfig).order_by(PlanConfig.price_cents))
+        plans = result.scalars().all()
+        return [
+            {"id": p.id, "tier_name": p.tier_name, "display_name": p.display_name,
+             "price_cents": p.price_cents, "estimate_limit": p.estimate_limit,
+             "features": json.loads(p.features_json) if p.features_json else [],
+             "stripe_price_id": p.stripe_price_id, "is_active": p.is_active}
+            for p in plans
+        ]
+
+
+@app.put("/api/admin/plans/{plan_id}")
+async def admin_update_plan(request: Request, plan_id: int):
+    await require_admin(request)
+    body = await request.json()
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(PlanConfig).where(PlanConfig.id == plan_id))
+        plan = result.scalar_one_or_none()
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        if "display_name" in body:
+            plan.display_name = body["display_name"]
+        if "price_cents" in body:
+            plan.price_cents = int(body["price_cents"])
+        if "estimate_limit" in body:
+            plan.estimate_limit = int(body["estimate_limit"])
+        if "features" in body:
+            plan.features_json = json.dumps(body["features"])
+        if "is_active" in body:
+            plan.is_active = bool(body["is_active"])
+        if "stripe_price_id" in body:
+            plan.stripe_price_id = body["stripe_price_id"]
+        await db.commit()
+        return {"success": True}
+
+
+@app.get("/api/site-config")
+async def public_site_config():
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(SiteConfig))
+        configs = result.scalars().all()
+        return {c.config_key: c.config_value for c in configs}
+
+
+@app.get("/api/admin/site-config")
+async def admin_get_site_config(request: Request):
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(SiteConfig))
+        configs = result.scalars().all()
+        return {c.config_key: c.config_value for c in configs}
+
+
+@app.put("/api/admin/site-config")
+async def admin_update_site_config(request: Request):
+    await require_admin(request)
+    body = await request.json()
+    async with AsyncSessionLocal() as db:
+        for key, value in body.items():
+            result = await db.execute(select(SiteConfig).where(SiteConfig.config_key == key))
+            config = result.scalar_one_or_none()
+            if config:
+                config.config_value = str(value)
+                config.updated_at = datetime.utcnow()
+            else:
+                db.add(SiteConfig(config_key=key, config_value=str(value)))
+        await db.commit()
+        return {"success": True}
+
+
+@app.get("/api/admin/estimates")
+async def admin_estimates(request: Request, page: int = 1, q: str = ""):
+    await require_admin(request)
+    limit = 25
+    offset = (page - 1) * limit
+    async with AsyncSessionLocal() as db:
+        query = select(Estimate)
+        total = (await db.execute(select(func.count(Estimate.id)))).scalar() or 0
+        result = await db.execute(query.order_by(Estimate.created_at.desc()).offset(offset).limit(limit))
+        estimates = result.scalars().all()
+
+        user_ids = list(set(e.user_id for e in estimates if e.user_id))
+        users_map = {}
+        if user_ids:
+            u_result = await db.execute(select(User).where(User.id.in_(user_ids)))
+            for u in u_result.scalars().all():
+                users_map[u.id] = u.email
+
+        return {
+            "estimates": [
+                {"id": e.id, "user_email": users_map.get(e.user_id, "Unknown"),
+                 "photos_count": e.photos_count, "price_low": e.price_low,
+                 "price_high": e.price_high, "cy_estimate": e.cy_estimate,
+                 "team_member_id": e.team_member_id,
+                 "created_at": e.created_at.isoformat() if e.created_at else None}
+                for e in estimates
+            ],
+            "total": total,
+            "page": page,
+            "pages": max(1, (total + limit - 1) // limit),
+        }
+
+
+# ============== TEAM API ==============
+
+
+@app.post("/api/team/members")
+async def create_team_member(request: Request):
+    user = await require_admin(request)
+    body = await request.json()
+    name = body.get("name", "").strip()
+    pin = body.get("pin", "").strip()
+    if not name or not pin or len(pin) < 4:
+        raise HTTPException(status_code=400, detail="Name and PIN (min 4 digits) required.")
+
+    loop = asyncio.get_event_loop()
+    pin_hash = await loop.run_in_executor(
+        None, lambda: bcrypt.hashpw(pin.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    )
+    async with AsyncSessionLocal() as db:
+        member = TeamMember(
+            owner_user_id=user.id,
+            name=name,
+            pin_hash=pin_hash,
+            role=body.get("role", "estimator"),
+        )
+        db.add(member)
+        await db.commit()
+        await db.refresh(member)
+        return {"id": member.id, "name": member.name, "role": member.role}
+
+
+@app.get("/api/team/members")
+async def list_team_members(request: Request):
+    user = await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(TeamMember).where(TeamMember.owner_user_id == user.id).order_by(TeamMember.created_at.desc())
+        )
+        members = result.scalars().all()
+        return [
+            {"id": m.id, "name": m.name, "role": m.role, "is_active": m.is_active,
+             "created_at": m.created_at.isoformat() if m.created_at else None}
+            for m in members
+        ]
+
+
+@app.put("/api/team/members/{member_id}")
+async def update_team_member(request: Request, member_id: int):
+    user = await require_admin(request)
+    body = await request.json()
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(TeamMember).where(TeamMember.id == member_id, TeamMember.owner_user_id == user.id)
+        )
+        member = result.scalar_one_or_none()
+        if not member:
+            raise HTTPException(status_code=404, detail="Team member not found")
+        if "name" in body:
+            member.name = body["name"]
+        if "role" in body:
+            member.role = body["role"]
+        if "is_active" in body:
+            member.is_active = bool(body["is_active"])
+        if "pin" in body and body["pin"]:
+            loop = asyncio.get_event_loop()
+            member.pin_hash = await loop.run_in_executor(
+                None, lambda: bcrypt.hashpw(body["pin"].encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+            )
+        await db.commit()
+        return {"success": True}
+
+
+@app.delete("/api/team/members/{member_id}")
+async def delete_team_member(request: Request, member_id: int):
+    user = await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(TeamMember).where(TeamMember.id == member_id, TeamMember.owner_user_id == user.id)
+        )
+        member = result.scalar_one_or_none()
+        if not member:
+            raise HTTPException(status_code=404, detail="Team member not found")
+        member.is_active = False
+        await db.commit()
+        return {"success": True}
+
+
+@app.post("/api/team/auth")
+async def team_auth(request: Request):
+    body = await request.json()
+    company_code = body.get("company_code", "").strip().lower()
+    pin = body.get("pin", "").strip()
+
+    if not company_code or not pin:
+        raise HTTPException(status_code=400, detail="Company code and PIN required.")
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(User).where(func.lower(User.email) == company_code)
+        )
+        owner = result.scalar_one_or_none()
+        if not owner:
+            result = await db.execute(
+                select(User).where(func.lower(User.company_name) == company_code)
+            )
+            owner = result.scalar_one_or_none()
+        if not owner:
+            raise HTTPException(status_code=401, detail="Company not found.")
+
+        result = await db.execute(
+            select(TeamMember).where(
+                TeamMember.owner_user_id == owner.id,
+                TeamMember.is_active == True
+            )
+        )
+        members = result.scalars().all()
+
+        loop = asyncio.get_event_loop()
+        matched_member = None
+        for m in members:
+            valid = await loop.run_in_executor(
+                None, lambda mem=m: bcrypt.checkpw(pin.encode("utf-8"), mem.pin_hash.encode("utf-8"))
+            )
+            if valid:
+                matched_member = m
+                break
+
+        if not matched_member:
+            raise HTTPException(status_code=401, detail="Invalid PIN.")
+
+        token = secrets.token_hex(32)
+        sess = TeamSession(
+            team_member_id=matched_member.id,
+            owner_user_id=owner.id,
+            token=token,
+            expires_at=datetime.utcnow() + timedelta(hours=12),
+        )
+        db.add(sess)
+        await db.commit()
+
+    response = JSONResponse({
+        "success": True,
+        "name": matched_member.name,
+        "company": owner.company_name,
+        "redirect": "/team/app"
+    })
+    response.set_cookie(
+        "team_token", token, httponly=True, samesite="lax", secure=True,
+        max_age=12 * 3600, path="/"
+    )
+    return response
+
+
+@app.get("/api/team/me")
+async def team_me(request: Request):
+    member, owner = await get_team_member(request)
+    if not member:
+        return JSONResponse({"authenticated": False})
+    remaining = max(0, owner.estimates_limit - owner.estimates_used)
+    return {
+        "authenticated": True,
+        "name": member.name,
+        "role": member.role,
+        "company_name": owner.company_name,
+        "estimates_remaining": remaining,
+    }
+
+
+@app.post("/api/team/estimate")
+async def team_create_estimate(
+    request: Request,
+    files: list[UploadFile] = File(...),
+    rooms: str = Form(default="[]"),
+    truck_load_pct: Optional[float] = Form(default=None),
+    customer_name: str = Form(default=""),
+    customer_email: str = Form(default=""),
+    customer_phone: str = Form(default=""),
+):
+    member, owner = await require_team_member(request)
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == owner.id))
+        fresh_owner = result.scalar_one_or_none()
+        if not fresh_owner or fresh_owner.estimates_used >= fresh_owner.estimates_limit:
+            raise HTTPException(status_code=403, detail="estimate_limit_reached")
+        user = fresh_owner
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY is not configured.")
+
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one photo is required.")
+    if len(files) > 20:
+        raise HTTPException(status_code=400, detail="Maximum 20 photos allowed.")
+
+    try:
+        rooms_list = json.loads(rooms)
+    except Exception:
+        rooms_list = []
+
+    MAX_FILE_SIZE = 20 * 1024 * 1024
+    photo_data = []
+    for i, file in enumerate(files):
+        raw = await file.read()
+        if len(raw) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail=f"Photo {i+1} exceeds 20MB limit.")
+        compressed = compress_image(raw)
+        b64 = base64.standard_b64encode(compressed).decode("utf-8")
+        room_label = rooms_list[i] if i < len(rooms_list) else "Unknown"
+        photo_data.append({"b64": b64, "room": room_label, "index": i + 1})
+
+    room_groups = {}
+    for pd in photo_data:
+        room = pd["room"]
+        if room not in room_groups:
+            room_groups[room] = []
+        room_groups[room].append(pd)
+
+    image_content = []
+    for room, group_photos in room_groups.items():
+        if len(group_photos) > 1:
+            image_content.append({
+                "type": "text",
+                "text": f"\n--- ROOM: {room} ({len(group_photos)} photos — these show DIFFERENT ANGLES of the SAME space. DO NOT double-count items visible in multiple photos.) ---"
+            })
+        for pd in group_photos:
+            label = f"Photo {pd['index']} (Room: {room})"
+            if len(group_photos) > 1:
+                label += f" [angle {group_photos.index(pd) + 1} of {len(group_photos)} for this room]"
+            image_content.append({"type": "text", "text": f"{label}:"})
+            image_content.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": "image/jpeg", "data": pd["b64"]}
+            })
+
+    now = datetime.utcnow()
+    job_id = f"team-{member.id}-{secrets.token_hex(8)}"
+    estimate_jobs[job_id] = {
+        "status": "analyzing",
+        "message": "Analyzing photos...",
+        "result": None,
+        "user_id": owner.id,
+        "team_member_id": member.id,
+        "customer_name": customer_name,
+        "customer_email": customer_email,
+        "customer_phone": customer_phone,
+        "created_at": now,
+    }
+
+    asyncio.create_task(run_estimate(
+        job_id=job_id,
+        user=user,
+        image_content=image_content,
+        api_key=api_key,
+        num_photos=len(files),
+    ))
+
+    return {"job_id": job_id}
+
+
+@app.get("/api/team/estimate/status/{job_id}")
+async def team_estimate_status(request: Request, job_id: str):
+    member, owner = await require_team_member(request)
+    job = estimate_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
+    resp = {
+        "status": job["status"],
+        "message": job["message"],
+    }
+    if job["status"] == "complete" and job["result"]:
+        resp["result"] = job["result"]
+    elif job["status"] == "error":
+        resp["error"] = job["message"]
+    return resp
+
+
+@app.get("/api/team/estimates")
+async def team_estimates(request: Request):
+    member, owner = await require_team_member(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Estimate)
+            .where(Estimate.team_member_id == member.id)
+            .order_by(Estimate.created_at.desc())
+            .limit(50)
+        )
+        estimates = result.scalars().all()
+        return [
+            {"id": e.id, "created_at": e.created_at.isoformat() if e.created_at else None,
+             "photos_count": e.photos_count, "price_low": e.price_low,
+             "price_high": e.price_high, "cy_estimate": e.cy_estimate,
+             "customer_name": e.customer_name}
+            for e in estimates
+        ]
+
+
+@app.post("/api/team/logout")
+async def team_logout(request: Request):
+    token = request.cookies.get("team_token")
+    if token:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(TeamSession).where(TeamSession.token == token))
+            sess = result.scalar_one_or_none()
+            if sess:
+                await db.delete(sess)
+                await db.commit()
+    response = JSONResponse({"success": True})
+    response.delete_cookie("team_token", path="/")
+    return response
+
+
+# ============== PDF GENERATION ==============
+
+
+def generate_estimate_pdf(estimate, user, items, special_items):
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch,
+                            leftMargin=0.75*inch, rightMargin=0.75*inch)
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('CustomTitle', parent=styles['Title'], fontSize=22,
+                                  textColor=colors.HexColor('#1a1a2e'), spaceAfter=6)
+    subtitle_style = ParagraphStyle('Subtitle', parent=styles['Normal'], fontSize=11,
+                                     textColor=colors.HexColor('#666666'), spaceAfter=20)
+    heading_style = ParagraphStyle('Heading', parent=styles['Heading2'], fontSize=14,
+                                    textColor=colors.HexColor('#1a1a2e'), spaceBefore=16, spaceAfter=8)
+    body_style = ParagraphStyle('Body', parent=styles['Normal'], fontSize=10,
+                                 textColor=colors.HexColor('#333333'), leading=14)
+    small_style = ParagraphStyle('Small', parent=styles['Normal'], fontSize=8,
+                                  textColor=colors.HexColor('#999999'), leading=11)
+
+    elements = []
+
+    company_name = user.company_name or "WhatShouldICharge"
+    elements.append(Paragraph(company_name, title_style))
+    elements.append(Paragraph("Junk Removal Estimate", subtitle_style))
+
+    info_data = [
+        ["Estimate #:", str(estimate.id), "Date:", estimate.created_at.strftime("%B %d, %Y") if estimate.created_at else "N/A"],
+        ["Photos:", str(estimate.photos_count or 0), "Volume:", f"{estimate.cy_estimate or 0} CY"],
+    ]
+    if estimate.customer_name:
+        info_data.append(["Customer:", estimate.customer_name, "", ""])
+
+    info_table = Table(info_data, colWidths=[1.2*inch, 2.3*inch, 1.0*inch, 2.3*inch])
+    info_table.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#666666')),
+        ('TEXTCOLOR', (2, 0), (2, -1), colors.HexColor('#666666')),
+        ('FONTNAME', (1, 0), (1, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (3, 0), (3, -1), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 16))
+
+    price_data = [[
+        Paragraph(f"<b>${estimate.price_low:,.0f} — ${estimate.price_high:,.0f}</b>",
+                  ParagraphStyle('Price', fontSize=20, textColor=colors.HexColor('#16a34a'), alignment=1))
+    ]]
+    price_table = Table(price_data, colWidths=[6.8*inch])
+    price_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f0fdf4')),
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#bbf7d0')),
+        ('TOPPADDING', (0, 0), (-1, -1), 14),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 14),
+    ]))
+    elements.append(price_table)
+    elements.append(Paragraph("Estimated price range based on volume", small_style))
+    elements.append(Spacer(1, 8))
+
+    if items:
+        elements.append(Paragraph("Item Breakdown", heading_style))
+        item_data = [["Item", "Qty", "Category", "Cubic Yards"]]
+        for item in items:
+            item_data.append([
+                item.get("name", "Unknown"),
+                str(item.get("quantity", 1)),
+                item.get("category", "other").title(),
+                f"{item.get('cubic_yards', 0)} CY"
+            ])
+        item_table = Table(item_data, colWidths=[3.0*inch, 0.8*inch, 1.5*inch, 1.5*inch])
+        item_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a2e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(item_table)
+
+    if special_items:
+        elements.append(Spacer(1, 12))
+        elements.append(Paragraph("Special Recycling Items", heading_style))
+        elements.append(Paragraph(
+            "The following items may require additional recycling or disposal fees. "
+            "These fees are not included in the estimate above.",
+            body_style
+        ))
+        for si in special_items:
+            elements.append(Paragraph(f"• {si.get('name', 'Unknown')} × {si.get('quantity', 1)}", body_style))
+
+    elements.append(Spacer(1, 24))
+    elements.append(Paragraph("Important Notes", heading_style))
+    elements.append(Paragraph(
+        "This estimate is based on items visible in the provided photos. "
+        "Actual pricing may vary based on job conditions, access, and items not pictured. "
+        "Recycling fees for special items (TVs, mattresses, tires, etc.) are additional. "
+        "Final pricing will be confirmed by your technician on arrival.",
+        body_style
+    ))
+
+    elements.append(Spacer(1, 20))
+    contact_parts = [company_name]
+    if user.company_city and user.company_state:
+        contact_parts.append(f"{user.company_city}, {user.company_state}")
+    elements.append(Paragraph(" | ".join(contact_parts), small_style))
+    elements.append(Paragraph("Powered by WhatShouldICharge.app", small_style))
+
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
+
+@app.post("/api/estimate/{estimate_id}/pdf")
+async def generate_pdf(request: Request, estimate_id: int):
+    user = None
+    member = None
+    team_token = request.cookies.get("team_token")
+    if team_token:
+        member, owner = await get_team_member(request)
+        if member and owner:
+            user = owner
+    if not user:
+        user = await require_user(request)
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Estimate).where(Estimate.id == estimate_id))
+        estimate = result.scalar_one_or_none()
+        if not estimate:
+            raise HTTPException(status_code=404, detail="Estimate not found")
+        if estimate.user_id != user.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+    result_data = json.loads(estimate.result_json) if estimate.result_json else {}
+    items = result_data.get("items", [])
+    special_items = [i for i in items if i.get("is_special")]
+
+    loop = asyncio.get_event_loop()
+    buffer = await loop.run_in_executor(
+        None, lambda: generate_estimate_pdf(estimate, user, items, special_items)
+    )
+
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=estimate-{estimate_id}.pdf"}
+    )
+
+
+@app.post("/api/estimate/{estimate_id}/send")
+async def send_estimate(request: Request, estimate_id: int):
+    user = None
+    team_token = request.cookies.get("team_token")
+    if team_token:
+        member, owner = await get_team_member(request)
+        if member and owner:
+            user = owner
+    if not user:
+        user = await require_user(request)
+
+    body = await request.json()
+    to_email = body.get("email", "").strip()
+    if not to_email:
+        raise HTTPException(status_code=400, detail="Email address required.")
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Estimate).where(Estimate.id == estimate_id))
+        estimate = result.scalar_one_or_none()
+        if not estimate:
+            raise HTTPException(status_code=404, detail="Estimate not found")
+        if estimate.user_id != user.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+    company = user.company_name or "WhatShouldICharge"
+    send_email(
+        to_email,
+        f"Your Junk Removal Estimate from {company}",
+        f"<h2>Junk Removal Estimate</h2>"
+        f"<p>Thank you for choosing <strong>{company}</strong>.</p>"
+        f"<p><strong>Estimated Price Range: ${estimate.price_low:,.0f} — ${estimate.price_high:,.0f}</strong></p>"
+        f"<p>Estimated Volume: {estimate.cy_estimate or 0} CY</p>"
+        f"<p>Photos Analyzed: {estimate.photos_count or 0}</p>"
+        f"<hr>"
+        f"<p style='color:#666;font-size:12px;'>This estimate is based on items visible in provided photos. "
+        f"Actual pricing may vary. Recycling fees for special items are additional. "
+        f"Final pricing confirmed on arrival.</p>"
+        f"<p style='color:#999;font-size:11px;'>Powered by WhatShouldICharge.app</p>"
+    )
+    return {"success": True}

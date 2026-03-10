@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Team Login — WhatShouldICharge</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242734;
+    --border: #2a2d3a;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --accent: #4f8ef7;
+    --green: #16a34a;
+    --red: #ef4444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .login-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px 28px;
+    width: 100%;
+    max-width: 380px;
+    margin: 16px;
+    text-align: center;
+  }
+
+  .logo { font-size: 1.2rem; font-weight: 700; margin-bottom: 24px; }
+  .logo span { color: var(--green); }
+
+  h2 { font-size: 1.3rem; margin-bottom: 6px; }
+  .subtitle { color: var(--muted); font-size: 0.88rem; margin-bottom: 24px; }
+
+  .field { margin-bottom: 16px; text-align: left; }
+  .field label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 6px; color: var(--muted); }
+  .field input {
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font-size: 1rem;
+  }
+  .field input:focus { outline: none; border-color: var(--accent); }
+
+  .pin-display {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .pin-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--border);
+    transition: background 0.15s;
+  }
+  .pin-dot.filled { background: var(--green); }
+
+  .numpad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .numpad button {
+    padding: 18px;
+    font-size: 1.5rem;
+    font-weight: 600;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.12s;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .numpad button:active { background: var(--accent); border-color: var(--accent); transform: scale(0.95); }
+  .numpad .fn-btn { font-size: 0.85rem; color: var(--muted); }
+  .numpad .fn-btn:active { background: var(--surface2); }
+
+  .submit-btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: 14px;
+    border: none;
+    background: var(--green);
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .submit-btn:hover:not(:disabled) { opacity: 0.9; }
+
+  .error-msg {
+    color: var(--red);
+    font-size: 0.85rem;
+    margin-top: 12px;
+    display: none;
+  }
+  .error-msg.visible { display: block; }
+
+  .back-link {
+    margin-top: 16px;
+    font-size: 0.82rem;
+  }
+  .back-link a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="login-card">
+  <div class="logo"><span>●</span> WhatShouldICharge</div>
+  <h2>Team Login</h2>
+  <p class="subtitle">Enter your company email and PIN</p>
+
+  <div class="field">
+    <label>Company Email</label>
+    <input type="text" id="company-code" placeholder="boss@company.com" autocomplete="off" autocapitalize="none">
+  </div>
+
+  <div style="font-size:0.82rem;font-weight:600;color:var(--muted);margin-bottom:10px;">Enter PIN</div>
+  <div class="pin-display">
+    <div class="pin-dot" id="dot-0"></div>
+    <div class="pin-dot" id="dot-1"></div>
+    <div class="pin-dot" id="dot-2"></div>
+    <div class="pin-dot" id="dot-3"></div>
+    <div class="pin-dot" id="dot-4"></div>
+    <div class="pin-dot" id="dot-5"></div>
+  </div>
+
+  <div class="numpad">
+    <button onclick="addDigit('1')">1</button>
+    <button onclick="addDigit('2')">2</button>
+    <button onclick="addDigit('3')">3</button>
+    <button onclick="addDigit('4')">4</button>
+    <button onclick="addDigit('5')">5</button>
+    <button onclick="addDigit('6')">6</button>
+    <button onclick="addDigit('7')">7</button>
+    <button onclick="addDigit('8')">8</button>
+    <button onclick="addDigit('9')">9</button>
+    <button class="fn-btn" onclick="clearPin()">Clear</button>
+    <button onclick="addDigit('0')">0</button>
+    <button class="fn-btn" onclick="removeDigit()">⌫</button>
+  </div>
+
+  <button class="submit-btn" id="login-btn" disabled onclick="login()">Sign In</button>
+  <div class="error-msg" id="error-msg"></div>
+  <div class="back-link"><a href="/login">Admin login →</a></div>
+</div>
+
+<script>
+var pin = '';
+var maxLen = 6;
+
+function updateDots() {
+  for (var i = 0; i < maxLen; i++) {
+    document.getElementById('dot-' + i).classList.toggle('filled', i < pin.length);
+  }
+  document.getElementById('login-btn').disabled = pin.length < 4;
+}
+
+function addDigit(d) {
+  if (pin.length < maxLen) { pin += d; updateDots(); }
+}
+
+function removeDigit() {
+  pin = pin.slice(0, -1);
+  updateDots();
+}
+
+function clearPin() {
+  pin = '';
+  updateDots();
+}
+
+async function login() {
+  var code = document.getElementById('company-code').value.trim();
+  if (!code) { showError('Enter company email'); return; }
+  if (pin.length < 4) { showError('PIN must be at least 4 digits'); return; }
+
+  document.getElementById('login-btn').disabled = true;
+  hideError();
+
+  try {
+    var resp = await fetch('/api/team/auth', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ company_code: code, pin: pin })
+    });
+    var data = await resp.json();
+    if (!resp.ok) {
+      showError(data.detail || 'Login failed');
+      document.getElementById('login-btn').disabled = false;
+      return;
+    }
+    window.location.href = data.redirect || '/team/app';
+  } catch (e) {
+    showError('Connection error');
+    document.getElementById('login-btn').disabled = false;
+  }
+}
+
+function showError(msg) {
+  var el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+function hideError() { document.getElementById('error-msg').classList.remove('visible'); }
+</script>
+</body>
+</html>

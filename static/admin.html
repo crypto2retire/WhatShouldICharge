@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard — WhatShouldICharge</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242734;
+    --border: #2a2d3a;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --accent: #4f8ef7;
+    --green: #16a34a;
+    --red: #ef4444;
+    --amber: #f59e0b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .top-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .top-bar h1 { font-size: 1.1rem; font-weight: 700; }
+  .top-bar h1 span { color: var(--green); }
+  .top-bar-links a { color: var(--muted); text-decoration: none; font-size: 0.85rem; margin-left: 16px; }
+  .top-bar-links a:hover { color: var(--text); }
+
+  .tabs {
+    display: flex;
+    gap: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .tab {
+    padding: 12px 24px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .content { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .stat-card .label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 1.8rem; font-weight: 700; margin-top: 6px; }
+  .stat-card .value.green { color: var(--green); }
+  .stat-card .value.accent { color: var(--accent); }
+  .stat-card .value.amber { color: var(--amber); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .card-title { font-size: 0.95rem; font-weight: 700; margin-bottom: 16px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th { text-align: left; padding: 10px 12px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); font-size: 0.78rem; text-transform: uppercase; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: var(--surface2); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  .badge-free { background: rgba(255,255,255,0.06); color: var(--muted); }
+  .badge-starter { background: rgba(79,142,247,0.15); color: var(--accent); }
+  .badge-pro { background: rgba(168,85,247,0.15); color: #a855f7; }
+  .badge-agency { background: rgba(22,163,106,0.15); color: var(--green); }
+
+  .tier-bar {
+    display: flex;
+    gap: 4px;
+    height: 24px;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .tier-bar-seg { height: 100%; min-width: 2px; transition: width 0.3s; }
+
+  input[type="text"], input[type="number"], input[type="email"], textarea, select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-size: 0.85rem;
+    width: 100%;
+  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+
+  .btn {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    font-size: 0.83rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-green { background: var(--green); color: #fff; }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+
+  .search-box {
+    margin-bottom: 16px;
+  }
+  .search-box input {
+    max-width: 320px;
+  }
+
+  .plan-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .plan-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .plan-card h3 { font-size: 1rem; margin-bottom: 12px; }
+  .plan-field { margin-bottom: 12px; }
+  .plan-field label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+
+  .config-form {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .config-field label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+  .config-field textarea { min-height: 60px; resize: vertical; }
+
+  .pagination {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 16px;
+  }
+  .pagination button {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.82rem;
+  }
+  .pagination button:hover { border-color: var(--accent); }
+  .pagination button.active { background: var(--accent); border-color: var(--accent); }
+
+  .team-form {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .team-form input { max-width: 200px; }
+
+  .toggle {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    display: inline-block;
+  }
+  .toggle input { display: none; }
+  .toggle .slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 11px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle .slider::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    top: 3px;
+    left: 3px;
+    transition: transform 0.2s;
+  }
+  .toggle input:checked + .slider { background: var(--green); }
+  .toggle input:checked + .slider::after { transform: translateX(18px); }
+
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 10px;
+    background: var(--green);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    z-index: 9999;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s;
+  }
+  .toast.visible { transform: translateY(0); opacity: 1; }
+
+  @media (max-width: 768px) {
+    .content { padding: 16px; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .plan-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <h1><span>●</span> WhatShouldICharge <span style="font-weight:400;color:var(--muted);font-size:0.85rem;">Admin</span></h1>
+  <div class="top-bar-links">
+    <a href="/estimate">Estimator</a>
+    <a href="/library">Library</a>
+    <a href="/" target="_blank">Site</a>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-panel="analytics">Analytics</div>
+  <div class="tab" data-panel="users">Users</div>
+  <div class="tab" data-panel="plans">Plans</div>
+  <div class="tab" data-panel="team">Team</div>
+  <div class="tab" data-panel="site-config">Site Config</div>
+  <div class="tab" data-panel="estimates">Estimates</div>
+</div>
+
+<div class="content">
+
+  <!-- Analytics Panel -->
+  <div class="panel active" id="panel-analytics">
+    <div class="stat-grid" id="stats-grid"></div>
+    <div class="card">
+      <div class="card-title">User Distribution</div>
+      <div class="tier-bar" id="tier-bar"></div>
+      <div id="tier-legend" style="display:flex;gap:16px;margin-top:10px;font-size:0.78rem;flex-wrap:wrap;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Recent Users</div>
+      <table id="recent-users-table">
+        <thead><tr><th>Email</th><th>Company</th><th>Tier</th><th>Joined</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Users Panel -->
+  <div class="panel" id="panel-users">
+    <div class="search-box">
+      <input type="text" id="user-search" placeholder="Search by email or company...">
+    </div>
+    <div class="card">
+      <table id="users-table">
+        <thead><tr><th>Email</th><th>Company</th><th>Location</th><th>Tier</th><th>Usage</th><th>Joined</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="pagination" id="users-pagination"></div>
+    </div>
+  </div>
+
+  <!-- Plans Panel -->
+  <div class="panel" id="panel-plans">
+    <div class="plan-grid" id="plans-grid"></div>
+  </div>
+
+  <!-- Team Panel -->
+  <div class="panel" id="panel-team">
+    <div class="card">
+      <div class="card-title">Add Team Member</div>
+      <div class="team-form">
+        <input type="text" id="team-name" placeholder="Name">
+        <input type="text" id="team-pin" placeholder="PIN (4+ digits)">
+        <select id="team-role"><option value="estimator">Estimator</option><option value="viewer">Viewer</option></select>
+        <button class="btn btn-green" onclick="addTeamMember()">Add Member</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Team Members</div>
+      <table id="team-table">
+        <thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Site Config Panel -->
+  <div class="panel" id="panel-site-config">
+    <div class="card">
+      <div class="card-title">Website Content</div>
+      <div class="config-form" id="config-form"></div>
+      <div style="margin-top:16px;">
+        <button class="btn btn-primary" onclick="saveSiteConfig()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estimates Panel -->
+  <div class="panel" id="panel-estimates">
+    <div class="card">
+      <table id="estimates-table">
+        <thead><tr><th>ID</th><th>User</th><th>Photos</th><th>Price Range</th><th>CY</th><th>Date</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="pagination" id="estimates-pagination"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function esc(s) { var d = document.createElement('div'); d.textContent = String(s || ''); return d.innerHTML; }
+
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('visible');
+  setTimeout(function() { t.classList.remove('visible'); }, 2500);
+}
+
+document.querySelectorAll('.tab').forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+  });
+});
+
+async function loadAnalytics() {
+  var resp = await fetch('/api/admin/analytics');
+  if (resp.status === 401 || resp.status === 403) { window.location.href = '/login'; return; }
+  var d = await resp.json();
+  var grid = document.getElementById('stats-grid');
+  grid.innerHTML = `
+    <div class="stat-card"><div class="label">Total Users</div><div class="value accent">${d.total_users}</div></div>
+    <div class="stat-card"><div class="label">Paid Users</div><div class="value green">${d.paid_users}</div></div>
+    <div class="stat-card"><div class="label">Total Estimates</div><div class="value">${d.total_estimates}</div></div>
+    <div class="stat-card"><div class="label">Estimates Today</div><div class="value accent">${d.estimates_today}</div></div>
+    <div class="stat-card"><div class="label">Estimates This Week</div><div class="value">${d.estimates_week}</div></div>
+    <div class="stat-card"><div class="label">Estimates This Month</div><div class="value">${d.estimates_month}</div></div>
+    <div class="stat-card"><div class="label">Avg. Volume</div><div class="value amber">${d.avg_cy} CY</div></div>
+    <div class="stat-card"><div class="label">Team Members</div><div class="value">${d.team_members}</div></div>
+  `;
+
+  var tierColors = { free: '#6b7280', starter: '#4f8ef7', pro: '#a855f7', agency: '#16a34a' };
+  var total = d.total_users || 1;
+  var bar = document.getElementById('tier-bar');
+  var legend = document.getElementById('tier-legend');
+  bar.innerHTML = '';
+  legend.innerHTML = '';
+  ['free','starter','pro','agency'].forEach(function(t) {
+    var cnt = d.tier_counts[t] || 0;
+    var pct = (cnt / total * 100);
+    bar.innerHTML += '<div class="tier-bar-seg" style="width:' + pct + '%;background:' + tierColors[t] + '"></div>';
+    legend.innerHTML += '<div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + tierColors[t] + ';margin-right:4px;vertical-align:middle;"></span>' + t.charAt(0).toUpperCase() + t.slice(1) + ' (' + cnt + ')</div>';
+  });
+
+  var tbody = document.querySelector('#recent-users-table tbody');
+  tbody.innerHTML = '';
+  (d.recent_users || []).forEach(function(u) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + esc(u.email) + '</td><td>' + esc(u.company_name) + '</td><td><span class="badge badge-' + u.tier + '">' + esc(u.tier) + '</span></td><td style="color:var(--muted)">' + (u.created_at ? new Date(u.created_at).toLocaleDateString() : '') + '</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+var usersPage = 1;
+async function loadUsers(page, query) {
+  page = page || 1;
+  query = query || '';
+  var resp = await fetch('/api/admin/users?page=' + page + '&q=' + encodeURIComponent(query));
+  var d = await resp.json();
+  var tbody = document.querySelector('#users-table tbody');
+  tbody.innerHTML = '';
+  d.users.forEach(function(u) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + esc(u.email) + '</td><td>' + esc(u.company_name) + '</td><td style="color:var(--muted)">' + esc((u.company_city || '') + (u.company_state ? ', ' + u.company_state : '')) + '</td><td><span class="badge badge-' + u.tier + '">' + esc(u.tier) + '</span></td><td>' + u.estimates_used + '/' + u.estimates_limit + '</td><td style="color:var(--muted)">' + (u.created_at ? new Date(u.created_at).toLocaleDateString() : '') + '</td>';
+    tbody.appendChild(tr);
+  });
+  renderPagination('users-pagination', d.page, d.pages, function(p) { usersPage = p; loadUsers(p, document.getElementById('user-search').value); });
+}
+
+function renderPagination(containerId, current, total, callback) {
+  var el = document.getElementById(containerId);
+  el.innerHTML = '';
+  if (total <= 1) return;
+  for (var i = 1; i <= total; i++) {
+    var btn = document.createElement('button');
+    btn.textContent = i;
+    if (i === current) btn.classList.add('active');
+    btn.addEventListener('click', (function(page) { return function() { callback(page); }; })(i));
+    el.appendChild(btn);
+  }
+}
+
+document.getElementById('user-search').addEventListener('input', function(e) {
+  loadUsers(1, e.target.value);
+});
+
+async function loadPlans() {
+  var resp = await fetch('/api/admin/plans');
+  var plans = await resp.json();
+  var grid = document.getElementById('plans-grid');
+  grid.innerHTML = '';
+  plans.forEach(function(p) {
+    var features = (p.features || []).join('\n');
+    var card = document.createElement('div');
+    card.className = 'plan-card';
+    card.innerHTML = `
+      <h3>${esc(p.display_name)}</h3>
+      <div class="plan-field"><label>Display Name</label><input type="text" value="${esc(p.display_name)}" data-field="display_name"></div>
+      <div class="plan-field"><label>Price (cents)</label><input type="number" value="${p.price_cents}" data-field="price_cents"></div>
+      <div class="plan-field"><label>Estimate Limit</label><input type="number" value="${p.estimate_limit}" data-field="estimate_limit"></div>
+      <div class="plan-field"><label>Stripe Price ID</label><input type="text" value="${esc(p.stripe_price_id)}" data-field="stripe_price_id"></div>
+      <div class="plan-field"><label>Features (one per line)</label><textarea data-field="features" rows="4">${esc(features)}</textarea></div>
+      <div class="plan-field" style="display:flex;align-items:center;gap:8px;">
+        <label style="margin:0;">Active</label>
+        <label class="toggle"><input type="checkbox" ${p.is_active ? 'checked' : ''} data-field="is_active"><span class="slider"></span></label>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="savePlan(${p.id}, this.closest('.plan-card'))">Save</button>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+async function savePlan(id, card) {
+  var data = {};
+  card.querySelectorAll('[data-field]').forEach(function(el) {
+    var f = el.dataset.field;
+    if (f === 'features') data[f] = el.value.split('\n').filter(function(l) { return l.trim(); });
+    else if (f === 'is_active') data[f] = el.checked;
+    else if (f === 'price_cents' || f === 'estimate_limit') data[f] = parseInt(el.value) || 0;
+    else data[f] = el.value;
+  });
+  await fetch('/api/admin/plans/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  showToast('Plan saved');
+  loadPlans();
+}
+
+async function loadTeam() {
+  var resp = await fetch('/api/team/members');
+  var members = await resp.json();
+  var tbody = document.querySelector('#team-table tbody');
+  tbody.innerHTML = '';
+  members.forEach(function(m) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${esc(m.name)}</td>
+      <td>${esc(m.role)}</td>
+      <td>${m.is_active ? '<span style="color:var(--green)">Active</span>' : '<span style="color:var(--red)">Inactive</span>'}</td>
+      <td style="color:var(--muted)">${m.created_at ? new Date(m.created_at).toLocaleDateString() : ''}</td>
+      <td>
+        <button class="btn btn-sm ${m.is_active ? 'btn-red' : 'btn-green'}" onclick="toggleMember(${m.id}, ${m.is_active})">${m.is_active ? 'Deactivate' : 'Activate'}</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function addTeamMember() {
+  var name = document.getElementById('team-name').value.trim();
+  var pin = document.getElementById('team-pin').value.trim();
+  var role = document.getElementById('team-role').value;
+  if (!name || !pin || pin.length < 4) { alert('Name and PIN (4+ digits) required.'); return; }
+  await fetch('/api/team/members', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name: name, pin: pin, role: role}) });
+  document.getElementById('team-name').value = '';
+  document.getElementById('team-pin').value = '';
+  showToast('Team member added');
+  loadTeam();
+}
+
+async function toggleMember(id, isActive) {
+  await fetch('/api/team/members/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({is_active: !isActive}) });
+  showToast(isActive ? 'Member deactivated' : 'Member activated');
+  loadTeam();
+}
+
+var siteConfig = {};
+async function loadSiteConfig() {
+  var resp = await fetch('/api/admin/site-config');
+  siteConfig = await resp.json();
+  var form = document.getElementById('config-form');
+  form.innerHTML = '';
+  var labels = {
+    hero_title: 'Hero Title',
+    hero_subtitle: 'Hero Subtitle',
+    hero_description: 'Hero Description',
+    cta_primary: 'Primary CTA Button',
+    cta_secondary: 'Secondary CTA Button',
+    feature_1_title: 'Feature 1 Title',
+    feature_1_desc: 'Feature 1 Description',
+    feature_2_title: 'Feature 2 Title',
+    feature_2_desc: 'Feature 2 Description',
+    feature_3_title: 'Feature 3 Title',
+    feature_3_desc: 'Feature 3 Description',
+    faq_1_q: 'FAQ 1 Question',
+    faq_1_a: 'FAQ 1 Answer',
+    faq_2_q: 'FAQ 2 Question',
+    faq_2_a: 'FAQ 2 Answer',
+    faq_3_q: 'FAQ 3 Question',
+    faq_3_a: 'FAQ 3 Answer',
+  };
+  Object.keys(siteConfig).forEach(function(key) {
+    var div = document.createElement('div');
+    div.className = 'config-field';
+    var isLong = key.includes('desc') || key.includes('_a');
+    div.innerHTML = '<label>' + esc(labels[key] || key) + '</label>' +
+      (isLong ? '<textarea data-key="' + esc(key) + '">' + esc(siteConfig[key]) + '</textarea>'
+              : '<input type="text" data-key="' + esc(key) + '" value="' + esc(siteConfig[key]) + '">');
+    form.appendChild(div);
+  });
+}
+
+async function saveSiteConfig() {
+  var data = {};
+  document.querySelectorAll('#config-form [data-key]').forEach(function(el) {
+    data[el.dataset.key] = el.value;
+  });
+  await fetch('/api/admin/site-config', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  showToast('Site config saved');
+}
+
+var estPage = 1;
+async function loadEstimates(page) {
+  page = page || 1;
+  var resp = await fetch('/api/admin/estimates?page=' + page);
+  var d = await resp.json();
+  var tbody = document.querySelector('#estimates-table tbody');
+  tbody.innerHTML = '';
+  d.estimates.forEach(function(e) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>#' + e.id + '</td><td>' + esc(e.user_email) + '</td><td>' + (e.photos_count || 0) + '</td><td>$' + (e.price_low || 0).toLocaleString() + ' — $' + (e.price_high || 0).toLocaleString() + '</td><td>' + (e.cy_estimate || 0) + '</td><td style="color:var(--muted)">' + (e.created_at ? new Date(e.created_at).toLocaleDateString() : '') + '</td>';
+    tbody.appendChild(tr);
+  });
+  renderPagination('estimates-pagination', d.page, d.pages, function(p) { estPage = p; loadEstimates(p); });
+}
+
+loadAnalytics();
+loadUsers();
+loadPlans();
+loadTeam();
+loadSiteConfig();
+loadEstimates();
+</script>
+</body>
+</html>

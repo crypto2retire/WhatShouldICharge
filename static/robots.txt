@@ -2,7 +2,8 @@ User-agent: *
 Allow: /
 
 Disallow: /api/
-Disallow: /admin/
+Disallow: /admin
+Disallow: /team
 Disallow: /estimate
 Disallow: /library
 Disallow: /login

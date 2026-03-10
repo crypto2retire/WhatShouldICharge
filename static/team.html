@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Team Estimator — WhatShouldICharge</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242734;
+    --border: #2a2d3a;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --accent: #4f8ef7;
+    --green: #16a34a;
+    --red: #ef4444;
+    --amber: #f59e0b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .top-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .top-bar-left { display: flex; align-items: center; gap: 8px; }
+  .top-bar-left .name { font-weight: 700; font-size: 0.95rem; }
+  .top-bar-left .company { color: var(--muted); font-size: 0.78rem; }
+  .top-bar-right { display: flex; align-items: center; gap: 12px; }
+  .remaining { font-size: 0.75rem; color: var(--green); font-weight: 600; }
+  .logout-btn {
+    background: none; border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 12px; color: var(--muted); font-size: 0.78rem; cursor: pointer;
+  }
+
+  .container { max-width: 600px; margin: 0 auto; padding: 16px; }
+
+  .section-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 10px;
+    margin-top: 16px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+
+  .customer-fields {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .customer-fields input {
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 0.95rem;
+  }
+  .customer-fields input:focus { outline: none; border-color: var(--accent); }
+
+  .upload-area {
+    border: 2px dashed var(--border);
+    border-radius: 14px;
+    padding: 28px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .upload-area:active { border-color: var(--accent); }
+  .upload-icon { font-size: 2.2rem; margin-bottom: 8px; }
+  .upload-text { font-size: 0.95rem; font-weight: 600; }
+  .upload-sub { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+
+  .preview-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .preview-thumb {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 10px;
+    border: 2px solid var(--border);
+    position: relative;
+  }
+  .preview-item {
+    position: relative;
+  }
+  .preview-item .remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--red);
+    border: none;
+    color: #fff;
+    font-size: 0.7rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .preview-item .room-tag {
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.6rem;
+    background: var(--accent);
+    color: #fff;
+    padding: 1px 5px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  .room-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .room-btn {
+    padding: 12px 8px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-align: center;
+    transition: all 0.12s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .room-btn:active { transform: scale(0.96); }
+  .room-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .submit-btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: 14px;
+    border: none;
+    background: linear-gradient(135deg, var(--green), #15803d);
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    margin-top: 12px;
+  }
+  .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .loading {
+    display: none;
+    text-align: center;
+    padding: 40px 16px;
+  }
+  .loading.visible { display: block; }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 0.95rem; font-weight: 600; }
+  .loading-sub { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
+
+  .results { display: none; }
+  .results.visible { display: block; }
+
+  .price-box {
+    background: linear-gradient(135deg, #0d2641, var(--surface));
+    border: 1px solid #4f8ef755;
+    border-radius: 16px;
+    padding: 24px;
+    text-align: center;
+    margin-bottom: 14px;
+  }
+  .price-label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .price-range { font-size: 2rem; font-weight: 800; margin-top: 6px; color: var(--green); }
+  .price-meta { display: flex; justify-content: center; gap: 24px; margin-top: 12px; }
+  .price-meta-item { text-align: center; }
+  .price-meta-item .val { font-size: 1.1rem; font-weight: 700; }
+  .price-meta-item .lbl { font-size: 0.72rem; color: var(--muted); }
+
+  .item-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .item-row:last-child { border-bottom: none; }
+  .item-icon { font-size: 1.2rem; }
+  .item-name { flex: 1; font-size: 0.88rem; font-weight: 500; }
+  .item-qty { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+
+  .special-box {
+    background: rgba(120,53,15,0.15);
+    border: 1px solid rgba(245,158,11,0.3);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .special-title { font-weight: 600; color: #fef3c7; font-size: 0.85rem; margin-bottom: 8px; }
+  .special-item { padding: 3px 0; font-size: 0.82rem; color: #fef3c7; }
+
+  .action-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .action-btn {
+    padding: 14px;
+    border-radius: 12px;
+    border: none;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .action-btn:active { opacity: 0.85; }
+  .btn-pdf { background: var(--accent); color: #fff; }
+  .btn-send { background: var(--green); color: #fff; }
+  .btn-new {
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+
+  .send-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0,0,0,0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .send-modal.visible { display: flex; }
+  .send-modal-content {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    width: 100%;
+    max-width: 360px;
+  }
+  .send-modal h3 { font-size: 1rem; margin-bottom: 14px; }
+  .send-modal input {
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 0.95rem;
+    margin-bottom: 12px;
+  }
+  .send-modal-btns { display: flex; gap: 10px; }
+  .send-modal-btns button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: 600; cursor: pointer; font-size: 0.88rem; }
+
+  .error-box {
+    color: var(--red);
+    font-size: 0.85rem;
+    text-align: center;
+    margin-top: 10px;
+    display: none;
+  }
+  .error-box.visible { display: block; }
+
+  .ref-photos {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 14px;
+  }
+  .ref-photos-title { font-size: 0.78rem; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+  .ref-photos-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ref-photos-grid img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+
+  .disclaimer {
+    font-size: 0.72rem;
+    color: var(--muted);
+    line-height: 1.4;
+    margin-top: 14px;
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="top-bar-left">
+    <div>
+      <div class="name" id="team-name">Team Member</div>
+      <div class="company" id="team-company">Company</div>
+    </div>
+  </div>
+  <div class="top-bar-right">
+    <span class="remaining" id="team-remaining"></span>
+    <button class="logout-btn" onclick="logout()">Logout</button>
+  </div>
+</div>
+
+<div class="container">
+
+  <div id="upload-section">
+    <div class="section-title">Customer Info (optional)</div>
+    <div class="card">
+      <div class="customer-fields">
+        <input type="text" id="cust-name" placeholder="Customer name">
+        <input type="email" id="cust-email" placeholder="Customer email">
+        <input type="tel" id="cust-phone" placeholder="Customer phone">
+      </div>
+    </div>
+
+    <div class="section-title">Photos</div>
+    <div class="card">
+      <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
+        <div class="upload-icon">📸</div>
+        <div class="upload-text">Tap to take or upload photos</div>
+        <div class="upload-sub" id="photo-count">0 / 20 photos</div>
+      </div>
+      <input type="file" id="file-input" accept="image/*" multiple capture="environment" style="display:none">
+      <div class="preview-grid" id="previews"></div>
+    </div>
+
+    <div id="room-section" style="display:none;">
+      <div class="section-title">Select Room for <span id="selected-photo-label">Photo</span></div>
+      <div class="card">
+        <div class="room-grid" id="room-grid"></div>
+      </div>
+    </div>
+
+    <button class="submit-btn" id="submit-btn" disabled onclick="submitEstimate()">Get Estimate</button>
+    <div class="error-box" id="error-box"></div>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loading-text">Analyzing photos...</div>
+    <div class="loading-sub" id="loading-sub">AI is calculating your estimate</div>
+  </div>
+
+  <div class="results" id="results">
+    <div id="ref-photos-section" class="ref-photos" style="display:none;"></div>
+
+    <div class="price-box">
+      <div class="price-label">Estimated Price Range</div>
+      <div class="price-range" id="res-price"></div>
+      <div class="price-meta">
+        <div class="price-meta-item"><div class="val" id="res-cy"></div><div class="lbl">Cubic Yards</div></div>
+        <div class="price-meta-item"><div class="val" id="res-photos-count"></div><div class="lbl">Photos</div></div>
+        <div class="price-meta-item"><div class="val" id="res-confidence"></div><div class="lbl">Confidence</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title" style="margin-top:0;">Item Breakdown</div>
+      <div id="res-items"></div>
+    </div>
+
+    <div id="res-special" style="display:none;" class="special-box"></div>
+
+    <div class="action-row">
+      <button class="action-btn btn-pdf" id="pdf-btn" onclick="downloadPDF()">📄 Download PDF</button>
+      <button class="action-btn btn-send" id="send-btn" onclick="openSendModal()">📧 Send to Customer</button>
+    </div>
+
+    <button class="btn-new" onclick="newEstimate()">+ New Estimate</button>
+
+    <div class="disclaimer">
+      This estimate is based on items visible in photos. Actual pricing may vary.
+      Recycling fees for special items are additional. Final pricing confirmed on arrival.
+    </div>
+  </div>
+
+</div>
+
+<div class="send-modal" id="send-modal">
+  <div class="send-modal-content">
+    <h3>Send Estimate to Customer</h3>
+    <input type="email" id="send-email" placeholder="Customer email address">
+    <div class="send-modal-btns">
+      <button style="background:var(--surface2);color:var(--text);" onclick="closeSendModal()">Cancel</button>
+      <button style="background:var(--green);color:#fff;" onclick="sendEstimate()">Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var photos = [];
+var selectedIdx = null;
+var currentEstimateId = null;
+var ROOMS = ['Living Room','Bedroom 1','Bedroom 2','Bedroom 3','Bedroom 4','Garage','Basement','Kitchen','Bathroom','Outdoor','Other','Truck Load'];
+
+function esc(s) { var d = document.createElement('div'); d.textContent = String(s || ''); return d.innerHTML; }
+
+(async function() {
+  var resp = await fetch('/api/team/me');
+  var data = await resp.json();
+  if (!data.authenticated) { window.location.href = '/team'; return; }
+  document.getElementById('team-name').textContent = data.name;
+  document.getElementById('team-company').textContent = data.company_name;
+  document.getElementById('team-remaining').textContent = data.estimates_remaining + ' left';
+
+  var grid = document.getElementById('room-grid');
+  ROOMS.forEach(function(room) {
+    var btn = document.createElement('button');
+    btn.className = 'room-btn';
+    btn.textContent = room;
+    btn.addEventListener('click', function() { assignRoom(room); });
+    grid.appendChild(btn);
+  });
+})();
+
+document.getElementById('file-input').addEventListener('change', function(e) {
+  handleFiles(Array.from(e.target.files));
+  e.target.value = '';
+});
+
+function handleFiles(files) {
+  var remaining = 20 - photos.length;
+  if (remaining <= 0) return;
+  files.filter(function(f) { return f.type.startsWith('image/'); }).slice(0, remaining).forEach(function(file) {
+    photos.push({ file: file, url: URL.createObjectURL(file), room: null });
+  });
+  renderPreviews();
+  if (photos.length > 0) {
+    selectedIdx = photos.length - 1;
+    showRoomSelector();
+  }
+}
+
+function renderPreviews() {
+  var el = document.getElementById('previews');
+  el.innerHTML = '';
+  photos.forEach(function(p, i) {
+    var div = document.createElement('div');
+    div.className = 'preview-item';
+    div.innerHTML = '<img class="preview-thumb" src="' + p.url + '" style="' + (i === selectedIdx ? 'border-color:var(--accent);' : '') + '">' +
+      '<button class="remove" data-idx="' + i + '">✕</button>' +
+      (p.room ? '<span class="room-tag">' + esc(p.room) + '</span>' : '');
+    div.querySelector('img').addEventListener('click', function() { selectedIdx = i; showRoomSelector(); renderPreviews(); });
+    div.querySelector('.remove').addEventListener('click', function(e) { e.stopPropagation(); photos.splice(i, 1); selectedIdx = null; renderPreviews(); updateBtn(); });
+    el.appendChild(div);
+  });
+  document.getElementById('photo-count').textContent = photos.length + ' / 20 photos';
+  updateBtn();
+}
+
+function showRoomSelector() {
+  document.getElementById('room-section').style.display = 'block';
+  document.getElementById('selected-photo-label').textContent = 'Photo ' + (selectedIdx + 1);
+  document.querySelectorAll('.room-btn').forEach(function(btn) {
+    btn.classList.toggle('active', photos[selectedIdx] && photos[selectedIdx].room === btn.textContent);
+  });
+}
+
+function assignRoom(room) {
+  if (selectedIdx !== null && photos[selectedIdx]) {
+    photos[selectedIdx].room = room;
+    renderPreviews();
+    updateBtn();
+    var next = photos.findIndex(function(p, i) { return i > selectedIdx && !p.room; });
+    if (next !== -1) { selectedIdx = next; showRoomSelector(); renderPreviews(); }
+  }
+}
+
+function updateBtn() {
+  var allLabeled = photos.length > 0 && photos.every(function(p) { return p.room; });
+  document.getElementById('submit-btn').disabled = !allLabeled;
+}
+
+async function submitEstimate() {
+  document.getElementById('upload-section').style.display = 'none';
+  document.getElementById('loading').classList.add('visible');
+  document.getElementById('results').classList.remove('visible');
+  hideError();
+
+  var formData = new FormData();
+  photos.forEach(function(p) { formData.append('files', p.file); });
+  formData.append('rooms', JSON.stringify(photos.map(function(p) { return p.room; })));
+  formData.append('customer_name', document.getElementById('cust-name').value);
+  formData.append('customer_email', document.getElementById('cust-email').value);
+  formData.append('customer_phone', document.getElementById('cust-phone').value);
+
+  try {
+    var resp = await fetch('/api/team/estimate', { method: 'POST', body: formData });
+    var data = await resp.json();
+    if (!resp.ok) {
+      if (data.detail === 'estimate_limit_reached') { showError('Estimate limit reached. Contact your admin.'); }
+      else { showError(data.detail || 'Failed to submit'); }
+      document.getElementById('upload-section').style.display = 'block';
+      document.getElementById('loading').classList.remove('visible');
+      return;
+    }
+    pollStatus(data.job_id);
+  } catch (e) {
+    showError('Connection error');
+    document.getElementById('upload-section').style.display = 'block';
+    document.getElementById('loading').classList.remove('visible');
+  }
+}
+
+async function pollStatus(jobId) {
+  try {
+    var resp = await fetch('/api/team/estimate/status/' + jobId);
+    var data = await resp.json();
+    if (data.status === 'complete' && data.result) {
+      document.getElementById('loading').classList.remove('visible');
+      showResults(data.result);
+    } else if (data.status === 'error') {
+      showError(data.error || 'Estimation failed');
+      document.getElementById('loading').classList.remove('visible');
+      document.getElementById('upload-section').style.display = 'block';
+    } else {
+      document.getElementById('loading-text').textContent = data.message || 'Analyzing...';
+      setTimeout(function() { pollStatus(jobId); }, 1500);
+    }
+  } catch (e) {
+    setTimeout(function() { pollStatus(jobId); }, 2000);
+  }
+}
+
+var catIcons = { furniture: '🪑', appliance: '🔌', debris: '🗑️', electronics: '💻', outdoor: '🌳', sports: '🏋️', medical: '🏥', hazardous: '☣️', other: '📦' };
+
+function showResults(data) {
+  currentEstimateId = data.id;
+  document.getElementById('results').classList.add('visible');
+
+  document.getElementById('res-price').textContent = '$' + (data.price_low || 0).toLocaleString() + ' — $' + (data.price_high || 0).toLocaleString();
+  document.getElementById('res-cy').textContent = (data.cy_estimate || 0) + ' CY';
+  document.getElementById('res-photos-count').textContent = photos.length;
+  document.getElementById('res-confidence').textContent = (data.confidence || 75) + '%';
+
+  var photosEl = document.getElementById('ref-photos-section');
+  if (photos.length > 0) {
+    var html = '<div class="ref-photos-title">Photos Analyzed (' + photos.length + ')</div><div class="ref-photos-grid">';
+    photos.forEach(function(p) { html += '<img src="' + p.url + '" alt="photo">'; });
+    html += '</div>';
+    photosEl.innerHTML = html;
+    photosEl.style.display = 'block';
+  }
+
+  var itemsEl = document.getElementById('res-items');
+  itemsEl.innerHTML = '';
+  (data.items || []).forEach(function(item) {
+    var cat = item.category || 'other';
+    var row = document.createElement('div');
+    row.className = 'item-row';
+    row.innerHTML = '<div class="item-icon">' + (catIcons[cat] || '📦') + '</div><div class="item-name">' + esc(item.name || 'Unknown') + (item.is_special ? ' <span style="color:var(--amber);font-size:0.72rem;">♻️</span>' : '') + '</div><div class="item-qty">×' + (parseInt(item.quantity) || 1) + '</div>';
+    itemsEl.appendChild(row);
+  });
+
+  var specialEl = document.getElementById('res-special');
+  if (data.special_items && data.special_items.length > 0) {
+    var sh = '<div class="special-title">♻️ Special Recycling Items</div>';
+    data.special_items.forEach(function(si) { sh += '<div class="special-item">' + esc(si.name) + ' ×' + (parseInt(si.quantity) || 1) + '</div>'; });
+    specialEl.innerHTML = sh;
+    specialEl.style.display = 'block';
+  }
+
+  var sendEmail = document.getElementById('cust-email').value.trim();
+  if (sendEmail) { document.getElementById('send-email').value = sendEmail; }
+}
+
+async function downloadPDF() {
+  if (!currentEstimateId) return;
+  var btn = document.getElementById('pdf-btn');
+  btn.textContent = '⏳ Generating...';
+  try {
+    var resp = await fetch('/api/estimate/' + currentEstimateId + '/pdf', { method: 'POST' });
+    if (!resp.ok) { btn.textContent = '❌ Failed'; setTimeout(function() { btn.textContent = '📄 Download PDF'; }, 2000); return; }
+    var blob = await resp.blob();
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'estimate-' + currentEstimateId + '.pdf';
+    a.click();
+    URL.revokeObjectURL(url);
+    btn.textContent = '✅ Downloaded';
+    setTimeout(function() { btn.textContent = '📄 Download PDF'; }, 2000);
+  } catch (e) {
+    btn.textContent = '❌ Error';
+    setTimeout(function() { btn.textContent = '📄 Download PDF'; }, 2000);
+  }
+}
+
+function openSendModal() {
+  document.getElementById('send-modal').classList.add('visible');
+}
+function closeSendModal() {
+  document.getElementById('send-modal').classList.remove('visible');
+}
+
+async function sendEstimate() {
+  var email = document.getElementById('send-email').value.trim();
+  if (!email || !currentEstimateId) return;
+  try {
+    var resp = await fetch('/api/estimate/' + currentEstimateId + '/send', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ email: email })
+    });
+    if (resp.ok) {
+      closeSendModal();
+      var btn = document.getElementById('send-btn');
+      btn.textContent = '✅ Sent!';
+      setTimeout(function() { btn.textContent = '📧 Send to Customer'; }, 2500);
+    }
+  } catch (e) {}
+}
+
+function newEstimate() {
+  photos = [];
+  selectedIdx = null;
+  currentEstimateId = null;
+  document.getElementById('previews').innerHTML = '';
+  document.getElementById('room-section').style.display = 'none';
+  document.getElementById('results').classList.remove('visible');
+  document.getElementById('loading').classList.remove('visible');
+  document.getElementById('upload-section').style.display = 'block';
+  document.getElementById('photo-count').textContent = '0 / 20 photos';
+  document.getElementById('submit-btn').disabled = true;
+  document.getElementById('cust-name').value = '';
+  document.getElementById('cust-email').value = '';
+  document.getElementById('cust-phone').value = '';
+}
+
+async function logout() {
+  await fetch('/api/team/logout', { method: 'POST' });
+  window.location.href = '/team';
+}
+
+function showError(msg) {
+  var el = document.getElementById('error-box');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+function hideError() { document.getElementById('error-box').classList.remove('visible'); }
+</script>
+</body>
+</html>

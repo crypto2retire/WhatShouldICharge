@@ -136,11 +136,11 @@
   <div class="hero-label">
     <span aria-hidden="true">&#10022;</span> AI-Powered Junk Removal Pricing
   </div>
-  <h1>Junk Removal Pricing.<br><span class="accent">Instant AI Estimates.</span></h1>
-  <p class="hero-sub">Upload customer photos. Get an instant AI price estimate with cubic yard calculations. Close more jobs — without the guesswork.</p>
+  <h1><span data-config="hero_title">Junk Removal Pricing.</span><br><span class="accent" data-config="hero_subtitle">Instant AI Estimates.</span></h1>
+  <p class="hero-sub" data-config="hero_description">Upload customer photos. Get an instant AI price estimate with cubic yard calculations. Close more jobs — without the guesswork.</p>
   <div class="hero-ctas">
-    <a href="/signup" class="btn btn-primary btn-lg">Try It Free &rarr;</a>
-    <a href="#how-it-works" class="btn btn-ghost btn-lg">See How It Works</a>
+    <a href="/signup" class="btn btn-primary btn-lg" data-config="cta_primary">Try It Free &rarr;</a>
+    <a href="#how-it-works" class="btn btn-ghost btn-lg" data-config="cta_secondary">See How It Works</a>
   </div>
 
   <div class="mockup-wrap fade-up" role="img" aria-label="Screenshot of the WhatShouldICharge estimator showing photo upload, item detection, and a price result of $280 to $350">
@@ -264,18 +264,18 @@
     <div class="features-grid">
       <div class="feature-card fade-up">
         <span class="feature-icon" aria-hidden="true">&#128248;</span>
-        <h3>Photo-Based Estimates</h3>
-        <p>No site visit needed. Upload up to 6 photos and let the AI do the heavy lifting. Works with any phone camera.</p>
+        <h3 data-config="feature_1_title">Photo-Based Estimates</h3>
+        <p data-config="feature_1_desc">No site visit needed. Upload up to 6 photos and let the AI do the heavy lifting. Works with any phone camera.</p>
       </div>
       <div class="feature-card fade-up fade-up-delay-1">
         <span class="feature-icon" aria-hidden="true">&#127919;</span>
-        <h3>Accurate Pricing</h3>
-        <p>AI trained specifically on junk removal jobs — furniture, appliances, debris, yard waste. Purpose-built for your industry.</p>
+        <h3 data-config="feature_2_title">Accurate Pricing</h3>
+        <p data-config="feature_2_desc">AI trained specifically on junk removal jobs — furniture, appliances, debris, yard waste. Purpose-built for your industry.</p>
       </div>
       <div class="feature-card fade-up fade-up-delay-2">
         <span class="feature-icon" aria-hidden="true">&#9889;</span>
-        <h3>Premium Detection</h3>
-        <p>Automatically flags hoarder situations, heavy items, stairs, and outdoor piles — and switches to premium pricing rates.</p>
+        <h3 data-config="feature_3_title">Premium Detection</h3>
+        <p data-config="feature_3_desc">Automatically flags hoarder situations, heavy items, stairs, and outdoor piles — and switches to premium pricing rates.</p>
       </div>
       <div class="feature-card fade-up fade-up-delay-3">
         <span class="feature-icon" aria-hidden="true">&#128667;</span>
@@ -509,6 +509,15 @@ window.addEventListener('scroll', function() {
     ? 'rgba(13,17,23,0.98)'
     : 'rgba(13,17,23,0.92)';
 });
+
+(function() {
+  fetch('/api/site-config').then(function(r) { return r.json(); }).then(function(cfg) {
+    document.querySelectorAll('[data-config]').forEach(function(el) {
+      var key = el.getAttribute('data-config');
+      if (cfg[key]) el.textContent = cfg[key];
+    });
+  }).catch(function() {});
+})();
 </script>
 </body>
 </html>

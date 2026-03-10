@@ -663,7 +663,7 @@
     <div id="drop-zone" role="button" tabindex="0" aria-label="Upload photos. Drop photos here or click to upload.">
       <div class="upload-icon" aria-hidden="true">📷</div>
       <div class="upload-label">Drop photos here or click to upload</div>
-      <div class="upload-sub">Up to 20 photos • Multiple per room OK • JPG, PNG, WEBP</div>
+      <div class="upload-sub">Up to 30 photos • Room labels optional • JPG, PNG, WEBP</div>
     </div>
     <input type="file" id="file-input" accept="image/*" multiple aria-label="Select photos to upload">
 
@@ -673,7 +673,7 @@
     <!-- Room Selector -->
     <div id="room-selector">
       <div id="room-selector-title">Label Photo <span id="current-photo-num">1</span></div>
-      <div class="room-selector-label">Choose the room for this photo. Use the same room for multiple angles:</div>
+      <div class="room-selector-label">Optional: label this photo's room for better accuracy</div>
       <div class="room-grid">
         <button class="room-btn" data-room="Living Room">🛋️ Living Room</button>
         <button class="room-btn" data-room="Bedroom 1">🛏️ Bedroom 1</button>
@@ -876,8 +876,8 @@ dropZone.addEventListener('drop', e => {
 fileInput.addEventListener('change', e => handleFiles(Array.from(e.target.files)));
 
 function handleFiles(files) {
-  var remaining = 20 - photos.length;
-  if (remaining <= 0) { showError('Maximum 20 photos allowed.'); return; }
+  var remaining = 30 - photos.length;
+  if (remaining <= 0) { showError('Maximum 30 photos allowed.'); return; }
   var toAdd = files.filter(function(f) { return f.type.startsWith('image/'); }).slice(0, remaining);
   toAdd.forEach(function(file) {
     var url = URL.createObjectURL(file);
@@ -979,7 +979,7 @@ function updatePhotoCount() {
     var roomCount = {};
     photos.forEach(function(p) { if (p.room) roomCount[p.room] = true; });
     var rooms = Object.keys(roomCount).length;
-    photoCount.textContent = photos.length + '/20 photo' + (photos.length !== 1 ? 's' : '') + ' added' + (rooms > 0 ? ' \u00B7 ' + rooms + ' room' + (rooms !== 1 ? 's' : '') : '');
+    photoCount.textContent = photos.length + '/30 photo' + (photos.length !== 1 ? 's' : '') + ' added' + (rooms > 0 ? ' \u00B7 ' + rooms + ' room' + (rooms !== 1 ? 's' : '') : '');
   }
 }
 
@@ -1041,12 +1041,9 @@ function updateTruckDisplay() {
 updateTruckDisplay();
 
 function updateSubmitBtn() {
-  const allLabeled = photos.length > 0 && photos.every(p => p.room);
-  submitBtn.disabled = !allLabeled;
+  submitBtn.disabled = photos.length === 0;
   if (photos.length === 0) {
     submitBtn.textContent = 'Upload Photos to Get Estimate';
-  } else if (!allLabeled) {
-    submitBtn.textContent = 'Label All Photos to Continue';
   } else {
     submitBtn.textContent = 'Get Estimate for ' + photos.length + ' Photo' + (photos.length !== 1 ? 's' : '');
   }

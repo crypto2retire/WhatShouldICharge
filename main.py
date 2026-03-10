@@ -399,7 +399,7 @@ async def seed_site_config():
             "faq_2_q": "What types of junk can it estimate?",
             "faq_2_a": "Furniture, appliances, electronics, yard waste, construction debris, and more. Over 90 item types in our reference library.",
             "faq_3_q": "How many photos should I upload?",
-            "faq_3_a": "We recommend 2-4 photos per room from different angles. You can upload up to 20 photos total.",
+            "faq_3_a": "We recommend 2-3 photos per room from different angles. You can upload up to 30 photos total. Room labels are optional but improve accuracy.",
         }
         for k, v in defaults.items():
             db.add(SiteConfig(config_key=k, config_value=v))

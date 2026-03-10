@@ -20,7 +20,7 @@ An AI-powered junk removal job estimator. Users upload customer photos, Claude v
 3. **Library Learning**: After each estimate, all identified items update the reference library (increment times_seen or add new AI-learned items).
 
 ## Multi-Photo Per Room
-- Users can upload up to 20 photos total (increased from 6), with multiple photos per room
+- Users can upload up to 30 photos total, with multiple photos per room
 - Photos are grouped by room label in the preview UI (visual grouping with room headers)
 - Backend groups photos by room before sending to Claude, with explicit per-group headers
 - AI prompt includes dedicated MULTI-PHOTO DEDUPLICATION section: same-room photos are treated as different angles of one space, items visible in multiple angles counted only once
@@ -193,7 +193,7 @@ Admin user kevin@cleartheclutter.net seeded with is_admin=True.
 - CORS hardened with explicit methods and headers (no wildcards)
 - Team estimate status endpoint checks ownership before returning results
 - Session cookies set with `secure=True`, `httponly=True`, `samesite=lax`
-- Upload size limit: 20MB per file, 20 files max
+- Upload size limit: 20MB per file, 30 files max
 
 ### Backend Performance
 - Database connection pool: `pool_pre_ping=True`, `pool_recycle=3600`

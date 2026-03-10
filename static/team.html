@@ -367,7 +367,7 @@
       <div class="upload-area" id="upload-area" role="button" tabindex="0" aria-label="Tap to take or upload photos" onclick="document.getElementById('file-input').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('file-input').click();}">
         <div class="upload-icon" aria-hidden="true">📸</div>
         <div class="upload-text">Tap to take or upload photos</div>
-        <div class="upload-sub" id="photo-count" aria-live="polite">0 / 20 photos</div>
+        <div class="upload-sub" id="photo-count" aria-live="polite">0 / 30 photos</div>
       </div>
       <input type="file" id="file-input" accept="image/*" multiple capture="environment" style="display:none" aria-label="Select photos to upload">
       <div class="preview-grid" id="previews"></div>
@@ -471,7 +471,7 @@ document.getElementById('file-input').addEventListener('change', function(e) {
 });
 
 function handleFiles(files) {
-  var remaining = 20 - photos.length;
+  var remaining = 30 - photos.length;
   if (remaining <= 0) return;
   files.filter(function(f) { return f.type.startsWith('image/'); }).slice(0, remaining).forEach(function(file) {
     photos.push({ file: file, url: URL.createObjectURL(file), room: null });
@@ -496,7 +496,7 @@ function renderPreviews() {
     div.querySelector('.remove').addEventListener('click', function(e) { e.stopPropagation(); photos.splice(i, 1); selectedIdx = null; renderPreviews(); updateBtn(); });
     el.appendChild(div);
   });
-  document.getElementById('photo-count').textContent = photos.length + ' / 20 photos';
+  document.getElementById('photo-count').textContent = photos.length + ' / 30 photos';
   updateBtn();
 }
 
@@ -519,8 +519,7 @@ function assignRoom(room) {
 }
 
 function updateBtn() {
-  var allLabeled = photos.length > 0 && photos.every(function(p) { return p.room; });
-  document.getElementById('submit-btn').disabled = !allLabeled;
+  document.getElementById('submit-btn').disabled = photos.length === 0;
 }
 
 async function submitEstimate() {
@@ -683,7 +682,7 @@ function newEstimate() {
   document.getElementById('results').classList.remove('visible');
   document.getElementById('loading').classList.remove('visible');
   document.getElementById('upload-section').style.display = 'block';
-  document.getElementById('photo-count').textContent = '0 / 20 photos';
+  document.getElementById('photo-count').textContent = '0 / 30 photos';
   document.getElementById('submit-btn').disabled = true;
   document.getElementById('cust-name').value = '';
   document.getElementById('cust-email').value = '';

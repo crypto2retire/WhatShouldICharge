@@ -346,6 +346,71 @@
   #results { display: none; }
   #results.visible { display: block; }
 
+  .ref-photos {
+    margin-bottom: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .ref-photos-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+  }
+  .ref-photos-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .ref-photo-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .ref-photo-group-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--accent);
+    padding: 0 2px;
+  }
+  .ref-photo-group-imgs {
+    display: flex;
+    gap: 6px;
+  }
+  .ref-photo-thumb {
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .ref-photo-thumb:hover {
+    transform: scale(1.08);
+    border-color: var(--accent);
+  }
+  .ref-photo-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .ref-photo-modal img {
+    max-width: 90vw;
+    max-height: 90vh;
+    border-radius: 10px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  }
+
   .price-banner {
     background: linear-gradient(135deg, #0d2641, #1a1d27);
     border: 1px solid #4f8ef755;
@@ -663,6 +728,7 @@
 
   <!-- Results -->
   <div id="results">
+    <div id="ref-photos" class="ref-photos" style="display:none;"></div>
     <div class="price-banner">
       <div class="label">Estimated Price Range</div>
       <div class="price-range" id="res-price"></div>
@@ -1061,9 +1127,47 @@ function esc(str) {
   return d.innerHTML;
 }
 
+function renderRefPhotos() {
+  var container = document.getElementById('ref-photos');
+  if (!photos.length) { container.style.display = 'none'; return; }
+
+  var groups = {};
+  photos.forEach(function(p) {
+    var label = p.room || 'Unlabeled';
+    if (!groups[label]) groups[label] = [];
+    groups[label].push(p.url);
+  });
+
+  var html = '<div class="ref-photos-title">📷 Photos Analyzed (' + photos.length + ')</div><div class="ref-photos-grid">';
+  Object.keys(groups).forEach(function(room) {
+    html += '<div class="ref-photo-group">';
+    html += '<div class="ref-photo-group-label">' + esc(room) + '</div>';
+    html += '<div class="ref-photo-group-imgs">';
+    groups[room].forEach(function(url) {
+      html += '<img class="ref-photo-thumb" src="' + url + '" alt="' + esc(room) + '" onclick="showPhotoModal(this.src)">';
+    });
+    html += '</div></div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+  container.style.display = 'block';
+}
+
+function showPhotoModal(src) {
+  var modal = document.createElement('div');
+  modal.className = 'ref-photo-modal';
+  modal.innerHTML = '<img src="' + src + '">';
+  modal.addEventListener('click', function() { modal.remove(); });
+  document.addEventListener('keydown', function handler(e) {
+    if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', handler); }
+  });
+  document.body.appendChild(modal);
+}
+
 function showResults(data) {
   loadingEl.classList.remove('visible');
   resultsEl.classList.add('visible');
+  renderRefPhotos();
 
   document.getElementById('res-price').innerHTML =
     `$${data.price_low.toLocaleString()} <span>–</span> $${data.price_high.toLocaleString()}`
@@ -1181,6 +1285,7 @@ document.getElementById('new-estimate-btn').addEventListener('click', () => {
   truckPanel.classList.remove('visible');
   resultsEl.classList.remove('visible');
   loadingEl.classList.remove('visible');
+  document.getElementById('ref-photos').style.display = 'none';
   submitSection.style.display = 'block';
   uploadCard.style.display = 'block';
   hideError();

@@ -397,23 +397,41 @@ async def seed_site_config():
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(SiteConfig).limit(1))
         if result.scalar_one_or_none():
+            updates = {
+                "hero_subtitle": "AI-Assisted Estimates.",
+                "hero_description": "Upload customer photos. Get an AI-assisted price range with cubic yard estimates. Close more jobs — without the guesswork.",
+                "feature_1_title": "Photo-Based Estimates",
+                "feature_1_desc": "No site visit needed. Upload up to 6 photos and let the AI do the heavy lifting. Works with any phone camera.",
+                "feature_2_title": "AI-Assisted Pricing",
+                "feature_2_desc": "Purpose-built for junk removal — not generic object detection. The AI uses a reference library of 86+ items with real dimensions to estimate volume.",
+                "feature_3_title": "Premium Detection",
+                "feature_3_desc": "Automatically flags hoarder situations, heavy items, stairs, and outdoor piles — and switches to premium pricing rates.",
+            }
+            for k, v in updates.items():
+                row = await db.execute(select(SiteConfig).where(SiteConfig.config_key == k))
+                existing = row.scalar_one_or_none()
+                if existing:
+                    existing.config_value = v
+                else:
+                    db.add(SiteConfig(config_key=k, config_value=v))
+            await db.commit()
             return
         defaults = {
             "hero_title": "Junk Removal Pricing.",
-            "hero_subtitle": "Instant AI Estimates.",
-            "hero_description": "Upload customer photos. Get an instant AI price estimate with cubic yard calculations. Close more jobs — without the guesswork.",
+            "hero_subtitle": "AI-Assisted Estimates.",
+            "hero_description": "Upload customer photos. Get an AI-assisted price range with cubic yard estimates. Close more jobs — without the guesswork.",
             "cta_primary": "Try It Free →",
             "cta_secondary": "See How It Works",
-            "feature_1_title": "Upload Photos",
-            "feature_1_desc": "Snap photos of the items. Our AI handles the rest.",
-            "feature_2_title": "Get Instant Pricing",
-            "feature_2_desc": "AI calculates cubic yards and gives you a price range in seconds.",
-            "feature_3_title": "Close More Jobs",
-            "feature_3_desc": "Send professional estimates to customers. Win more bids.",
+            "feature_1_title": "Photo-Based Estimates",
+            "feature_1_desc": "No site visit needed. Upload up to 6 photos and let the AI do the heavy lifting. Works with any phone camera.",
+            "feature_2_title": "AI-Assisted Pricing",
+            "feature_2_desc": "Purpose-built for junk removal — not generic object detection. The AI uses a reference library of 86+ items with real dimensions to estimate volume.",
+            "feature_3_title": "Premium Detection",
+            "feature_3_desc": "Automatically flags hoarder situations, heavy items, stairs, and outdoor piles — and switches to premium pricing rates.",
             "faq_1_q": "How accurate are the estimates?",
-            "faq_1_a": "Our AI achieves 85-95% accuracy by analyzing items, calculating cubic yards, and applying current market rates for your area.",
+            "faq_1_a": "Our AI-assisted estimates give you a solid starting point for pricing conversations. Accuracy improves with more photos from different angles.",
             "faq_2_q": "What types of junk can it estimate?",
-            "faq_2_a": "Furniture, appliances, electronics, yard waste, construction debris, and more. Over 90 item types in our reference library.",
+            "faq_2_a": "Furniture, appliances, electronics, yard waste, construction debris, and more. 86+ item types in our reference library with real-world dimensions.",
             "faq_3_q": "How many photos should I upload?",
             "faq_3_a": "We recommend 2-3 photos per room from different angles. You can upload up to 30 photos total. Room labels are optional but improve accuracy.",
         }
@@ -664,7 +682,7 @@ async def auth_signup(request: Request):
         "Welcome to WhatShouldICharge!",
         f"<h2>Welcome, {company_name or 'there'}!</h2>"
         "<p>You have <strong>3 free estimates</strong> to try out the platform.</p>"
-        "<p>Upload customer photos and get instant AI-powered pricing.</p>"
+        "<p>Upload customer photos and get AI-assisted pricing in seconds.</p>"
         "<p>— The WhatShouldICharge Team</p>"
     )
 

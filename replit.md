@@ -14,10 +14,11 @@ An AI-powered junk removal job estimator. Users upload customer photos, Claude v
 - **Email**: SendGrid for estimate delivery
 - **Server**: uvicorn on port 5000
 
-## Single-Pass Estimation Engine
-1. **Pass 1**: Claude analyzes photos with the reference library injected into the system prompt. Identifies items, estimates CY, classifies job type. Special items (TVs, mattresses, tires, etc.) are flagged with `is_special: true` but NO fees are calculated.
-2. **Web Lookup**: For items flagged as `items_needing_lookup`, parallel Tavily searches find real-world dimensions. Claude extracts CY from search results. New items are saved to the reference library.
-3. **Library Learning**: After each estimate, all identified items update the reference library (increment times_seen or add new AI-learned items).
+## Spatial Reasoning Estimation Engine
+1. **Reference Point Calibration**: Claude scans photos for 5-10 items it recognizes from the reference library. These known items (with verified cubic yard values) serve as spatial anchors to establish scale and depth across the photo.
+2. **Spatial Measurement**: Using the known real-world dimensions of reference items at different depths and positions, Claude calibrates perspective and measures unknown items by comparing their apparent size to nearby reference points. This is triangulation-based spatial reasoning — not pattern matching or guessing.
+3. **Web Lookup**: For items flagged as `items_needing_lookup`, parallel Tavily searches find real-world dimensions. Claude extracts CY from search results. New items are saved to the reference library.
+4. **Library Learning**: After each estimate, all identified items update the reference library (increment times_seen or add new AI-learned items). Admin can manually adjust CY values in the library to improve future accuracy.
 
 ## Multi-Photo Per Room
 - Users can upload up to 30 photos total, with multiple photos per room

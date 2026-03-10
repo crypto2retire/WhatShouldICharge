@@ -787,6 +787,11 @@
       <div class="conditions-row" id="res-conditions"></div>
     </div>
 
+    <div id="res-refpoints" class="card" style="display:none;">
+      <div class="card-title" style="color:var(--blue,#818cf8);">Spatial Reference Points</div>
+      <div id="res-refpoints-list" style="font-size:0.85rem;"></div>
+    </div>
+
     <div class="card">
       <div class="card-title">Item Breakdown</div>
       <div class="items-grid" id="res-items"></div>
@@ -852,6 +857,7 @@
         <button class="detail-close" onclick="closeDetail()" aria-label="Close">&times;</button>
       </div>
       <div class="detail-info-row" id="detail-info"></div>
+      <div id="detail-refpoints"></div>
       <div id="detail-items"></div>
       <div id="detail-special"></div>
       <div class="detail-actions" id="detail-actions"></div>
@@ -1302,6 +1308,23 @@ function showResults(data) {
     condEl.appendChild(pill);
   });
 
+  var refPoints = data.reference_points || [];
+  var refContainer = document.getElementById('res-refpoints');
+  var refList = document.getElementById('res-refpoints-list');
+  if (refPoints.length) {
+    refContainer.style.display = 'block';
+    var refHtml = '<div style="color:var(--muted);font-size:0.78rem;margin-bottom:8px;">AI used these ' + refPoints.length + ' known items to calibrate scale and depth:</div>';
+    refPoints.forEach(function(rp) {
+      refHtml += '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(42,45,58,0.3);">' +
+        '<span style="color:var(--blue,#818cf8);">' + esc(rp.name || '') + '</span>' +
+        '<span style="color:var(--muted);">' + (rp.cubic_yards || 0) + ' CY' + (rp.location_in_photo ? ' · ' + esc(rp.location_in_photo) : '') + '</span>' +
+      '</div>';
+    });
+    refList.innerHTML = refHtml;
+  } else {
+    refContainer.style.display = 'none';
+  }
+
   const itemsEl = document.getElementById('res-items');
   itemsEl.innerHTML = '';
   const catMap = { ...catIcons, electronics: '💻', hazardous: '☣️' };
@@ -1371,6 +1394,7 @@ document.getElementById('new-estimate-btn').addEventListener('click', () => {
   resultsEl.classList.remove('visible');
   loadingEl.classList.remove('visible');
   document.getElementById('ref-photos').style.display = 'none';
+  document.getElementById('res-refpoints').style.display = 'none';
   submitSection.style.display = 'block';
   uploadCard.style.display = 'block';
   hideError();
@@ -1515,6 +1539,19 @@ async function openDetail(id) {
     var items = result.items || [];
     var normalItems = items.filter(function(i) { return !i.is_special; });
     var specialItems = items.filter(function(i) { return i.is_special; });
+
+    var refPoints = result.reference_points || [];
+    var refHtml = '';
+    if (refPoints.length) {
+      refHtml += '<div class="detail-section-title" style="color:var(--blue,#818cf8);">Spatial Reference Points (' + refPoints.length + ')</div>';
+      refPoints.forEach(function(rp) {
+        refHtml += '<div class="detail-item-row" style="color:var(--blue,#818cf8);">' +
+          '<div class="detail-item-name">' + esc(rp.name || '') + '</div>' +
+          '<div class="detail-item-cy">' + (rp.cubic_yards || 0) + ' CY</div>' +
+        '</div>';
+      });
+    }
+    document.getElementById('detail-refpoints').innerHTML = refHtml;
 
     var itemsHtml = '';
     if (normalItems.length) {

@@ -1037,6 +1037,14 @@ Analyze ALL photos carefully and return ONLY valid JSON with no markdown, no exp
 
 REQUIRED JSON FORMAT:
 {
+  "reference_points": [
+    {
+      "name": "item used as reference",
+      "known_dimensions": "3ft x 2ft x 3ft",
+      "cubic_yards": 0.5,
+      "location_in_photo": "left foreground"
+    }
+  ],
   "items": [
     {
       "name": "specific item name",
@@ -1057,6 +1065,20 @@ REQUIRED JSON FORMAT:
   "notes": "Brief job description for the crew"
 }
 
+SPATIAL REASONING METHOD (THIS IS HOW YOU ESTIMATE — FOLLOW EXACTLY):
+
+Step 1 — FIND REFERENCE POINTS: Scan the photo for 5-10 items you recognize from the KNOWN ITEM REFERENCE LIBRARY below. These are your spatial anchors. Pick items spread across the photo — foreground, middle, background, left, right — to establish scale from multiple vantage points.
+
+Step 2 — ESTABLISH SCALE AND DEPTH: Use the known real-world dimensions of those 5-10 reference items to calibrate the photo's perspective. A couch you know is 7ft long tells you how big everything near it is. A refrigerator in the background tells you the scale of that area. A trash bag in the corner reveals depth. By triangulating between multiple known objects at different depths, you can determine the true 3D volume of the entire scene.
+
+Step 3 — MEASURE UNKNOWN ITEMS: Now that you understand the photo's scale and depth, estimate the cubic yards of every other item by comparing its apparent size to your reference points. An unknown box sitting next to a known chair can be sized accurately because you know how big the chair really is.
+
+Step 4 — CALCULATE TOTALS: Sum all items for total cubic yards. Use reference-calibrated measurements, not guesses.
+
+List your reference points in the "reference_points" array so the estimate is explainable and auditable.
+
+If fewer than 5 reference items are visible, note this in "notes" and lower your confidence score. The fewer reference points, the less accurate the spatial calibration.
+
 MULTI-PHOTO DEDUPLICATION (CRITICAL):
 - Multiple photos may show the SAME room from different angles
 - Photos labeled with the same room name are different views of ONE space
@@ -1064,10 +1086,11 @@ MULTI-PHOTO DEDUPLICATION (CRITICAL):
 - Use visual cues (position, color, size, surroundings) to identify duplicate items across angles
 - When uncertain if an item in two photos is the same, assume it IS the same item and count once
 - Only count an item multiple times if it is clearly a DIFFERENT item (e.g., two distinct chairs in different positions)
+- Use reference points from multiple angles to improve spatial accuracy — seeing the same reference item from two angles gives better depth calibration
 
 ITEM IDENTIFICATION RULES:
 - Identify every visible item individually, do not group unless identical
-- Assign cubic_yards to each item based on actual physical size
+- Assign cubic_yards to each item based on its size RELATIVE TO YOUR REFERENCE POINTS — not generic guesses
 - Look specifically along walls, in corners, behind other items
 - FLAT SCREEN TVs vs WINDOW SCREENS: Dark rectangular objects leaning against walls may be TVs OR window screens — distinguish carefully. A TV will have a visible stand base, port connections on the back/side, a brand logo, a glossy screen surface, or a thick plastic bezel. A window screen has a thin metal or wooden frame with mesh visible through it. When uncertain, add "possible TV or window screen, verify on site" in the notes field for the crew to check.
 - Wheelchairs and medical equipment: note in items, not special fee but flag in notes for crew (may be donateable)
@@ -1116,10 +1139,10 @@ CONDITIONS LIST — include all that apply:
 stairs, heavy_items, outdoor, hoarder, disassembly_needed, multiple_floors, elevator_available, long_carry, truck_load, hazardous_materials, electronics, donation_possible
 
 CONFIDENCE SCORE:
-- 90-100: Clear photos, all items visible, straightforward job
-- 70-89: Some items obscured, reasonable estimate
-- 50-69: Poor lighting, many items hidden, estimate may vary
-- Under 50: Cannot see enough to estimate accurately
+- 90-100: Clear photos, 5+ reference points identified, all items visible, straightforward job
+- 70-89: 3-4 reference points, some items obscured, reasonable estimate
+- 50-69: 1-2 reference points, poor lighting, many items hidden, estimate may vary significantly
+- Under 50: No reference points found, cannot calibrate scale, estimate is a rough guess
 
 Always err toward the higher end of CY when visibility is limited. Better to quote slightly high and come down than to under-quote."""
 
@@ -1134,7 +1157,12 @@ async def get_library_context() -> str:
         items = result.scalars().all()
     if not items:
         return ""
-    lines = ["\nKNOWN ITEM REFERENCE LIBRARY (use these CY values when items match):"]
+    lines = [
+        "\nKNOWN ITEM REFERENCE LIBRARY — USE THESE AS SPATIAL REFERENCE POINTS:",
+        "Find 5-10 of these items in the photo to establish scale and depth.",
+        "Their known cubic yard volumes tell you the real-world size of the scene.",
+        "",
+    ]
     for item in items:
         line = f"- {item.item_name}: {item.cubic_yards} CY"
         if item.is_special:

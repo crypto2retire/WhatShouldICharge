@@ -216,6 +216,7 @@ class ItemReferenceLibrary(Base):
     item_name = Column(String, unique=True, nullable=False, index=True)
     item_category = Column(String, default="other")
     cubic_yards = Column(Float, nullable=False)
+    dimensions = Column(String, default="")
     is_special = Column(Boolean, default=False)
     special_fee = Column(Float, default=0.0)
     confidence = Column(Float, default=1.0)
@@ -236,6 +237,7 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN customer_name TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN customer_email TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN customer_phone TEXT DEFAULT ''",
+            "ALTER TABLE item_reference_library ADD COLUMN dimensions TEXT DEFAULT ''",
         ]
         for stmt in alter_statements:
             try:
@@ -245,105 +247,119 @@ async def init_db():
 
 
 SEED_ITEMS = [
-    ("king mattress", "furniture", 2.5, True, 25.0),
-    ("queen mattress", "furniture", 2.0, True, 25.0),
-    ("full mattress", "furniture", 1.5, True, 25.0),
-    ("twin mattress", "furniture", 1.5, True, 25.0),
-    ("box spring", "furniture", 1.5, True, 25.0),
-    ("large sectional sofa", "furniture", 5.0, False, 0),
-    ("sofa", "furniture", 3.5, False, 0),
-    ("loveseat", "furniture", 2.0, False, 0),
-    ("recliner", "furniture", 1.5, False, 0),
-    ("armchair", "furniture", 1.2, False, 0),
-    ("king bed frame", "furniture", 3.0, False, 0),
-    ("queen bed frame", "furniture", 2.5, False, 0),
-    ("twin bed frame", "furniture", 1.5, False, 0),
-    ("large dresser", "furniture", 2.0, False, 0),
-    ("small dresser", "furniture", 1.0, False, 0),
-    ("nightstand", "furniture", 0.5, False, 0),
-    ("coffee table", "furniture", 0.8, False, 0),
-    ("dining table large", "furniture", 3.0, False, 0),
-    ("dining table small", "furniture", 1.5, False, 0),
-    ("dining chair", "furniture", 0.4, False, 0),
-    ("large workbench", "furniture", 4.5, False, 0),
-    ("small workbench", "furniture", 2.0, False, 0),
-    ("bookshelf large", "furniture", 1.5, False, 0),
-    ("bookshelf small", "furniture", 0.8, False, 0),
-    ("desk large", "furniture", 2.5, False, 0),
-    ("desk small", "furniture", 1.2, False, 0),
-    ("refrigerator large", "appliance", 2.5, False, 0),
-    ("refrigerator small", "appliance", 1.5, False, 0),
-    ("washing machine", "appliance", 2.0, False, 0),
-    ("dryer", "appliance", 2.0, False, 0),
-    ("dishwasher", "appliance", 1.5, False, 0),
-    ("stove", "appliance", 2.0, False, 0),
-    ("microwave large", "appliance", 0.5, False, 0),
-    ("microwave small", "appliance", 0.3, False, 0),
-    ("air conditioner window unit", "appliance", 0.8, False, 0),
-    ("dehumidifier", "appliance", 0.6, False, 0),
-    ("water heater", "appliance", 1.5, False, 0),
-    ("large flat screen tv 55+", "electronics", 0.6, True, 25.0),
-    ("medium flat screen tv 32-54", "electronics", 0.4, True, 25.0),
-    ("small flat screen tv under 32", "electronics", 0.25, True, 25.0),
-    ("crt television", "electronics", 0.8, True, 25.0),
-    ("desktop computer tower", "electronics", 0.2, False, 0),
-    ("monitor", "electronics", 0.2, False, 0),
-    ("printer large", "electronics", 0.3, False, 0),
-    ("large cardboard box", "debris", 0.15, False, 0),
-    ("medium cardboard box", "debris", 0.10, False, 0),
-    ("small cardboard box", "debris", 0.06, False, 0),
-    ("large plastic tote with lid", "debris", 0.25, False, 0),
-    ("small plastic tote", "debris", 0.15, False, 0),
-    ("large trash bag full", "debris", 0.15, False, 0),
-    ("small trash bag full", "debris", 0.08, False, 0),
-    ("plastic outdoor chair", "outdoor", 0.5, False, 0),
-    ("metal outdoor chair", "outdoor", 0.5, False, 0),
-    ("outdoor dining set 4 chairs table", "outdoor", 4.0, False, 0),
-    ("plastic outdoor table", "outdoor", 0.8, False, 0),
-    ("riding lawn mower", "outdoor", 4.0, False, 0),
-    ("push lawn mower", "outdoor", 1.0, False, 0),
-    ("gas grill large", "outdoor", 1.5, False, 0),
-    ("gas grill small", "outdoor", 0.8, False, 0),
-    ("trampoline", "outdoor", 5.0, False, 0),
-    ("swing set", "outdoor", 6.0, False, 0),
-    ("hot tub", "outdoor", 15.0, False, 0),
-    ("above ground pool", "outdoor", 8.0, False, 0),
-    ("4 drawer file cabinet", "other", 0.75, False, 0),
-    ("2 drawer file cabinet", "other", 0.4, False, 0),
-    ("lateral file cabinet", "other", 1.0, False, 0),
-    ("treadmill", "sports", 3.0, False, 0),
-    ("elliptical", "sports", 2.5, False, 0),
-    ("stationary bike", "sports", 1.5, False, 0),
-    ("weight bench", "sports", 1.5, False, 0),
-    ("weight set with rack", "sports", 3.0, False, 0),
-    ("ping pong table", "sports", 3.0, False, 0),
-    ("pool table", "sports", 8.0, False, 0),
-    ("wheelchair", "medical", 1.0, False, 0),
-    ("hospital bed", "medical", 4.0, False, 0),
-    ("walker", "medical", 0.3, False, 0),
-    ("propane tank large", "hazardous", 0.5, True, 50.0),
-    ("propane tank small", "hazardous", 0.2, True, 25.0),
-    ("paint cans box", "hazardous", 0.3, True, 25.0),
-    ("car battery", "hazardous", 0.1, True, 15.0),
-    ("tire car", "hazardous", 0.5, True, 15.0),
-    ("tire truck", "hazardous", 0.8, True, 25.0),
-    ("lumber pile small", "debris", 1.0, False, 0),
-    ("lumber pile large", "debris", 3.0, False, 0),
-    ("drywall sheets", "debris", 0.5, False, 0),
-    ("carpet room", "debris", 2.0, False, 0),
+    ("king mattress", "furniture", 2.5, True, 25.0, "76×80×11 in"),
+    ("queen mattress", "furniture", 2.0, True, 25.0, "60×80×11 in"),
+    ("full mattress", "furniture", 1.5, True, 25.0, "54×75×11 in"),
+    ("twin mattress", "furniture", 1.5, True, 25.0, "38×75×11 in"),
+    ("box spring", "furniture", 1.5, True, 25.0, "60×80×9 in"),
+    ("large sectional sofa", "furniture", 5.0, False, 0, "120×90×36 in"),
+    ("sofa", "furniture", 3.5, False, 0, "84×36×34 in"),
+    ("loveseat", "furniture", 2.0, False, 0, "60×36×34 in"),
+    ("recliner", "furniture", 1.5, False, 0, "36×38×40 in"),
+    ("armchair", "furniture", 1.2, False, 0, "32×34×34 in"),
+    ("king bed frame", "furniture", 3.0, False, 0, "80×76×14 in"),
+    ("queen bed frame", "furniture", 2.5, False, 0, "80×60×14 in"),
+    ("twin bed frame", "furniture", 1.5, False, 0, "75×38×14 in"),
+    ("large dresser", "furniture", 2.0, False, 0, "60×18×34 in"),
+    ("small dresser", "furniture", 1.0, False, 0, "36×18×30 in"),
+    ("nightstand", "furniture", 0.5, False, 0, "24×16×26 in"),
+    ("coffee table", "furniture", 0.8, False, 0, "48×24×18 in"),
+    ("dining table large", "furniture", 3.0, False, 0, "72×42×30 in"),
+    ("dining table small", "furniture", 1.5, False, 0, "48×30×30 in"),
+    ("dining chair", "furniture", 0.4, False, 0, "18×20×38 in"),
+    ("large workbench", "furniture", 4.5, False, 0, "96×30×36 in"),
+    ("small workbench", "furniture", 2.0, False, 0, "60×24×34 in"),
+    ("bookshelf large", "furniture", 1.5, False, 0, "36×12×72 in"),
+    ("bookshelf small", "furniture", 0.8, False, 0, "30×10×48 in"),
+    ("desk large", "furniture", 2.5, False, 0, "60×30×30 in"),
+    ("desk small", "furniture", 1.2, False, 0, "42×24×30 in"),
+    ("refrigerator large", "appliance", 2.5, False, 0, "36×30×70 in"),
+    ("refrigerator small", "appliance", 1.5, False, 0, "28×28×60 in"),
+    ("washing machine", "appliance", 2.0, False, 0, "27×27×38 in"),
+    ("dryer", "appliance", 2.0, False, 0, "27×29×38 in"),
+    ("dishwasher", "appliance", 1.5, False, 0, "24×24×35 in"),
+    ("stove", "appliance", 2.0, False, 0, "30×26×36 in"),
+    ("microwave large", "appliance", 0.5, False, 0, "24×18×14 in"),
+    ("microwave small", "appliance", 0.3, False, 0, "18×14×11 in"),
+    ("air conditioner window unit", "appliance", 0.8, False, 0, "24×20×16 in"),
+    ("dehumidifier", "appliance", 0.6, False, 0, "16×12×24 in"),
+    ("water heater", "appliance", 1.5, False, 0, "22×22×54 in"),
+    ("large flat screen tv 55+", "electronics", 0.6, True, 25.0, "49×4×29 in"),
+    ("medium flat screen tv 32-54", "electronics", 0.4, True, 25.0, "37×3×22 in"),
+    ("small flat screen tv under 32", "electronics", 0.25, True, 25.0, "28×3×17 in"),
+    ("crt television", "electronics", 0.8, True, 25.0, "24×20×20 in"),
+    ("desktop computer tower", "electronics", 0.2, False, 0, "18×8×17 in"),
+    ("monitor", "electronics", 0.2, False, 0, "24×8×18 in"),
+    ("printer large", "electronics", 0.3, False, 0, "20×18×14 in"),
+    ("large cardboard box", "debris", 0.15, False, 0, "24×18×18 in"),
+    ("medium cardboard box", "debris", 0.10, False, 0, "18×14×14 in"),
+    ("small cardboard box", "debris", 0.06, False, 0, "12×12×12 in"),
+    ("large plastic tote with lid", "debris", 0.25, False, 0, "30×20×16 in"),
+    ("small plastic tote", "debris", 0.15, False, 0, "22×16×12 in"),
+    ("large trash bag full", "debris", 0.15, False, 0, "24×24×30 in"),
+    ("small trash bag full", "debris", 0.08, False, 0, "18×18×24 in"),
+    ("plastic outdoor chair", "outdoor", 0.5, False, 0, "22×24×34 in"),
+    ("metal outdoor chair", "outdoor", 0.5, False, 0, "22×24×34 in"),
+    ("outdoor dining set 4 chairs table", "outdoor", 4.0, False, 0, "48×48×30 in + 4 chairs"),
+    ("plastic outdoor table", "outdoor", 0.8, False, 0, "36×36×28 in"),
+    ("riding lawn mower", "outdoor", 4.0, False, 0, "66×42×44 in"),
+    ("push lawn mower", "outdoor", 1.0, False, 0, "56×22×42 in"),
+    ("gas grill large", "outdoor", 1.5, False, 0, "56×22×44 in"),
+    ("gas grill small", "outdoor", 0.8, False, 0, "40×18×38 in"),
+    ("trampoline", "outdoor", 5.0, False, 0, "144 in diameter × 36 in tall"),
+    ("swing set", "outdoor", 6.0, False, 0, "144×96×84 in"),
+    ("hot tub", "outdoor", 15.0, False, 0, "84×84×36 in"),
+    ("above ground pool", "outdoor", 8.0, False, 0, "180 in diameter × 52 in tall"),
+    ("4 drawer file cabinet", "other", 0.75, False, 0, "15×25×52 in"),
+    ("2 drawer file cabinet", "other", 0.4, False, 0, "15×25×29 in"),
+    ("lateral file cabinet", "other", 1.0, False, 0, "36×18×28 in"),
+    ("treadmill", "sports", 3.0, False, 0, "72×34×56 in"),
+    ("elliptical", "sports", 2.5, False, 0, "70×28×64 in"),
+    ("stationary bike", "sports", 1.5, False, 0, "42×22×48 in"),
+    ("weight bench", "sports", 1.5, False, 0, "56×26×46 in"),
+    ("weight set with rack", "sports", 3.0, False, 0, "48×24×52 in"),
+    ("ping pong table", "sports", 3.0, False, 0, "108×60×30 in"),
+    ("pool table", "sports", 8.0, False, 0, "100×56×32 in"),
+    ("wheelchair", "medical", 1.0, False, 0, "26×16×36 in"),
+    ("hospital bed", "medical", 4.0, False, 0, "84×36×24 in"),
+    ("walker", "medical", 0.3, False, 0, "22×18×34 in"),
+    ("propane tank large", "hazardous", 0.5, True, 50.0, "12×12×48 in"),
+    ("propane tank small", "hazardous", 0.2, True, 25.0, "12×12×18 in"),
+    ("paint cans box", "hazardous", 0.3, True, 25.0, "18×12×12 in"),
+    ("car battery", "hazardous", 0.1, True, 15.0, "10×7×8 in"),
+    ("tire car", "hazardous", 0.5, True, 15.0, "26 in diameter × 8 in wide"),
+    ("tire truck", "hazardous", 0.8, True, 25.0, "34 in diameter × 12 in wide"),
+    ("lumber pile small", "debris", 1.0, False, 0, "48×24×24 in"),
+    ("lumber pile large", "debris", 3.0, False, 0, "96×24×36 in"),
+    ("drywall sheets", "debris", 0.5, False, 0, "96×48×0.5 in per sheet"),
+    ("carpet room", "debris", 2.0, False, 0, "rolled: 12 ft × 18 in diameter"),
 ]
 
 
 async def seed_reference_library():
+    dims_map = {name: dims for name, _, _, _, _, dims in SEED_ITEMS}
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(ItemReferenceLibrary).limit(1))
-        if result.scalar_one_or_none():
+        existing = result.scalar_one_or_none()
+        if existing:
+            all_result = await db.execute(
+                select(ItemReferenceLibrary).where(
+                    (ItemReferenceLibrary.dimensions == None) | (ItemReferenceLibrary.dimensions == "")
+                )
+            )
+            empty_dims = all_result.scalars().all()
+            for item in empty_dims:
+                if item.item_name in dims_map:
+                    item.dimensions = dims_map[item.item_name]
+            if empty_dims:
+                await db.commit()
             return
-        for name, cat, cy, special, fee in SEED_ITEMS:
+        for name, cat, cy, special, fee, dims in SEED_ITEMS:
             db.add(ItemReferenceLibrary(
                 item_name=name,
                 item_category=cat,
                 cubic_yards=cy,
+                dimensions=dims,
                 is_special=special,
                 special_fee=fee,
                 confidence=1.0,
@@ -796,6 +812,7 @@ async def get_library(request: Request):
                 "item_name": i.item_name,
                 "item_category": i.item_category,
                 "cubic_yards": i.cubic_yards,
+                "dimensions": i.dimensions or "",
                 "is_special": i.is_special,
                 "special_fee": i.special_fee,
                 "confidence": i.confidence,
@@ -857,6 +874,7 @@ async def add_library_item(request: Request):
             item_name=name,
             item_category=body.get("item_category", "other"),
             cubic_yards=cy,
+            dimensions=str(body.get("dimensions", "")),
             is_special=bool(body.get("is_special", False)),
             special_fee=float(body.get("special_fee", 0)),
             confidence=float(body.get("confidence", 0.9)),
@@ -888,6 +906,8 @@ async def update_library_item(request: Request, item_id: int):
             item.special_fee = float(body["special_fee"])
         if "item_category" in body:
             item.item_category = body["item_category"]
+        if "dimensions" in body:
+            item.dimensions = str(body["dimensions"])
         item.updated_at = datetime.utcnow()
         await db.commit()
         return {"success": True}
@@ -1089,7 +1109,7 @@ MULTI-PHOTO DEDUPLICATION (CRITICAL):
 - Use reference points from multiple angles to improve spatial accuracy — seeing the same reference item from two angles gives better depth calibration
 
 ITEM IDENTIFICATION RULES:
-- Identify every visible item individually, do not group unless identical
+- Identify every visible item for removal individually, do not group unless identical (but if circled/marked items were detected, only list the marked items — see CIRCLED OR MARKED ITEMS section)
 - Assign cubic_yards to each item based on its size RELATIVE TO YOUR REFERENCE POINTS — not generic guesses
 - Look specifically along walls, in corners, behind other items
 - FLAT SCREEN TVs vs WINDOW SCREENS: Dark rectangular objects leaning against walls may be TVs OR window screens — distinguish carefully. A TV will have a visible stand base, port connections on the back/side, a brand logo, a glossy screen surface, or a thick plastic bezel. A window screen has a thin metal or wooden frame with mesh visible through it. When uncertain, add "possible TV or window screen, verify on site" in the notes field for the crew to check.
@@ -1109,6 +1129,13 @@ SPECIAL ITEM FLAGGING — set is_special: true for ANY of these (do NOT calculat
 - Electronics with circuit boards
 
 These items may have recycling or disposal fees that vary by location. Just identify them and set is_special: true.
+
+CIRCLED OR MARKED ITEMS (CRITICAL):
+- If the customer has drawn circles, arrows, or markings on items in the photo, ONLY include the circled/marked items in your estimate.
+- Unmarked items in photos with markings should be EXCLUDED — they are items the customer wants to KEEP.
+- If no markings or circles are visible in any photo, include ALL items as normal.
+- When you detect markings, add "Customer circled specific items — only marked items included" to your notes.
+- Still use uncircled items as reference points for spatial calibration, but do NOT include them in the items list or cubic yard totals.
 
 JOB TYPE RULES — read carefully:
 STANDARD ($35-40/CY): Clean loads, easy access, under 8 CY, no stairs, no heavy items, no clutter
@@ -1160,11 +1187,14 @@ async def get_library_context() -> str:
     lines = [
         "\nKNOWN ITEM REFERENCE LIBRARY — USE THESE AS SPATIAL REFERENCE POINTS:",
         "Find 5-10 of these items in the photo to establish scale and depth.",
-        "Their known cubic yard volumes tell you the real-world size of the scene.",
+        "Each item includes its real-world L×W×H dimensions. Use these physical",
+        "measurements to calibrate the scale of the photo. Even 1-2 recognized",
+        "items with known dimensions gives you a reliable ruler for the scene.",
         "",
     ]
     for item in items:
-        line = f"- {item.item_name}: {item.cubic_yards} CY"
+        dims_str = f" [{item.dimensions}]" if item.dimensions else ""
+        line = f"- {item.item_name}: {item.cubic_yards} CY{dims_str}"
         if item.is_special:
             line += " [SPECIAL ITEM - flag for recycling/disposal]"
         lines.append(line)
@@ -1554,6 +1584,7 @@ async def run_estimate(
             "price_high": price_high,
             "cy_estimate": cy_mid,
             "items": result_data.get("items", []),
+            "reference_points": result_data.get("reference_points", []),
             "job_type": result_data.get("job_type", "standard"),
             "conditions": result_data.get("conditions", []),
             "notes": result_data.get("notes", ""),
@@ -1561,6 +1592,10 @@ async def run_estimate(
             "estimates_remaining": remaining,
             "special_items": special_items,
             "items_looked_up": lookups_done,
+            "rate_low": user.price_per_cy_low or 35.0,
+            "rate_high": user.price_per_cy_high or 40.0,
+            "rate_premium": user.price_per_cy_premium or 55.0,
+            "min_charge": user.min_charge or 75.0,
         }
 
         if market_context:

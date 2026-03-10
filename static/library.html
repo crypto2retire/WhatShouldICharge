@@ -114,6 +114,7 @@
           <th>Item Name</th>
           <th>Category</th>
           <th>CY</th>
+          <th>Dimensions</th>
           <th>Source</th>
           <th>Seen</th>
           <th>Special</th>
@@ -133,6 +134,10 @@
     <div class="modal-field">
       <label for="edit-cy">Cubic Yards (CY)</label>
       <input type="number" id="edit-cy" step="0.01" min="0">
+    </div>
+    <div class="modal-field">
+      <label for="edit-dims">Dimensions (L×W×H)</label>
+      <input type="text" id="edit-dims" placeholder="e.g. 84×36×34 in">
     </div>
     <div class="modal-field">
       <label for="edit-category">Category</label>
@@ -206,10 +211,12 @@ function renderTable(items) {
     var specialHtml = item.is_special
       ? '<span class="special-tag">$' + (parseFloat(item.special_fee) || 0) + '</span>'
       : '<span style="color:var(--muted)">—</span>';
+    var dimsHtml = item.dimensions ? '<span style="font-size:0.78rem;color:var(--blue)">' + esc(item.dimensions) + '</span>' : '<span style="color:var(--muted);font-size:0.78rem">—</span>';
     tr.innerHTML =
       '<td>' + esc(item.item_name) + '</td>' +
       '<td style="color:var(--muted)">' + esc(item.item_category) + '</td>' +
       '<td><span class="cy-val">' + (parseFloat(item.cubic_yards) || 0) + '</span></td>' +
+      '<td>' + dimsHtml + '</td>' +
       '<td><span class="source-badge source-' + esc(item.source) + '">' + esc(item.source.replace('_', ' ')) + '</span></td>' +
       '<td><span class="times-seen">' + (parseInt(item.times_seen) || 0) + '</span></td>' +
       '<td>' + specialHtml + '</td>' +
@@ -230,6 +237,7 @@ function openEditModal(id) {
   editingId = id;
   document.getElementById('edit-item-name').textContent = item.item_name;
   document.getElementById('edit-cy').value = parseFloat(item.cubic_yards) || 0;
+  document.getElementById('edit-dims').value = item.dimensions || '';
   document.getElementById('edit-category').value = item.item_category || '';
   document.getElementById('edit-special').checked = !!item.is_special;
   document.getElementById('edit-fee').value = parseFloat(item.special_fee) || 0;
@@ -263,6 +271,7 @@ async function saveItem() {
 
   var body = {
     cubic_yards: parseFloat(document.getElementById('edit-cy').value) || 0,
+    dimensions: document.getElementById('edit-dims').value.trim(),
     item_category: document.getElementById('edit-category').value.trim(),
     is_special: document.getElementById('edit-special').checked,
     special_fee: document.getElementById('edit-special').checked ? (parseFloat(document.getElementById('edit-fee').value) || 0) : 0
@@ -279,6 +288,7 @@ async function saveItem() {
     var item = allItems.find(function(i) { return i.id === editingId; });
     if (item) {
       item.cubic_yards = body.cubic_yards;
+      item.dimensions = body.dimensions;
       item.item_category = body.item_category;
       item.is_special = body.is_special;
       item.special_fee = body.special_fee;

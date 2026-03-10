@@ -404,7 +404,13 @@
     </div>
 
     <div class="card">
-      <div class="section-title" style="margin-top:0;">Item Breakdown</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div class="section-title" style="margin-top:0;">Item Breakdown</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:0.72rem;color:var(--muted);">Uncheck to exclude</span>
+          <button id="recalc-btn" onclick="recalcEstimate()" style="display:none;padding:5px 12px;border-radius:6px;border:1px solid var(--accent);background:rgba(34,197,94,0.1);color:var(--accent);font-size:0.8rem;font-weight:600;cursor:pointer;">Recalculate</button>
+        </div>
+      </div>
       <div id="res-items"></div>
     </div>
 
@@ -575,8 +581,14 @@ async function pollStatus(jobId) {
 
 var catIcons = { furniture: '🪑', appliance: '🔌', debris: '🗑️', electronics: '💻', outdoor: '🌳', sports: '🏋️', medical: '🏥', hazardous: '☣️', other: '📦' };
 
+var currentEstimateData = null;
+var excludedItems = new Set();
+
 function showResults(data) {
   currentEstimateId = data.id;
+  currentEstimateData = data;
+  excludedItems = new Set();
+  document.getElementById('recalc-btn').style.display = 'none';
   document.getElementById('results').classList.add('visible');
 
   document.getElementById('res-price').textContent = '$' + (data.price_low || 0).toLocaleString() + ' — $' + (data.price_high || 0).toLocaleString();
@@ -595,11 +607,32 @@ function showResults(data) {
 
   var itemsEl = document.getElementById('res-items');
   itemsEl.innerHTML = '';
-  (data.items || []).forEach(function(item) {
+  (data.items || []).forEach(function(item, idx) {
     var cat = item.category || 'other';
     var row = document.createElement('div');
     row.className = 'item-row';
-    row.innerHTML = '<div class="item-icon">' + (catIcons[cat] || '📦') + '</div><div class="item-name">' + esc(item.name || 'Unknown') + (item.is_special ? ' <span style="color:var(--amber);font-size:0.72rem;">♻️</span>' : '') + '</div><div class="item-qty">×' + (parseInt(item.quantity) || 1) + '</div>';
+    row.style.cursor = 'pointer';
+    row.style.transition = 'opacity 0.2s';
+    row.innerHTML = '<input type="checkbox" checked data-item-idx="' + idx + '" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;"><div class="item-icon">' + (catIcons[cat] || '📦') + '</div><div class="item-name">' + esc(item.name || 'Unknown') + (item.is_special ? ' <span style="color:var(--amber);font-size:0.72rem;">♻️</span>' : '') + '</div><div class="item-qty">×' + (parseInt(item.quantity) || 1) + '</div>';
+    var cb = row.querySelector('input[type="checkbox"]');
+    cb.addEventListener('change', function() {
+      if (this.checked) {
+        excludedItems.delete(idx);
+        row.style.opacity = '1';
+        row.style.textDecoration = 'none';
+      } else {
+        excludedItems.add(idx);
+        row.style.opacity = '0.4';
+        row.style.textDecoration = 'line-through';
+      }
+      if (excludedItems.size > 0) {
+        document.getElementById('recalc-btn').style.display = 'inline-block';
+        recalcEstimate();
+      } else {
+        document.getElementById('recalc-btn').style.display = 'none';
+        restoreOriginalEstimate();
+      }
+    });
     itemsEl.appendChild(row);
   });
 
@@ -613,6 +646,72 @@ function showResults(data) {
 
   var sendEmail = document.getElementById('cust-email').value.trim();
   if (sendEmail) { document.getElementById('send-email').value = sendEmail; }
+}
+
+function restoreOriginalEstimate() {
+  if (!currentEstimateData) return;
+  var data = currentEstimateData;
+  document.getElementById('res-price').textContent = '$' + (data.price_low || 0).toLocaleString() + ' — $' + (data.price_high || 0).toLocaleString();
+  document.getElementById('res-cy').textContent = (data.cy_estimate || 0) + ' CY';
+  var specialEl = document.getElementById('res-special');
+  if (data.special_items && data.special_items.length > 0) {
+    var sh = '<div class="special-title">♻️ Special Recycling Items</div>';
+    data.special_items.forEach(function(si) { sh += '<div class="special-item">' + esc(si.name) + ' ×' + (parseInt(si.quantity) || 1) + '</div>'; });
+    specialEl.innerHTML = sh;
+    specialEl.style.display = 'block';
+  } else {
+    specialEl.style.display = 'none';
+  }
+}
+
+function recalcEstimate() {
+  if (!currentEstimateData) return;
+  var data = currentEstimateData;
+  var allItems = data.items || [];
+  var includedItems = allItems.filter(function(_, idx) { return !excludedItems.has(idx); });
+
+  var totalCy = 0;
+  includedItems.forEach(function(item) {
+    totalCy += (parseFloat(item.cubic_yards) || 0) * (parseInt(item.quantity) || 1);
+  });
+
+  var conditions = data.conditions || [];
+  var jobType = data.job_type || 'standard';
+  var isPremium = (
+    jobType === 'premium' || jobType === 'hoarder' || jobType === 'truck_load' ||
+    conditions.indexOf('stairs') >= 0 || conditions.indexOf('heavy_items') >= 0 ||
+    conditions.indexOf('hoarder') >= 0 || totalCy > 10
+  );
+
+  var rateLow = data.rate_low || 35;
+  var rateHigh = data.rate_high || 40;
+  var ratePremium = data.rate_premium || 55;
+  var minCharge = data.min_charge || 75;
+
+  var cyLow = totalCy * 0.85;
+  var cyHigh = totalCy * 1.15;
+  var priceLow, priceHigh;
+  if (isPremium) { priceLow = cyLow * ratePremium; priceHigh = cyHigh * ratePremium; }
+  else { priceLow = cyLow * rateLow; priceHigh = cyHigh * rateHigh; }
+  priceLow = Math.max(priceLow, minCharge);
+  priceHigh = Math.max(priceHigh, minCharge);
+  priceLow = Math.round(priceLow * 100) / 100;
+  priceHigh = Math.round(priceHigh * 100) / 100;
+  totalCy = Math.round(totalCy * 10) / 10;
+
+  document.getElementById('res-price').textContent = '$' + priceLow.toLocaleString() + ' — $' + priceHigh.toLocaleString();
+  document.getElementById('res-cy').textContent = totalCy + ' CY';
+
+  var specialItems = includedItems.filter(function(i) { return i.is_special; });
+  var specialEl = document.getElementById('res-special');
+  if (specialItems.length > 0) {
+    var sh = '<div class="special-title">♻️ Special Recycling Items</div>';
+    specialItems.forEach(function(si) { sh += '<div class="special-item">' + esc(si.name) + ' ×' + (parseInt(si.quantity) || 1) + '</div>'; });
+    specialEl.innerHTML = sh;
+    specialEl.style.display = 'block';
+  } else {
+    specialEl.style.display = 'none';
+  }
 }
 
 async function downloadPDF() {

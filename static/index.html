@@ -506,6 +506,7 @@
     background: var(--bg);
     border-radius: 8px;
     border: 1px solid var(--border);
+    transition: opacity 0.2s;
   }
 
   .item-icon {
@@ -793,7 +794,13 @@
     </div>
 
     <div class="card">
-      <div class="card-title">Item Breakdown</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+        <div class="card-title" style="margin-bottom:0;">Item Breakdown</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:0.75rem;color:var(--muted);">Uncheck items to exclude</span>
+          <button id="recalc-btn" onclick="recalcEstimate()" style="display:none;padding:6px 14px;border-radius:8px;border:1px solid var(--accent);background:rgba(34,197,94,0.1);color:var(--accent);font-size:0.82rem;font-weight:600;cursor:pointer;">Recalculate</button>
+        </div>
+      </div>
       <div class="items-grid" id="res-items"></div>
     </div>
 
@@ -1252,10 +1259,16 @@ function showPhotoModal(src) {
   modal.focus();
 }
 
+var currentEstimateData = null;
+var excludedItems = new Set();
+
 function showResults(data) {
   loadingEl.classList.remove('visible');
   resultsEl.classList.add('visible');
   currentEstimateId = data.id || null;
+  currentEstimateData = data;
+  excludedItems = new Set();
+  document.getElementById('recalc-btn').style.display = 'none';
   renderRefPhotos();
 
   var priceLow = data.price_low || 0;
@@ -1328,18 +1341,39 @@ function showResults(data) {
   const itemsEl = document.getElementById('res-items');
   itemsEl.innerHTML = '';
   const catMap = { ...catIcons, electronics: '💻', hazardous: '☣️' };
-  (data.items || []).forEach(item => {
+  (data.items || []).forEach((item, idx) => {
     const cat = item.category || 'other';
     const cyText = item.cubic_yards ? `${item.cubic_yards} CY` : '';
     const specialTag = item.is_special ? `<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:4px;background:rgba(245,158,11,0.15);color:#f59e0b;font-size:0.68rem;font-weight:600;vertical-align:middle;">♻️ SPECIAL</span>` : '';
     const lookedUp = item.looked_up ? '<span class="item-looked-up" title="Dimensions found via web search">🔍</span>' : '';
     const row = document.createElement('div');
     row.className = 'item-row';
+    row.style.cursor = 'pointer';
     row.innerHTML = `
+      <input type="checkbox" checked data-item-idx="${idx}" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
       <div class="item-icon cat-${esc(cat)}">${catMap[cat] || '📦'}</div>
       <div class="item-name">${esc(item.name || 'Unknown item')}${specialTag}${lookedUp}${cyText ? ' <span style="color:var(--muted);font-size:0.78rem;font-weight:400">(' + esc(cyText) + ')</span>' : ''}</div>
       <div class="item-qty">×${parseInt(item.quantity) || 1}</div>
     `;
+    const cb = row.querySelector('input[type="checkbox"]');
+    cb.addEventListener('change', function() {
+      if (this.checked) {
+        excludedItems.delete(idx);
+        row.style.opacity = '1';
+        row.style.textDecoration = 'none';
+      } else {
+        excludedItems.add(idx);
+        row.style.opacity = '0.4';
+        row.style.textDecoration = 'line-through';
+      }
+      if (excludedItems.size > 0) {
+        document.getElementById('recalc-btn').style.display = 'inline-block';
+        recalcEstimate();
+      } else {
+        document.getElementById('recalc-btn').style.display = 'none';
+        restoreOriginalEstimate();
+      }
+    });
     itemsEl.appendChild(row);
   });
 
@@ -1382,6 +1416,93 @@ function showResults(data) {
   }
 }
 
+function restoreOriginalEstimate() {
+  if (!currentEstimateData) return;
+  var data = currentEstimateData;
+  var priceLow = data.price_low || 0;
+  var priceHigh = data.price_high || 0;
+  document.getElementById('res-price').innerHTML =
+    '$' + priceLow.toLocaleString() + ' <span>–</span> $' + priceHigh.toLocaleString()
+    + '<div style="font-size:0.75rem;color:var(--muted);font-weight:400;margin-top:4px;">Based on volume only</div>';
+  document.getElementById('res-cy').textContent = data.cy_estimate + ' CY';
+  var specialEl = document.getElementById('res-special-items');
+  if (data.special_items && data.special_items.length > 0) {
+    var html = '<div style="font-weight:600;color:#fef3c7;margin-bottom:10px;font-size:0.85rem;">♻️ Recycling Fee Items Detected</div>';
+    html += '<div style="font-size:0.78rem;color:#fde68a;margin-bottom:10px;">The following items may have additional recycling or disposal fees:</div>';
+    data.special_items.forEach(function(si) {
+      html += '<div style="padding:4px 0;font-size:0.83rem;color:#fef3c7;font-weight:500;">' + esc(si.name) + '  ×' + (parseInt(si.quantity) || 1) + '</div>';
+    });
+    html += '<div style="font-size:0.75rem;color:#d4a050;margin-top:10px;font-style:italic;">Recycling fees are not included in the estimate above. Your technician will confirm exact fees on arrival.</div>';
+    specialEl.innerHTML = html;
+    specialEl.style.display = 'block';
+  } else {
+    specialEl.style.display = 'none';
+  }
+}
+
+function recalcEstimate() {
+  if (!currentEstimateData) return;
+  var data = currentEstimateData;
+  var allItems = data.items || [];
+  var includedItems = allItems.filter((_, idx) => !excludedItems.has(idx));
+
+  var totalCy = 0;
+  includedItems.forEach(item => {
+    totalCy += (parseFloat(item.cubic_yards) || 0) * (parseInt(item.quantity) || 1);
+  });
+
+  var conditions = data.conditions || [];
+  var jobType = data.job_type || 'standard';
+  var isPremium = (
+    jobType === 'premium' || jobType === 'hoarder' || jobType === 'truck_load' ||
+    conditions.includes('stairs') || conditions.includes('heavy_items') ||
+    conditions.includes('hoarder') || totalCy > 10
+  );
+
+  var rateLow = data.rate_low || 35;
+  var rateHigh = data.rate_high || 40;
+  var ratePremium = data.rate_premium || 55;
+  var minCharge = data.min_charge || 75;
+
+  var cyLow = totalCy * 0.85;
+  var cyHigh = totalCy * 1.15;
+
+  var priceLow, priceHigh;
+  if (isPremium) {
+    priceLow = cyLow * ratePremium;
+    priceHigh = cyHigh * ratePremium;
+  } else {
+    priceLow = cyLow * rateLow;
+    priceHigh = cyHigh * rateHigh;
+  }
+
+  priceLow = Math.max(priceLow, minCharge);
+  priceHigh = Math.max(priceHigh, minCharge);
+  priceLow = Math.round(priceLow * 100) / 100;
+  priceHigh = Math.round(priceHigh * 100) / 100;
+  totalCy = Math.round(totalCy * 10) / 10;
+
+  document.getElementById('res-price').innerHTML =
+    '$' + priceLow.toLocaleString() + ' <span>–</span> $' + priceHigh.toLocaleString()
+    + '<div style="font-size:0.75rem;color:var(--muted);font-weight:400;margin-top:4px;">Adjusted — ' + excludedItems.size + ' item' + (excludedItems.size > 1 ? 's' : '') + ' excluded</div>';
+  document.getElementById('res-cy').textContent = totalCy + ' CY';
+
+  var specialItems = includedItems.filter(i => i.is_special);
+  var specialEl = document.getElementById('res-special-items');
+  if (specialItems.length > 0) {
+    var html = '<div style="font-weight:600;color:#fef3c7;margin-bottom:10px;font-size:0.85rem;">♻️ Recycling Fee Items Detected</div>';
+    html += '<div style="font-size:0.78rem;color:#fde68a;margin-bottom:10px;">The following items may have additional recycling or disposal fees:</div>';
+    specialItems.forEach(function(si) {
+      html += '<div style="padding:4px 0;font-size:0.83rem;color:#fef3c7;font-weight:500;">' + esc(si.name) + '  ×' + (parseInt(si.quantity) || 1) + '</div>';
+    });
+    html += '<div style="font-size:0.75rem;color:#d4a050;margin-top:10px;font-style:italic;">Recycling fees are not included in the estimate above. Your technician will confirm exact fees on arrival.</div>';
+    specialEl.innerHTML = html;
+    specialEl.style.display = 'block';
+  } else {
+    specialEl.style.display = 'none';
+  }
+}
+
 document.getElementById('new-estimate-btn').addEventListener('click', () => {
   photos.forEach(p => URL.revokeObjectURL(p.url));
   photos = [];
@@ -1395,6 +1516,9 @@ document.getElementById('new-estimate-btn').addEventListener('click', () => {
   loadingEl.classList.remove('visible');
   document.getElementById('ref-photos').style.display = 'none';
   document.getElementById('res-refpoints').style.display = 'none';
+  currentEstimateData = null;
+  excludedItems = new Set();
+  document.getElementById('recalc-btn').style.display = 'none';
   submitSection.style.display = 'block';
   uploadCard.style.display = 'block';
   hideError();

@@ -1,228 +1,46 @@
 # WhatShouldICharge — AI Junk Removal Estimator
 
 ## Overview
-An AI-powered junk removal job estimator. Users upload customer photos, Claude vision AI analyzes them using a two-pass estimation system with a growing reference library. Returns price ranges, cubic yard estimates, item breakdowns, and job type classification. Includes user auth, Stripe subscriptions, live market rate fetching, marketing landing page, admin dashboard, team portal with PIN-based auth, and PDF estimate generation with email delivery.
+WhatShouldICharge is an AI-powered junk removal job estimator. Its core purpose is to provide accurate price ranges, cubic yard estimates, item breakdowns, and job type classifications to users by analyzing customer-uploaded photos using advanced AI vision. The platform aims to streamline the estimation process for junk removal businesses, improve accuracy, and provide tools for team management, customer interaction, and business analytics. Key capabilities include user authentication, subscription management via Stripe, live market rate integration, a marketing landing page, an admin dashboard, a team portal with PIN-based authentication, and automated PDF estimate generation and email delivery. The business vision is to become the leading estimation tool in the junk removal industry, offering a scalable solution that reduces manual effort and increases conversion rates for businesses.
 
-## Stack
-- **Backend**: Python 3.11, FastAPI, SQLite (via SQLAlchemy + aiosqlite)
-- **Frontend**: Single-page HTML files (no framework), dark theme
-- **AI**: Anthropic Claude (`claude-sonnet-4-20250514`) with vision, single-pass estimation
-- **Auth**: bcrypt password hashing (async via executor), secure session cookies (30-day, httponly, samesite, secure)
-- **Payments**: Stripe checkout sessions + webhooks with server-side tier validation from price_id
-- **Market Data**: Tavily API for live market rate fetching + item dimension lookups
-- **PDF**: ReportLab for professional PDF estimate generation
-- **Email**: SendGrid for estimate delivery
-- **Server**: uvicorn on port 5000
+## User Preferences
+I prefer iterative development, with a focus on delivering functional components that can be tested and refined. Please provide clear explanations of complex technical decisions. When implementing new features or making significant changes, ask for confirmation before proceeding. I value clean, readable code and robust error handling.
 
-## Spatial Reasoning Estimation Engine
-1. **Reference Point Calibration**: Claude scans photos for 5-10 items it recognizes from the reference library. These known items (with verified cubic yard values) serve as spatial anchors to establish scale and depth across the photo.
-2. **Spatial Measurement**: Using the known real-world dimensions of reference items at different depths and positions, Claude calibrates perspective and measures unknown items by comparing their apparent size to nearby reference points. This is triangulation-based spatial reasoning — not pattern matching or guessing.
-3. **Web Lookup**: For items flagged as `items_needing_lookup`, parallel Tavily searches find real-world dimensions. Claude extracts CY from search results. New items are saved to the reference library.
-4. **Library Learning**: After each estimate, all identified items update the reference library (increment times_seen or add new AI-learned items). Admin can manually adjust CY values in the library to improve future accuracy.
+## System Architecture
 
-## Multi-Photo Per Room
-- Users can upload up to 30 photos total, with multiple photos per room
-- Photos are grouped by room label in the preview UI (visual grouping with room headers)
-- Backend groups photos by room before sending to Claude, with explicit per-group headers
-- AI prompt includes dedicated MULTI-PHOTO DEDUPLICATION section: same-room photos are treated as different angles of one space, items visible in multiple angles counted only once
-- When uncertain, AI defaults to assuming items ARE the same (avoids over-counting)
+### UI/UX Decisions
+The frontend consists of single-page HTML files with a dark theme for a modern aesthetic. Key UI/UX considerations include:
+- **Mobile-first design** for the team portal.
+- **Visual grouping** of photos by room in the preview UI.
+- **Professional PDF templates** for estimates, including company branding.
+- **SEO optimization** for the landing page with full meta tags and JSON-LD structured data.
+- **Accessibility features** such as semantic HTML, ARIA labels, skip links, and keyboard navigation support.
 
-## Special Item Handling
-- Special items are flagged but NEVER added to price totals
-- Price is based ONLY on cubic yards and job type
-- Special items shown in a separate amber section with recycling fee notice
-- Two disclaimers always shown on every estimate: recycling fees disclaimer and photo-based estimate disclaimer
+### Technical Implementations
+- **Backend**: Python 3.11 with FastAPI, using SQLite via SQLAlchemy for data persistence.
+- **AI**: Anthropic Claude vision AI (`claude-sonnet-4-20250514`) for image analysis.
+- **Authentication**: Secure session cookies, bcrypt for password hashing, and PIN-based authentication for team members.
+- **Payments**: Stripe Checkout sessions and webhooks for subscription management.
+- **PDF Generation**: ReportLab for creating professional PDF estimates.
+- **Email Delivery**: SendGrid for sending estimates to customers.
+- **Server**: Uvicorn on port 5000.
 
-## Estimation Flow
-- `POST /api/estimate` returns `{ job_id }` immediately
-- Background task runs single-pass estimation
-- Frontend polls `GET /api/estimate/status/{job_id}` every second
-- Status progresses: analyzing → looking_up → complete
-- If lookups fail, silently falls back to base result
+### Feature Specifications
+- **Spatial Reasoning Estimation Engine**: Uses known items with real L×W×H dimensions from the reference library as spatial anchors to calibrate photo scale. Even 1-2 recognized items provide a reliable ruler. The AI detects circled/marked items in photos and only includes those in the estimate. Users can also uncheck items from results to recalculate the price client-side.
+- **Multi-Photo Per Room Handling**: Supports uploading multiple photos per room, which are then grouped and processed by the AI with explicit deduplication logic to avoid over-counting items.
+- **Special Item Handling**: Identifies special items (e.g., hazardous materials) but excludes them from cubic yardage pricing, flagging them separately with recycling fee notices.
+- **Asynchronous Estimation Flow**: Estimates are processed in background tasks, with frontend polling for status updates.
+- **Admin Dashboard**: Comprehensive dashboard for analytics, user management, plan configuration, site content editing, and team management.
+- **Team Portal**: PIN-authenticated portal for field estimators to capture customer info, upload photos, and generate/send estimates on mobile devices.
+- **Site Configuration System**: Dynamic content management for the landing page and other site elements via an admin-editable key-value store.
+- **Subscription Tiers**: Multiple tiers (Free, Starter, Pro, Agency) with varying estimate limits and pricing, managed through Stripe.
+- **Security Hardening**: Implements security headers, rate limiting on auth endpoints, input validation, server-side validation for Stripe webhooks, HTML escaping for XSS prevention, generic error messages, and hardened CORS policies.
+- **Performance Optimizations**: Includes database connection pooling, indexing, optimized library statistics and analytics queries, async programming patterns, and efficient image processing.
+- **Frontend Optimization**: Focus on semantic HTML, ARIA labels, keyboard navigation, and proper error handling in `fetch()` calls.
 
-## Admin Dashboard
-- Route: `GET /admin` (requires admin user)
-- Tabs: Analytics, Users, Plans, Site Config, Estimates, Team
-- Analytics: key metrics (total users, estimates today/week/month, revenue), usage stats
-- Users: searchable/paginated user list with subscription info
-- Plans: edit tier display names, prices, estimate limits, features, active status
-- Site Config: edit landing page content (hero text, feature descriptions, CTA text)
-- Estimates: filterable table of all estimates across users
-- Team: create/edit/deactivate team members, manage PINs
-- Admin user: kevin@cleartheclutter.net (is_admin=True, seeded on startup)
-
-## Team Portal
-- PIN-based authentication for team members (field estimators)
-- Route: `GET /team` (login), `GET /team/app` (dashboard)
-- Team login: company email/name + 4-digit PIN on mobile-friendly numpad
-- Team members belong to an owner (admin) user; they use the owner's subscription quota
-- Mobile-first estimate flow: simplified photo upload, room selection, customer info capture
-- Results include PDF download and email-to-customer buttons
-- Team session: 12-hour token via cookie
-
-## PDF Estimate Generation
-- Professional PDF generated via ReportLab
-- Includes: company branding, date, estimate ID, price range, CY estimate, item breakdown table, special items, conditions, disclaimer
-- `POST /api/estimate/{id}/pdf` — generates and downloads PDF
-- `POST /api/estimate/{id}/send` — emails PDF to customer via SendGrid
-- Available from both main estimator (index.html) and team portal (team.html)
-
-## Site Config System
-- Key-value pairs stored in SiteConfig table
-- Editable from Admin Dashboard → Site Config tab
-- Public API: `GET /api/site-config` returns all config
-- Landing page loads config via JS and updates elements with `data-config` attributes
-- Configurable fields: hero_title, hero_subtitle, hero_description, cta_primary, cta_secondary, feature_1_title, feature_1_desc, feature_2_title, feature_2_desc, feature_3_title, feature_3_desc
-
-## SEO
-- Landing page has full meta tags: description, canonical, OG, Twitter Card, robots, theme-color
-- JSON-LD structured data: SoftwareApplication (with pricing offers), FAQPage (5 questions), Organization
-- External CSS for browser caching (`landing.css`)
-- SVG favicon with green $ icon
-- robots.txt blocks auth-gated pages, admin, team routes; allows landing page
-- sitemap.xml lists indexable pages
-- Routes: `GET /robots.txt`, `GET /sitemap.xml`
-
-## Routes
-- `GET /` — Marketing landing page (`static/landing.html`)
-- `GET /estimate` — Estimator app (`static/index.html`, requires auth)
-- `GET /library` — Reference library viewer (`static/library.html`, requires auth)
-- `GET /login` — Login page (`static/login.html`)
-- `GET /signup` — Signup page (`static/signup.html`)
-- `GET /upgrade` — Subscription upgrade page (`static/upgrade.html`)
-- `GET /payment-success` — Payment confirmation (`static/payment-success.html`)
-- `GET /admin` — Admin dashboard (`static/admin.html`, requires admin)
-- `GET /team` — Team login page (`static/team-login.html`)
-- `GET /team/app` — Team estimate dashboard (`static/team.html`, requires team auth)
-- `POST /api/estimate` — Submit photos, returns job_id (auth required)
-- `GET /api/estimate/status/{job_id}` — Poll estimation progress (auth required)
-- `GET /api/estimates` — Fetch estimate history (auth required)
-- `POST /api/estimate/{id}/pdf` — Generate PDF estimate
-- `POST /api/estimate/{id}/send` — Email PDF to customer
-- `GET /api/library` — All reference library items
-- `GET /api/library/search?q=` — Search library by name
-- `POST /api/library/add` — Add item to library
-- `PUT /api/library/{id}` — Update library item
-- `GET /api/library/stats` — Library statistics
-- `POST /api/auth/signup` — Create account
-- `POST /api/auth/login` — Log in
-- `POST /api/auth/logout` — Log out
-- `POST /api/auth/forgot-password` — Reset password and email new one to user
-- `GET /api/auth/me` — Current user info (includes is_admin flag)
-- `POST /api/payments/create-checkout` — Create Stripe checkout session
-- `POST /api/payments/webhook` — Stripe webhook handler
-- `GET /api/site-config` — Public site config for landing page
-- `GET /api/admin/analytics` — Admin analytics data
-- `GET /api/admin/users` — Admin user list
-- `GET /api/admin/plans` — Admin plan configs
-- `PUT /api/admin/plans/{id}` — Update plan config
-- `GET /api/admin/site-config` — Admin site config
-- `PUT /api/admin/site-config` — Update site config
-- `GET /api/admin/estimates` — All estimates (admin)
-- `POST /api/team/members` — Create team member
-- `GET /api/team/members` — List team members
-- `PUT /api/team/members/{id}` — Update team member
-- `DELETE /api/team/members/{id}` — Deactivate team member
-- `POST /api/team/auth` — Team PIN login
-- `GET /api/team/me` — Current team member info
-- `POST /api/team/estimate` — Submit team estimate
-- `GET /api/team/estimate/status/{job_id}` — Poll team estimate
-- `GET /api/team/estimates` — Team estimate history
-
-## Files
-- `main.py` — FastAPI backend, DB models, auth, Stripe, estimation engine, reference library, pricing logic, admin API, team API, PDF generation
-- `static/index.html` — Estimator UI (auth-aware navbar, upload, room labels, truck load, polling progress, results with PDF/send buttons)
-- `static/library.html` — Reference library viewer (searchable table, sort by seen/name/recent, source badges, stats)
-- `static/landing.html` — Marketing landing page (hero, features, pricing, FAQ, scroll animations, SEO-optimized, dynamic site config)
-- `static/landing.css` — External CSS for landing page (cacheable)
-- `static/login.html` — Login form (with team portal link)
-- `static/signup.html` — Signup form (email, password, company name, city, state)
-- `static/upgrade.html` — Subscription tier selection (Starter/Pro/Agency)
-- `static/payment-success.html` — Post-payment confirmation
-- `static/admin.html` — Admin dashboard (analytics, users, plans, site config, estimates, team management)
-- `static/team-login.html` — Team PIN login (mobile-first numpad)
-- `static/team.html` — Team estimate dashboard (mobile-first, photo upload, results, PDF/send)
-- `static/robots.txt` — Search engine crawl directives (blocks auth-gated, admin, team pages)
-- `static/sitemap.xml` — XML sitemap for search engine indexing
-- `static/favicon.svg` — SVG favicon (green $ icon)
-- `estimates.db` — SQLite database (auto-created on startup)
-
-## Database Tables
-- **User** — id, email, password_hash, company_name, company_city, company_state, subscription_tier, stripe_customer_id, estimates_used, pricing fields, is_admin
-- **Session** — id, token, user_id, expires_at
-- **Estimate** — id, user_id, team_member_id, customer_name, customer_email, customer_phone, photos_count, result_json, price_low, price_high, cy_estimate, pass1_json, pass2_json, lookups_json, created_at
-- **ItemReferenceLibrary** — id, item_name (unique), item_category, cubic_yards, is_special, special_fee, confidence, source (builtin|ai_learned|web_search|manual), search_query_used, times_seen, created_at, updated_at
-- **TeamMember** — id, user_id (FK to owner/admin), name, pin_hash, role, is_active, created_at
-- **TeamSession** — id, token, team_member_id, expires_at
-- **SiteConfig** — id, config_key (unique), config_value, updated_at
-- **PlanConfig** — id, tier_name (unique), display_name, price_cents, estimate_limit, features_json, stripe_price_id, is_active
-
-## Seed Data
-86 built-in items across categories: furniture, appliance, electronics, debris, outdoor, sports, medical, hazardous. Seeded on first startup.
-Default plans seeded: free, starter, pro, agency with current pricing.
-Default site config seeded with landing page content.
-Admin user kevin@cleartheclutter.net seeded with is_admin=True.
-
-## Pricing Logic
-- Standard rate: $35/CY (low) – $40/CY (high), customizable per user
-- Premium rate: $55/CY for hoarder, heavy items, stairs, truck load, or >10 CY
-- Special item surcharges: variable per item ($15-$50), stored in reference library
-- Minimum charge: $75
-
-## Subscription Tiers
-- **Free**: 3 estimates
-- **Starter**: 20 estimates/month ($29/mo)
-- **Pro**: 40 estimates/month ($59/mo)
-- **Agency**: 999 estimates/month ($99/mo)
-
-## Stripe Price IDs
-- Starter: `price_1T7PXXAPEzwLONiqIIrAtsQZ`
-- Pro: `price_1T6iUPAPEzwLONiqp31lIw9T`
-- Agency: `price_1T7PXXAPEzwLONiqpQbgpgZ8`
-
-## Security & Performance Optimizations
-
-### Security Hardening
-- Security headers middleware: X-Content-Type-Options, X-Frame-Options (DENY), X-XSS-Protection, Referrer-Policy, Permissions-Policy, Strict-Transport-Security, Content-Security-Policy
-- Rate limiting on auth endpoints: 10 req/min for login/signup/team-auth, 5 req/5min for forgot-password
-- Input validation: email format/length on signup, password max length (128 chars to prevent bcrypt DoS), file content-type validation (image MIME types only)
-- Stripe webhook derives tier from price_id via `list_line_items` (never trusts client-supplied tier_name)
-- Checkout endpoint validates price_id against server-side `PRICE_TO_TIER` mapping
-- All innerHTML rendering of AI/DB data uses HTML escaping (`esc()` function) to prevent XSS
-- Generic error messages returned to clients (no internal details leaked)
-- Admin user configured via `ADMIN_EMAIL` environment variable (not hardcoded)
-- CORS hardened with explicit methods and headers (no wildcards)
-- Team estimate status endpoint checks ownership before returning results
-- Session cookies set with `secure=True`, `httponly=True`, `samesite=lax`
-- Upload size limit: 20MB per file, 30 files max
-
-### Backend Performance
-- Database connection pool: `pool_pre_ping=True`, `pool_recycle=3600`
-- Database indexes on: Estimate.user_id, Estimate.team_member_id, Estimate.created_at, User.subscription_tier
-- Library stats use SQL COUNT/GROUP BY aggregation instead of loading all items into memory
-- Admin analytics uses single GROUP BY query instead of 4 separate per-tier queries
-- Modern async patterns: `asyncio.to_thread()` instead of deprecated `get_event_loop().run_in_executor()`
-- Lifespan context manager pattern with proper engine disposal on shutdown
-- PIL Image resources properly closed with try/finally in compress_image()
-- Estimate quota only incremented after successful AI processing
-- Library updates use batch IN query instead of N+1 per-item SELECTs
-- Expired estimate jobs cleaned up automatically (5-minute TTL)
-
-### Frontend Optimization
-- Semantic HTML: proper nav, main, section, header, footer landmarks
-- Skip links on landing page and estimator
-- ARIA labels on all interactive elements (drop zones, modals, loading spinners, error boxes)
-- role="alert" on error containers, role="dialog" on modals, role="status" on live regions
-- Keyboard navigation: Enter/Space on drop zones, Escape closes modals, focus management
-- Proper form label associations across all pages
-- Admin tabs use proper ARIA tab pattern (role="tab", aria-selected, aria-controls)
-- URL.revokeObjectURL cleanup to prevent memory leaks
-- Proper error handling in all fetch() calls
-
-## Environment Variables
-- `ANTHROPIC_API_KEY` — Required. Claude vision API.
-- `STRIPE_SECRET_KEY` — Stripe API key for payments.
-- `STRIPE_WEBHOOK_SECRET` — Stripe webhook signature verification.
-- `TAVILY_API_KEY` — Optional. For live market rate fetching and item dimension lookups.
-- `SENDGRID_API_KEY` — Optional. For emailing PDF estimates to customers.
-- `ADMIN_EMAIL` — Required. Email address for the admin user (e.g., kevin@cleartheclutter.net).
+## External Dependencies
+- **Anthropic Claude API**: For AI vision capabilities and image analysis.
+- **Stripe API**: For processing payments, managing subscriptions, and handling webhooks.
+- **Tavily API**: Used for live market rate fetching and looking up item dimensions.
+- **SendGrid API**: For sending email notifications and PDF estimates to customers.
+- **ReportLab**: Python library for generating PDF documents.

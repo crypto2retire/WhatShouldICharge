@@ -1077,9 +1077,9 @@ REQUIRED JSON FORMAT:
 {
   "reference_points": [
     {
-      "name": "item used as reference",
-      "known_dimensions": "3ft x 2ft x 3ft",
-      "cubic_yards": 0.5,
+      "name": "item or fixture used as reference (e.g. 'standard interior door', 'electrical outlet', 'couch')",
+      "known_dimensions": "80in x 32in (or 3ft x 2ft x 3ft for items)",
+      "cubic_yards": 0.0,
       "location_in_photo": "left foreground"
     }
   ],
@@ -1107,7 +1107,33 @@ SPATIAL REASONING METHOD (THIS IS HOW YOU ESTIMATE — FOLLOW EXACTLY):
 
 Step 1 — FIND REFERENCE POINTS: Scan the photo for 5-10 items you recognize from the KNOWN ITEM REFERENCE LIBRARY below. These are your spatial anchors. Pick items spread across the photo — foreground, middle, background, left, right — to establish scale from multiple vantage points.
 
-Step 2 — ESTABLISH SCALE AND DEPTH: Use the known real-world dimensions of those 5-10 reference items to calibrate the photo's perspective. A couch you know is 7ft long tells you how big everything near it is. A refrigerator in the background tells you the scale of that area. A trash bag in the corner reveals depth. By triangulating between multiple known objects at different depths, you can determine the true 3D volume of the entire scene.
+ALSO USE ARCHITECTURAL FIXTURES AS REFERENCE POINTS — many have standardized or near-standard sizes:
+
+HARD STANDARDS (reliable rulers — dimensions are code-mandated and virtually universal):
+- Electrical outlet cover plate: 4.5"H × 2.75"W
+- Light switch cover plate: 4.5"H × 2.75"W
+- Wall stud spacing (visible in unfinished garages/basements): 16" on center
+- Standard interior door HEIGHT: 80" (6'8") — width varies (28-36") but height is consistent
+
+COMMON STANDARDS (very common dimensions, but can vary — treat as strong estimates):
+- Interior door width: typically 30-32"
+- Exterior door: 80"H × 36"W typical
+- Sliding patio door: 80"H × 72"W typical (6'8" × 6'0")
+- Garage door single: 84"H × 108"W (7' × 9') typical
+- Garage door double: 84"H × 192"W (7' × 16') typical
+- Standard stair riser height: 7-8" (code range)
+- Standard stair tread depth: 10-11" (code range)
+- Ceiling height: 96" (8') most common in residential, but 9' and 10' exist
+
+APPROXIMATE (use only when no better reference is available):
+- Double-hung window: 36"H × 24"W varies widely
+- Basement hopper window: 16"H × 32"W varies widely
+- Baseboard trim height: 3-5" varies
+- Door frame casing width: 2.25-3.5" varies
+
+Outlet plates and stud spacing are your most reliable architectural rulers. A visible outlet immediately tells you the scale of everything around it. Studs at 16" spacing give you a built-in ruler across the entire wall. Door height (80") is a strong vertical reference. Use as many of these as you can find in addition to junk items from the reference library. When using "common" or "approximate" fixtures, note the uncertainty in your confidence score.
+
+Step 2 — ESTABLISH SCALE AND DEPTH: Use the known real-world dimensions of those 5-10 reference items AND any architectural fixtures to calibrate the photo's perspective. A couch you know is 7ft long tells you how big everything near it is. A refrigerator in the background tells you the scale of that area. A visible door frame gives you an 80-inch vertical ruler. Wall studs at 16-inch spacing give you a horizontal ruler across the wall. An outlet plate tells you the scale of nearby items. By triangulating between multiple known objects and fixtures at different depths, you can determine the true 3D volume of the entire scene.
 
 Step 3 — MEASURE UNKNOWN ITEMS: Now that you understand the photo's scale and depth, estimate the cubic yards of every other item by comparing its apparent size to your reference points. An unknown box sitting next to a known chair can be sized accurately because you know how big the chair really is.
 
@@ -1115,7 +1141,7 @@ Step 4 — CALCULATE TOTALS: Sum all items for total cubic yards. Use reference-
 
 List your reference points in the "reference_points" array so the estimate is explainable and auditable.
 
-If fewer than 5 reference items are visible, note this in "notes" and lower your confidence score. The fewer reference points, the less accurate the spatial calibration.
+If fewer than 5 reference items are visible (counting both junk items AND architectural fixtures like outlets, doors, studs), note this in "notes" and lower your confidence score. The fewer reference points, the less accurate the spatial calibration.
 
 MULTI-PHOTO DEDUPLICATION (CRITICAL):
 - Multiple photos may show the SAME room from different angles
@@ -1206,8 +1232,9 @@ async def get_library_context() -> str:
         "\nKNOWN ITEM REFERENCE LIBRARY — USE THESE AS SPATIAL REFERENCE POINTS:",
         "Find 5-10 of these items in the photo to establish scale and depth.",
         "Each item includes its real-world L×W×H dimensions. Use these physical",
-        "measurements to calibrate the scale of the photo. Even 1-2 recognized",
-        "items with known dimensions gives you a reliable ruler for the scene.",
+        "measurements PLUS architectural fixtures (outlets, doors, studs, windows)",
+        "to calibrate the scale of the photo. Even 1-2 recognized items or",
+        "fixtures with known dimensions gives you a reliable ruler for the scene.",
         "",
     ]
     for item in items:

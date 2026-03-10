@@ -26,7 +26,7 @@ The frontend consists of single-page HTML files with a dark theme for a modern a
 - **Server**: Uvicorn on port 5000.
 
 ### Feature Specifications
-- **Spatial Reasoning Estimation Engine**: Uses known items with real L×W×H dimensions from the reference library as spatial anchors to calibrate photo scale. Even 1-2 recognized items provide a reliable ruler. The AI detects circled/marked items in photos and only includes those in the estimate. Users can also uncheck items from results to recalculate the price client-side.
+- **Spatial Reasoning Estimation Engine**: Uses known items with real L×W×H dimensions from the reference library AND architectural fixtures (electrical outlets, light switches, doors, windows, wall studs, stairs) as spatial anchors to calibrate photo scale. Fixtures are categorized as hard standards (outlet plates 4.5"×2.75", stud spacing 16" OC, door height 80"), common standards (garage doors, stair dimensions), and approximate references (windows, baseboards). Even 1-2 recognized items or fixtures provide a reliable ruler. The AI detects circled/marked items in photos and only includes those in the estimate. Users can also uncheck items from results to recalculate the price client-side.
 - **Multi-Photo Per Room Handling**: Supports uploading multiple photos per room, which are then grouped and processed by the AI with explicit deduplication logic to avoid over-counting items.
 - **Special Item Handling**: Identifies special items (e.g., hazardous materials) but excludes them from cubic yardage pricing, flagging them separately with recycling fee notices.
 - **Asynchronous Estimation Flow**: Estimates are processed in background tasks, with frontend polling for status updates.

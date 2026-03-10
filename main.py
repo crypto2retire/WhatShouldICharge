@@ -694,7 +694,8 @@ async def auth_login(request: Request):
         db.add(sess)
         await db.commit()
 
-    response = JSONResponse({"success": True, "redirect": "/estimate"})
+    redirect_url = "/admin" if user.is_admin else "/estimate"
+    response = JSONResponse({"success": True, "redirect": redirect_url, "is_admin": bool(user.is_admin)})
     response.set_cookie(
         "session_token", token, httponly=True, samesite="lax", secure=True,
         max_age=30 * 24 * 3600, path="/"

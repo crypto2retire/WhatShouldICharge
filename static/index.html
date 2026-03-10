@@ -647,7 +647,7 @@
     <a href="/" class="nav-brand">WhatShouldICharge</a>
   </div>
   <div class="nav-right" id="nav-user" style="display:none">
-    <a class="nav-link" id="nav-admin-link" href="/admin" style="display:none;color:var(--amber,#f59e0b);">Admin</a>
+    <a class="nav-link" id="nav-admin-link" href="/admin" style="display:none;background:#f59e0b;color:#000;padding:4px 14px;border-radius:6px;font-weight:700;font-size:0.8rem;text-decoration:none;">Admin Dashboard</a>
     <span class="nav-company" id="nav-company-name"></span>
     <span class="nav-estimates" id="nav-estimates"></span>
     <a class="nav-link" id="nav-logout" role="button" tabindex="0">Logout</a>
@@ -1196,8 +1196,10 @@ function showResults(data) {
   currentEstimateId = data.id || null;
   renderRefPhotos();
 
+  var priceLow = data.price_low || 0;
+  var priceHigh = data.price_high || 0;
   document.getElementById('res-price').innerHTML =
-    `$${data.price_low.toLocaleString()} <span>–</span> $${data.price_high.toLocaleString()}`
+    `$${priceLow.toLocaleString()} <span>–</span> $${priceHigh.toLocaleString()}`
     + `<div style="font-size:0.75rem;color:var(--muted);font-weight:400;margin-top:4px;">Based on volume only</div>`;
 
   document.getElementById('res-cy').textContent = data.cy_estimate + ' CY';

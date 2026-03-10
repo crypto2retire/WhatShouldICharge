@@ -610,10 +610,14 @@
       <div class="room-selector-label">Choose the room for this photo. Use the same room for multiple angles:</div>
       <div class="room-grid">
         <button class="room-btn" data-room="Living Room">🛋️ Living Room</button>
-        <button class="room-btn" data-room="Bedroom">🛏️ Bedroom</button>
+        <button class="room-btn" data-room="Bedroom 1">🛏️ Bedroom 1</button>
+        <button class="room-btn" data-room="Bedroom 2">🛏️ Bedroom 2</button>
+        <button class="room-btn" data-room="Bedroom 3">🛏️ Bedroom 3</button>
+        <button class="room-btn" data-room="Bedroom 4">🛏️ Bedroom 4</button>
         <button class="room-btn" data-room="Garage">🚗 Garage</button>
         <button class="room-btn" data-room="Basement">🏚️ Basement</button>
         <button class="room-btn" data-room="Kitchen">🍳 Kitchen</button>
+        <button class="room-btn" data-room="Bathroom">🚿 Bathroom</button>
         <button class="room-btn" data-room="Outdoor">🌳 Outdoor</button>
         <button class="room-btn" data-room="Other">📦 Other</button>
         <button class="room-btn truck-btn" data-room="Truck Load" id="truck-load-btn">🚛 Truck Load</button>
@@ -764,7 +768,7 @@ let photos = [];
 let selectedPhotoIdx = null;
 let truckLoadPct = null;
 
-const ROOMS = ['Living Room','Bedroom','Garage','Basement','Kitchen','Outdoor','Other','Truck Load'];
+const ROOMS = ['Living Room','Bedroom 1','Bedroom 2','Bedroom 3','Bedroom 4','Garage','Basement','Kitchen','Bathroom','Outdoor','Other','Truck Load'];
 
 const catIcons = {
   furniture: '🪑',
@@ -814,7 +818,7 @@ function renderPreviews() {
   });
 
   var roomIcons = {
-    'Living Room': '🛋️', 'Bedroom': '🛏️', 'Garage': '🚗', 'Basement': '🏚️',
+    'Living Room': '🛋️', 'Bedroom 1': '🛏️', 'Bedroom 2': '🛏️', 'Bedroom 3': '🛏️', 'Bedroom 4': '🛏️', 'Garage': '🚗', 'Basement': '🏚️', 'Bathroom': '🚿',
     'Kitchen': '🍳', 'Outdoor': '🌳', 'Other': '📦', 'Truck Load': '🚛'
   };
 

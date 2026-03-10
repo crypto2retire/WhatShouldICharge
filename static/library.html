@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Reference Library — WhatShouldICharge</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -51,6 +51,28 @@
   .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
   .cy-val { font-weight: 600; color: var(--accent); }
   .times-seen { font-weight: 600; }
+
+  .edit-btn { background: none; border: 1px solid var(--border); color: var(--muted); padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 0.78rem; transition: all 0.15s; }
+  .edit-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+  .modal-overlay.visible { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px; width: 90%; max-width: 440px; }
+  .modal-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 20px; }
+  .modal-field { margin-bottom: 16px; }
+  .modal-field label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+  .modal-field input, .modal-field select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.9rem; outline: none; }
+  .modal-field input:focus, .modal-field select:focus { border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .modal-actions button { flex: 1; padding: 10px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer; border: none; }
+  .btn-save { background: var(--accent); color: #000; }
+  .btn-save:hover { opacity: 0.9; }
+  .btn-cancel { background: var(--border); color: var(--text); }
+  .btn-cancel:hover { background: #3a3d4a; }
+  .checkbox-row { display: flex; align-items: center; gap: 10px; }
+  .checkbox-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
+  .save-status { font-size: 0.82rem; color: var(--accent); text-align: center; margin-top: 10px; min-height: 20px; }
+  .item-name-display { font-weight: 600; color: var(--accent); font-size: 0.95rem; margin-bottom: 4px; }
 </style>
 </head>
 <body>
@@ -95,6 +117,7 @@
           <th>Source</th>
           <th>Seen</th>
           <th>Special</th>
+          <th></th>
         </tr>
       </thead>
       <tbody id="library-body"></tbody>
@@ -103,92 +126,200 @@
   <div class="empty-state" id="empty-state" style="display:none">No items found</div>
 </div>
 
-<script>
-let allItems = [];
-let currentSort = 'times_seen';
+<div class="modal-overlay" id="edit-modal" role="dialog" aria-modal="true" aria-label="Edit library item">
+  <div class="modal">
+    <div class="modal-title">Edit Item</div>
+    <div class="item-name-display" id="edit-item-name"></div>
+    <div class="modal-field">
+      <label for="edit-cy">Cubic Yards (CY)</label>
+      <input type="number" id="edit-cy" step="0.01" min="0">
+    </div>
+    <div class="modal-field">
+      <label for="edit-category">Category</label>
+      <input type="text" id="edit-category">
+    </div>
+    <div class="modal-field">
+      <div class="checkbox-row">
+        <input type="checkbox" id="edit-special">
+        <label for="edit-special" style="margin-bottom:0">Recycling / Special Fee Item</label>
+      </div>
+    </div>
+    <div class="modal-field" id="fee-field" style="display:none">
+      <label for="edit-fee">Special Fee ($)</label>
+      <input type="number" id="edit-fee" step="1" min="0">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveItem()">Save Changes</button>
+    </div>
+    <div class="save-status" id="save-status"></div>
+  </div>
+</div>
 
-document.getElementById('nav-logout').addEventListener('click', async () => {
+<script>
+var allItems = [];
+var currentSort = 'times_seen';
+var editingId = null;
+
+document.getElementById('nav-logout').addEventListener('click', async function() {
   await fetch('/api/auth/logout', { method: 'POST' });
   window.location.href = '/login';
 });
 
 async function loadLibrary() {
   try {
-    const [itemsResp, statsResp] = await Promise.all([
+    var responses = await Promise.all([
       fetch('/api/library'),
       fetch('/api/library/stats')
     ]);
-    if (itemsResp.status === 401) { window.location.href = '/login'; return; }
-    allItems = await itemsResp.json();
-    const stats = await statsResp.json();
+    if (responses[0].status === 401) { window.location.href = '/login'; return; }
+    allItems = await responses[0].json();
+    var stats = await responses[1].json();
 
     document.getElementById('stat-total').textContent = stats.total_items || 0;
-    document.getElementById('stat-builtin').textContent = stats.by_source?.builtin || 0;
-    document.getElementById('stat-learned').textContent = stats.by_source?.ai_learned || 0;
-    document.getElementById('stat-web').textContent = stats.by_source?.web_search || 0;
+    document.getElementById('stat-builtin').textContent = (stats.by_source && stats.by_source.builtin) || 0;
+    document.getElementById('stat-learned').textContent = (stats.by_source && stats.by_source.ai_learned) || 0;
+    document.getElementById('stat-web').textContent = (stats.by_source && stats.by_source.web_search) || 0;
 
-    renderTable(allItems);
+    renderTable(sortItems(allItems, currentSort));
   } catch (e) {
     console.error('Failed to load library:', e);
   }
 }
 
+function esc(str) {
+  var d = document.createElement('div');
+  d.textContent = String(str);
+  return d.innerHTML;
+}
+
 function renderTable(items) {
-  const tbody = document.getElementById('library-body');
-  const empty = document.getElementById('empty-state');
+  var tbody = document.getElementById('library-body');
+  var empty = document.getElementById('empty-state');
   tbody.innerHTML = '';
 
-  if (!items.length) {
-    empty.style.display = 'block';
-    return;
-  }
+  if (!items.length) { empty.style.display = 'block'; return; }
   empty.style.display = 'none';
 
-  function esc(str) {
-    var d = document.createElement('div');
-    d.textContent = String(str);
-    return d.innerHTML;
-  }
-
-  items.forEach(item => {
-    const tr = document.createElement('tr');
-    const specialHtml = item.is_special
-      ? `<span class="special-tag">$${parseFloat(item.special_fee) || 0}</span>`
+  items.forEach(function(item) {
+    var tr = document.createElement('tr');
+    var specialHtml = item.is_special
+      ? '<span class="special-tag">$' + (parseFloat(item.special_fee) || 0) + '</span>'
       : '<span style="color:var(--muted)">—</span>';
-    tr.innerHTML = `
-      <td>${esc(item.item_name)}</td>
-      <td style="color:var(--muted)">${esc(item.item_category)}</td>
-      <td><span class="cy-val">${parseFloat(item.cubic_yards) || 0}</span></td>
-      <td><span class="source-badge source-${esc(item.source)}">${esc(item.source.replace('_', ' '))}</span></td>
-      <td><span class="times-seen">${parseInt(item.times_seen) || 0}</span></td>
-      <td>${specialHtml}</td>
-    `;
+    tr.innerHTML =
+      '<td>' + esc(item.item_name) + '</td>' +
+      '<td style="color:var(--muted)">' + esc(item.item_category) + '</td>' +
+      '<td><span class="cy-val">' + (parseFloat(item.cubic_yards) || 0) + '</span></td>' +
+      '<td><span class="source-badge source-' + esc(item.source) + '">' + esc(item.source.replace('_', ' ')) + '</span></td>' +
+      '<td><span class="times-seen">' + (parseInt(item.times_seen) || 0) + '</span></td>' +
+      '<td>' + specialHtml + '</td>' +
+      '<td><button class="edit-btn" data-id="' + item.id + '">Edit</button></td>';
     tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('.edit-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      openEditModal(parseInt(btn.dataset.id));
+    });
   });
 }
 
-document.getElementById('search-input').addEventListener('input', (e) => {
-  const q = e.target.value.toLowerCase().trim();
-  const filtered = q ? allItems.filter(i => i.item_name.includes(q)) : allItems;
+function openEditModal(id) {
+  var item = allItems.find(function(i) { return i.id === id; });
+  if (!item) return;
+  editingId = id;
+  document.getElementById('edit-item-name').textContent = item.item_name;
+  document.getElementById('edit-cy').value = parseFloat(item.cubic_yards) || 0;
+  document.getElementById('edit-category').value = item.item_category || '';
+  document.getElementById('edit-special').checked = !!item.is_special;
+  document.getElementById('edit-fee').value = parseFloat(item.special_fee) || 0;
+  document.getElementById('fee-field').style.display = item.is_special ? 'block' : 'none';
+  document.getElementById('save-status').textContent = '';
+  document.getElementById('edit-modal').classList.add('visible');
+}
+
+document.getElementById('edit-special').addEventListener('change', function() {
+  document.getElementById('fee-field').style.display = this.checked ? 'block' : 'none';
+});
+
+function closeModal() {
+  document.getElementById('edit-modal').classList.remove('visible');
+  editingId = null;
+}
+
+document.getElementById('edit-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeModal();
+});
+
+async function saveItem() {
+  if (!editingId) return;
+  var statusEl = document.getElementById('save-status');
+  statusEl.textContent = 'Saving...';
+  statusEl.style.color = 'var(--muted)';
+
+  var body = {
+    cubic_yards: parseFloat(document.getElementById('edit-cy').value) || 0,
+    item_category: document.getElementById('edit-category').value.trim(),
+    is_special: document.getElementById('edit-special').checked,
+    special_fee: document.getElementById('edit-special').checked ? (parseFloat(document.getElementById('edit-fee').value) || 0) : 0
+  };
+
+  try {
+    var resp = await fetch('/api/library/' + editingId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) throw new Error('Failed');
+
+    var item = allItems.find(function(i) { return i.id === editingId; });
+    if (item) {
+      item.cubic_yards = body.cubic_yards;
+      item.item_category = body.item_category;
+      item.is_special = body.is_special;
+      item.special_fee = body.special_fee;
+    }
+
+    statusEl.textContent = 'Saved';
+    statusEl.style.color = 'var(--accent)';
+
+    var q = document.getElementById('search-input').value.toLowerCase().trim();
+    var filtered = q ? allItems.filter(function(i) { return i.item_name.toLowerCase().includes(q); }) : allItems;
+    renderTable(sortItems(filtered, currentSort));
+
+    setTimeout(closeModal, 800);
+  } catch (e) {
+    statusEl.textContent = 'Error saving. Try again.';
+    statusEl.style.color = '#ef4444';
+  }
+}
+
+document.getElementById('search-input').addEventListener('input', function(e) {
+  var q = e.target.value.toLowerCase().trim();
+  var filtered = q ? allItems.filter(function(i) { return i.item_name.toLowerCase().includes(q); }) : allItems;
   renderTable(sortItems(filtered, currentSort));
 });
 
-document.querySelectorAll('.sort-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+document.querySelectorAll('.sort-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.sort-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
     currentSort = btn.dataset.sort;
-    const q = document.getElementById('search-input').value.toLowerCase().trim();
-    const filtered = q ? allItems.filter(i => i.item_name.includes(q)) : allItems;
+    var q = document.getElementById('search-input').value.toLowerCase().trim();
+    var filtered = q ? allItems.filter(function(i) { return i.item_name.toLowerCase().includes(q); }) : allItems;
     renderTable(sortItems(filtered, currentSort));
   });
 });
 
 function sortItems(items, sort) {
-  const copy = [...items];
-  if (sort === 'name') copy.sort((a, b) => a.item_name.localeCompare(b.item_name));
-  else if (sort === 'recent') copy.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
-  else copy.sort((a, b) => b.times_seen - a.times_seen);
+  var copy = items.slice();
+  if (sort === 'name') copy.sort(function(a, b) { return a.item_name.localeCompare(b.item_name); });
+  else if (sort === 'recent') copy.sort(function(a, b) { return (b.created_at || '').localeCompare(a.created_at || ''); });
+  else copy.sort(function(a, b) { return b.times_seen - a.times_seen; });
   return copy;
 }
 

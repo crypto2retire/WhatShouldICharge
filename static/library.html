@@ -144,17 +144,23 @@ function renderTable(items) {
   }
   empty.style.display = 'none';
 
+  function esc(str) {
+    var d = document.createElement('div');
+    d.textContent = String(str);
+    return d.innerHTML;
+  }
+
   items.forEach(item => {
     const tr = document.createElement('tr');
     const specialHtml = item.is_special
-      ? `<span class="special-tag">$${item.special_fee}</span>`
+      ? `<span class="special-tag">$${parseFloat(item.special_fee) || 0}</span>`
       : '<span style="color:var(--muted)">—</span>';
     tr.innerHTML = `
-      <td>${item.item_name}</td>
-      <td style="color:var(--muted)">${item.item_category}</td>
-      <td><span class="cy-val">${item.cubic_yards}</span></td>
-      <td><span class="source-badge source-${item.source}">${item.source.replace('_', ' ')}</span></td>
-      <td><span class="times-seen">${item.times_seen}</span></td>
+      <td>${esc(item.item_name)}</td>
+      <td style="color:var(--muted)">${esc(item.item_category)}</td>
+      <td><span class="cy-val">${parseFloat(item.cubic_yards) || 0}</span></td>
+      <td><span class="source-badge source-${esc(item.source)}">${esc(item.source.replace('_', ' '))}</span></td>
+      <td><span class="times-seen">${parseInt(item.times_seen) || 0}</span></td>
       <td>${specialHtml}</td>
     `;
     tbody.appendChild(tr);

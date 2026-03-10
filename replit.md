@@ -7,8 +7,8 @@ An AI-powered junk removal job estimator. Users upload customer photos, Claude v
 - **Backend**: Python 3.11, FastAPI, SQLite (via SQLAlchemy + aiosqlite)
 - **Frontend**: Single-page HTML files (no framework), dark theme
 - **AI**: Anthropic Claude (`claude-sonnet-4-20250514`) with vision, two-pass estimation
-- **Auth**: bcrypt password hashing, session cookies (30-day)
-- **Payments**: Stripe checkout sessions + webhooks for subscription lifecycle
+- **Auth**: bcrypt password hashing (async via executor), secure session cookies (30-day, httponly, samesite, secure)
+- **Payments**: Stripe checkout sessions + webhooks with server-side tier validation from price_id
 - **Market Data**: Tavily API for live market rate fetching + item dimension lookups
 - **Server**: uvicorn on port 5000
 
@@ -110,6 +110,18 @@ An AI-powered junk removal job estimator. Users upload customer photos, Claude v
 - Starter: `price_1T7PXXAPEzwLONiqIIrAtsQZ`
 - Pro: `price_1T6iUPAPEzwLONiqp31lIw9T`
 - Agency: `price_1T7PXXAPEzwLONiqpQbgpgZ8`
+
+## Security & Performance Optimizations
+- Stripe webhook derives tier from price_id via `list_line_items` (never trusts client-supplied tier_name)
+- Checkout endpoint validates price_id against server-side `PRICE_TO_TIER` mapping
+- All innerHTML rendering of AI/DB data uses HTML escaping (`esc()` function) to prevent XSS
+- bcrypt hashing runs in thread executor to avoid blocking the event loop
+- Stripe API calls run in thread executor for async compatibility
+- Session cookies set with `secure=True`, `httponly=True`, `samesite=lax`
+- Upload size limit: 20MB per file, 20 files max
+- Estimate quota only incremented after successful AI processing (failed jobs don't consume quota)
+- Library updates use batch IN query instead of N+1 per-item SELECTs
+- Expired estimate jobs cleaned up automatically (5-minute TTL)
 
 ## Environment Variables
 - `ANTHROPIC_API_KEY` — Required. Claude vision API.

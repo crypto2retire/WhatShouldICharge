@@ -45,12 +45,6 @@ TIER_LIMITS = {
     "agency": 999,
 }
 
-STRIPE_PRICES = {
-    "price_1T7PXXAPEzwLONiqIIrAtsQZ": "starter",
-    "price_1T6iUPAPEzwLONiqp31lIw9T": "pro",
-    "price_1T7PXXAPEzwLONiqpQbgpgZ8": "agency",
-}
-
 
 class User(Base):
     __tablename__ = "users"
@@ -345,7 +339,10 @@ async def auth_signup(request: Request):
     if len(password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
 
-    pw_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    loop = asyncio.get_event_loop()
+    pw_hash = await loop.run_in_executor(
+        None, lambda: bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    )
 
     async with AsyncSessionLocal() as db:
         existing = await db.execute(select(User).where(User.email == email))
@@ -386,7 +383,7 @@ async def auth_signup(request: Request):
 
     response = JSONResponse({"success": True, "redirect": "/estimate"})
     response.set_cookie(
-        "session_token", token, httponly=True, samesite="lax",
+        "session_token", token, httponly=True, samesite="lax", secure=True,
         max_age=30 * 24 * 3600, path="/"
     )
     return response
@@ -407,7 +404,11 @@ async def auth_login(request: Request):
         if not user:
             raise HTTPException(status_code=401, detail="Invalid email or password.")
 
-        if not bcrypt.checkpw(password.encode("utf-8"), user.password_hash.encode("utf-8")):
+        loop = asyncio.get_event_loop()
+        valid = await loop.run_in_executor(
+            None, lambda: bcrypt.checkpw(password.encode("utf-8"), user.password_hash.encode("utf-8"))
+        )
+        if not valid:
             raise HTTPException(status_code=401, detail="Invalid email or password.")
 
         token = secrets.token_hex(32)
@@ -421,7 +422,7 @@ async def auth_login(request: Request):
 
     response = JSONResponse({"success": True, "redirect": "/estimate"})
     response.set_cookie(
-        "session_token", token, httponly=True, samesite="lax",
+        "session_token", token, httponly=True, samesite="lax", secure=True,
         max_age=30 * 24 * 3600, path="/"
     )
     return response
@@ -442,7 +443,10 @@ async def auth_forgot_password(request: Request):
             return JSONResponse({"success": True, "message": "If an account with that email exists, a new password has been sent."})
 
         new_password = secrets.token_urlsafe(12)
-        new_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        loop = asyncio.get_event_loop()
+        new_hash = await loop.run_in_executor(
+            None, lambda: bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        )
         user.password_hash = new_hash
         await db.commit()
 
@@ -933,27 +937,32 @@ If you cannot find dimensions, return cubic_yards: 0"""
 
 
 async def update_library_from_estimate(items: list):
+    item_map = {}
+    for item in items:
+        normalized_name = item.get("name", "").lower().strip()
+        if normalized_name:
+            item_map[normalized_name] = item
+
+    if not item_map:
+        return
+
     async with AsyncSessionLocal() as db:
-        for item in items:
-            normalized_name = item.get("name", "").lower().strip()
-            if not normalized_name:
-                continue
-
-            result = await db.execute(
-                select(ItemReferenceLibrary).where(
-                    ItemReferenceLibrary.item_name == normalized_name
-                )
+        result = await db.execute(
+            select(ItemReferenceLibrary).where(
+                ItemReferenceLibrary.item_name.in_(list(item_map.keys()))
             )
-            existing = result.scalar_one_or_none()
+        )
+        existing_items = {row.item_name: row for row in result.scalars().all()}
 
-            if existing:
-                existing.times_seen = existing.times_seen + 1
-                existing.updated_at = datetime.utcnow()
+        for name, item in item_map.items():
+            if name in existing_items:
+                existing_items[name].times_seen = existing_items[name].times_seen + 1
+                existing_items[name].updated_at = datetime.utcnow()
             else:
                 cy = item.get("cubic_yards", 0)
                 if cy and cy > 0:
                     db.add(ItemReferenceLibrary(
-                        item_name=normalized_name,
+                        item_name=name,
                         item_category=item.get("category", "other"),
                         cubic_yards=cy,
                         is_special=bool(item.get("is_special", False)),
@@ -969,6 +978,14 @@ estimate_jobs = {}
 JOB_TTL_SECONDS = 300
 
 
+def cleanup_expired_jobs():
+    now = datetime.utcnow()
+    expired = [k for k, v in estimate_jobs.items()
+               if (now - v.get("created_at", now)).total_seconds() > JOB_TTL_SECONDS]
+    for k in expired:
+        del estimate_jobs[k]
+
+
 @app.post("/api/estimate")
 async def create_estimate(
     request: Request,
@@ -977,14 +994,13 @@ async def create_estimate(
     truck_load_pct: Optional[float] = Form(default=None),
 ):
     user = await require_user(request)
+    cleanup_expired_jobs()
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.id == user.id))
         fresh_user = result.scalar_one_or_none()
         if not fresh_user or fresh_user.estimates_used >= fresh_user.estimates_limit:
             raise HTTPException(status_code=403, detail="estimate_limit_reached")
-        fresh_user.estimates_used = fresh_user.estimates_used + 1
-        await db.commit()
         user = fresh_user
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -1001,9 +1017,12 @@ async def create_estimate(
     except Exception:
         rooms_list = []
 
+    MAX_FILE_SIZE = 20 * 1024 * 1024
     photo_data = []
     for i, file in enumerate(files):
         raw = await file.read()
+        if len(raw) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail=f"Photo {i+1} exceeds 20MB limit.")
         compressed = compress_image(raw)
         b64 = base64.standard_b64encode(compressed).decode("utf-8")
         room_label = rooms_list[i] if i < len(rooms_list) else "Unknown"
@@ -1191,6 +1210,14 @@ async def run_estimate(
             await db.refresh(est)
             estimate_id = est.id
 
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(User).where(User.id == user.id))
+            u = result.scalar_one_or_none()
+            if u:
+                u.estimates_used = u.estimates_used + 1
+                await db.commit()
+                user = u
+
         try:
             await update_library_from_estimate(result_data.get("items", []))
         except Exception:
@@ -1248,15 +1275,25 @@ async def estimate_status(request: Request, job_id: str):
     return resp
 
 
+PRICE_TO_TIER = {
+    "price_1T7PXXAPEzwLONiqIIrAtsQZ": "starter",
+    "price_1T6iUPAPEzwLONiqp31lIw9T": "pro",
+    "price_1T7PXXAPEzwLONiqpQbgpgZ8": "agency",
+}
+
+
 @app.post("/api/payments/create-checkout")
 async def create_checkout(request: Request):
     user = await require_user(request)
     body = await request.json()
     price_id = body.get("price_id")
-    tier_name = body.get("tier_name", "")
 
     if not price_id:
         raise HTTPException(status_code=400, detail="price_id is required.")
+
+    tier_name = PRICE_TO_TIER.get(price_id)
+    if not tier_name:
+        raise HTTPException(status_code=400, detail="Invalid price_id.")
 
     checkout_params = {
         "payment_method_types": ["card"],
@@ -1264,7 +1301,7 @@ async def create_checkout(request: Request):
         "mode": "subscription",
         "success_url": str(request.base_url) + "payment-success?session_id={CHECKOUT_SESSION_ID}",
         "cancel_url": str(request.base_url) + "upgrade",
-        "metadata": {"user_id": str(user.id), "tier_name": tier_name},
+        "metadata": {"user_id": str(user.id)},
         "allow_promotion_codes": True,
     }
 
@@ -1274,7 +1311,9 @@ async def create_checkout(request: Request):
         checkout_params["customer_email"] = user.email
 
     try:
-        session = stripe.checkout.Session.create(**checkout_params)
+        session = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: stripe.checkout.Session.create(**checkout_params)
+        )
         return {"checkout_url": session.url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
@@ -1294,9 +1333,17 @@ async def stripe_webhook(request: Request):
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         user_id = int(session.get("metadata", {}).get("user_id", 0))
-        tier_name = session.get("metadata", {}).get("tier_name", "starter")
         customer_id = session.get("customer", "")
         subscription_id = session.get("subscription", "")
+
+        tier_name = "starter"
+        try:
+            line_items = stripe.checkout.Session.list_line_items(session["id"], limit=1)
+            if line_items and line_items.data:
+                price_id = line_items.data[0].price.id
+                tier_name = PRICE_TO_TIER.get(price_id, "starter")
+        except Exception:
+            pass
 
         if user_id:
             async with AsyncSessionLocal() as db:

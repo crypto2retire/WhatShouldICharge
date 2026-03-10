@@ -1055,6 +1055,12 @@ async function submitEstimate() {
   }
 }
 
+function esc(str) {
+  var d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
 function showResults(data) {
   loadingEl.classList.remove('visible');
   resultsEl.classList.add('visible');
@@ -1118,9 +1124,9 @@ function showResults(data) {
     const row = document.createElement('div');
     row.className = 'item-row';
     row.innerHTML = `
-      <div class="item-icon cat-${cat}">${catMap[cat] || '📦'}</div>
-      <div class="item-name">${item.name || 'Unknown item'}${specialTag}${lookedUp}${cyText ? ' <span style="color:var(--muted);font-size:0.78rem;font-weight:400">(' + cyText + ')</span>' : ''}</div>
-      <div class="item-qty">×${item.quantity || 1}</div>
+      <div class="item-icon cat-${esc(cat)}">${catMap[cat] || '📦'}</div>
+      <div class="item-name">${esc(item.name || 'Unknown item')}${specialTag}${lookedUp}${cyText ? ' <span style="color:var(--muted);font-size:0.78rem;font-weight:400">(' + esc(cyText) + ')</span>' : ''}</div>
+      <div class="item-qty">×${parseInt(item.quantity) || 1}</div>
     `;
     itemsEl.appendChild(row);
   });
@@ -1130,7 +1136,7 @@ function showResults(data) {
     let html = `<div style="font-weight:600;color:#fef3c7;margin-bottom:10px;font-size:0.85rem;">♻️ Recycling Fee Items Detected</div>`;
     html += `<div style="font-size:0.78rem;color:#fde68a;margin-bottom:10px;">The following items may have additional recycling or disposal fees:</div>`;
     data.special_items.forEach(si => {
-      html += `<div style="padding:4px 0;font-size:0.83rem;color:#fef3c7;font-weight:500;">${si.name}  ×${si.quantity}</div>`;
+      html += `<div style="padding:4px 0;font-size:0.83rem;color:#fef3c7;font-weight:500;">${esc(si.name)}  ×${parseInt(si.quantity) || 1}</div>`;
     });
     html += `<div style="font-size:0.75rem;color:#d4a050;margin-top:10px;font-style:italic;">Recycling fees are not included in the estimate above. Your technician will confirm exact fees on arrival.</div>`;
     specialEl.innerHTML = html;

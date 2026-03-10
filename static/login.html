@@ -31,8 +31,16 @@
   .error-msg { display: none; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; color: var(--red); font-size: 0.85rem; margin-bottom: 16px; }
   .error-msg.visible { display: block; }
   .forgot { text-align: right; margin-top: -10px; margin-bottom: 16px; }
-  .forgot a { font-size: 0.8rem; color: var(--muted); text-decoration: none; }
+  .forgot a { font-size: 0.8rem; color: var(--muted); text-decoration: none; cursor: pointer; }
   .forgot a:hover { color: var(--green-light); }
+  .success-msg { display: none; background: rgba(22,197,94,0.1); border: 1px solid rgba(22,197,94,0.3); border-radius: 8px; padding: 10px 14px; color: var(--green-light); font-size: 0.85rem; margin-bottom: 16px; }
+  .success-msg.visible { display: block; }
+  #forgot-form { display: none; }
+  #forgot-form.visible { display: block; }
+  #login-form.hidden { display: none; }
+  .back-link { text-align: center; margin-top: 16px; font-size: 0.85rem; }
+  .back-link a { color: var(--green-light); text-decoration: none; font-weight: 600; cursor: pointer; }
+  .back-link a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -41,6 +49,7 @@
   <div class="auth-title">Welcome back</div>
   <div class="auth-sub">Log in to your account</div>
   <div class="error-msg" id="error-msg"></div>
+  <div class="success-msg" id="success-msg"></div>
   <form id="login-form">
     <div class="form-group">
       <label>Email</label>
@@ -50,24 +59,55 @@
       <label>Password</label>
       <input type="password" id="password" required autocomplete="current-password" placeholder="Enter your password">
     </div>
-    <div class="forgot"><a href="#">Forgot password?</a></div>
+    <div class="forgot"><a id="forgot-link">Forgot password?</a></div>
     <button type="submit" class="btn-submit" id="submit-btn">Log In</button>
+  </form>
+  <form id="forgot-form">
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="forgot-email" required autocomplete="email" placeholder="you@company.com">
+    </div>
+    <button type="submit" class="btn-submit" id="forgot-btn">Send New Password</button>
+    <div class="back-link"><a id="back-to-login">Back to login</a></div>
   </form>
   <div class="auth-footer">Don't have an account? <a href="/signup">Sign up free</a></div>
 </div>
 <script>
-const form = document.getElementById('login-form');
-const errorMsg = document.getElementById('error-msg');
-const submitBtn = document.getElementById('submit-btn');
+var loginForm = document.getElementById('login-form');
+var forgotForm = document.getElementById('forgot-form');
+var errorMsg = document.getElementById('error-msg');
+var successMsg = document.getElementById('success-msg');
+var submitBtn = document.getElementById('submit-btn');
+var forgotBtn = document.getElementById('forgot-btn');
+var authTitle = document.querySelector('.auth-title');
+var authSub = document.querySelector('.auth-sub');
 
-form.addEventListener('submit', async (e) => {
+document.getElementById('forgot-link').addEventListener('click', function() {
+  loginForm.classList.add('hidden');
+  forgotForm.classList.add('visible');
+  errorMsg.classList.remove('visible');
+  successMsg.classList.remove('visible');
+  authTitle.textContent = 'Reset Password';
+  authSub.textContent = 'Enter your email to receive a new password';
+});
+
+document.getElementById('back-to-login').addEventListener('click', function() {
+  loginForm.classList.remove('hidden');
+  forgotForm.classList.remove('visible');
+  errorMsg.classList.remove('visible');
+  authTitle.textContent = 'Welcome back';
+  authSub.textContent = 'Log in to your account';
+});
+
+loginForm.addEventListener('submit', async function(e) {
   e.preventDefault();
   errorMsg.classList.remove('visible');
+  successMsg.classList.remove('visible');
   submitBtn.disabled = true;
   submitBtn.textContent = 'Logging in...';
 
   try {
-    const resp = await fetch('/api/auth/login', {
+    var resp = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -75,7 +115,7 @@ form.addEventListener('submit', async (e) => {
         password: document.getElementById('password').value,
       }),
     });
-    const data = await resp.json();
+    var data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || 'Login failed');
     window.location.href = data.redirect || '/estimate';
   } catch (err) {
@@ -83,6 +123,40 @@ form.addEventListener('submit', async (e) => {
     errorMsg.classList.add('visible');
     submitBtn.disabled = false;
     submitBtn.textContent = 'Log In';
+  }
+});
+
+forgotForm.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  errorMsg.classList.remove('visible');
+  successMsg.classList.remove('visible');
+  forgotBtn.disabled = true;
+  forgotBtn.textContent = 'Sending...';
+
+  try {
+    var resp = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: document.getElementById('forgot-email').value }),
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Request failed');
+    successMsg.textContent = data.message;
+    successMsg.classList.add('visible');
+    forgotBtn.textContent = 'Sent!';
+    setTimeout(function() {
+      loginForm.classList.remove('hidden');
+      forgotForm.classList.remove('visible');
+      authTitle.textContent = 'Welcome back';
+      authSub.textContent = 'Log in with your new password';
+      forgotBtn.disabled = false;
+      forgotBtn.textContent = 'Send New Password';
+    }, 3000);
+  } catch (err) {
+    errorMsg.textContent = err.message;
+    errorMsg.classList.add('visible');
+    forgotBtn.disabled = false;
+    forgotBtn.textContent = 'Send New Password';
   }
 });
 </script>

@@ -65,6 +65,7 @@ An AI-powered junk removal job estimator. Users upload customer photos, Claude v
 - `POST /api/auth/signup` — Create account
 - `POST /api/auth/login` — Log in
 - `POST /api/auth/logout` — Log out
+- `POST /api/auth/forgot-password` — Reset password and email new one to user
 - `GET /api/auth/me` — Current user info
 - `POST /api/payments/create-checkout` — Create Stripe checkout session
 - `POST /api/payments/webhook` — Stripe webhook handler

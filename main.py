@@ -427,6 +427,39 @@ async def auth_login(request: Request):
     return response
 
 
+@app.post("/api/auth/forgot-password")
+async def auth_forgot_password(request: Request):
+    body = await request.json()
+    email = body.get("email", "").strip().lower()
+
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required.")
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+        if not user:
+            return JSONResponse({"success": True, "message": "If an account with that email exists, a new password has been sent."})
+
+        new_password = secrets.token_urlsafe(12)
+        new_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        user.password_hash = new_hash
+        await db.commit()
+
+    send_email(
+        email,
+        "Your WhatShouldICharge Password Has Been Reset",
+        f"<h2>Password Reset</h2>"
+        f"<p>Your password has been reset. Here is your new temporary password:</p>"
+        f"<div style='background:#f4f4f4;padding:16px;border-radius:8px;font-family:monospace;font-size:18px;margin:16px 0;text-align:center;'>{new_password}</div>"
+        f"<p>Please log in with this password. We recommend changing it after logging in.</p>"
+        f"<p>If you did not request this reset, please contact support immediately.</p>"
+        f"<p>— The WhatShouldICharge Team</p>"
+    )
+
+    return JSONResponse({"success": True, "message": "If an account with that email exists, a new password has been sent."})
+
+
 @app.post("/api/auth/logout")
 async def auth_logout(request: Request):
     token = request.cookies.get("session_token")

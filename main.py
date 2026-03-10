@@ -47,6 +47,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "base-uri 'self'; "
             "form-action 'self'"
         )
+        ct = response.headers.get("content-type", "")
+        if "text/html" in ct:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
         return response
 
 

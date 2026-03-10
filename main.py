@@ -1706,9 +1706,41 @@ async def get_estimates(request: Request):
                 "price_low": e.price_low,
                 "price_high": e.price_high,
                 "cy_estimate": e.cy_estimate,
+                "customer_name": e.customer_name or "",
+                "customer_email": e.customer_email or "",
             }
             for e in estimates
         ]
+
+
+@app.get("/api/estimates/{estimate_id}")
+async def get_estimate_detail(request: Request, estimate_id: int):
+    user = await require_user(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Estimate).where(Estimate.id == estimate_id, Estimate.user_id == user.id)
+        )
+        e = result.scalar_one_or_none()
+        if not e:
+            raise HTTPException(status_code=404, detail="Estimate not found.")
+        result_data = {}
+        if e.result_json:
+            try:
+                result_data = json.loads(e.result_json)
+            except Exception:
+                pass
+        return {
+            "id": e.id,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+            "photos_count": e.photos_count,
+            "price_low": e.price_low,
+            "price_high": e.price_high,
+            "cy_estimate": e.cy_estimate,
+            "customer_name": e.customer_name or "",
+            "customer_email": e.customer_email or "",
+            "customer_phone": e.customer_phone or "",
+            "result": result_data,
+        }
 
 
 # ============== ADMIN API ==============

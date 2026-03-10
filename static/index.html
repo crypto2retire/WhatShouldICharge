@@ -618,10 +618,45 @@
     margin-top: 8px;
   }
 
+  #history-section { margin-top: 24px; }
+  #history-section .card-title { margin-bottom: 14px; }
+  .history-list { display: flex; flex-direction: column; gap: 8px; }
+  .history-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; transition: border-color 0.15s; }
+  .history-item:hover { border-color: var(--accent); }
+  .history-left { display: flex; flex-direction: column; gap: 2px; }
+  .history-price { font-weight: 700; font-size: 1rem; color: var(--accent); }
+  .history-meta { font-size: 0.78rem; color: var(--muted); }
+  .history-right { text-align: right; }
+  .history-cy { font-weight: 600; font-size: 0.9rem; }
+  .history-date { font-size: 0.75rem; color: var(--muted); }
+  .history-customer { font-size: 0.78rem; color: var(--blue, #818cf8); }
+  .history-empty { text-align: center; color: var(--muted); padding: 24px; font-size: 0.9rem; }
+
+  .detail-overlay { display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.7); align-items: flex-start; justify-content: center; padding: 24px; overflow-y: auto; }
+  .detail-overlay.visible { display: flex; }
+  .detail-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 100%; max-width: 600px; margin-top: 40px; }
+  .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+  .detail-close { background: none; border: none; color: var(--muted); font-size: 1.5rem; cursor: pointer; padding: 0 4px; }
+  .detail-close:hover { color: var(--text); }
+  .detail-price { font-size: 1.8rem; font-weight: 800; color: var(--accent); margin-bottom: 4px; }
+  .detail-info-row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 16px; }
+  .detail-info-item { font-size: 0.82rem; }
+  .detail-info-item .lbl { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.3px; }
+  .detail-info-item .val { font-weight: 600; }
+  .detail-section-title { font-weight: 700; font-size: 0.88rem; margin: 18px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .detail-item-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 0.85rem; border-bottom: 1px solid rgba(42,45,58,0.3); }
+  .detail-item-name { flex: 1; }
+  .detail-item-cy { color: var(--accent); font-weight: 600; width: 60px; text-align: right; }
+  .detail-item-qty { color: var(--muted); width: 40px; text-align: right; }
+  .detail-special-row { color: #f59e0b; }
+  .detail-actions { display: flex; gap: 10px; margin-top: 18px; }
+  .detail-actions button { flex: 1; padding: 10px; border-radius: 10px; border: none; font-size: 0.85rem; font-weight: 700; cursor: pointer; }
+
   @media (max-width: 500px) {
     .price-range { font-size: 2rem; }
     .card { padding: 20px; }
     .truck-stats { flex-direction: column; }
+    .detail-panel { margin-top: 10px; padding: 20px; }
   }
 </style>
 </head>
@@ -801,11 +836,33 @@
   </div>
 
 </section>
+
+  <div id="history-section" class="card" style="display:none;">
+    <div class="card-title">Previous Estimates</div>
+    <div class="history-list" id="history-list"></div>
+  </div>
+
+  <div class="detail-overlay" id="detail-overlay">
+    <div class="detail-panel">
+      <div class="detail-header">
+        <div>
+          <div class="detail-price" id="detail-price"></div>
+          <div id="detail-customer" style="font-size:0.85rem;color:var(--muted);"></div>
+        </div>
+        <button class="detail-close" onclick="closeDetail()" aria-label="Close">&times;</button>
+      </div>
+      <div class="detail-info-row" id="detail-info"></div>
+      <div id="detail-items"></div>
+      <div id="detail-special"></div>
+      <div class="detail-actions" id="detail-actions"></div>
+    </div>
+  </div>
+
 </main>
 
 <script>
-let currentUser = null;
-let currentEstimateId = null;
+var currentUser = null;
+var currentEstimateId = null;
 
 (async () => {
   try {
@@ -826,6 +883,7 @@ let currentEstimateId = null;
       window.location.href = '/upgrade';
       return;
     }
+    loadHistory();
   } catch (e) {
     window.location.href = '/login';
     return;
@@ -1121,6 +1179,7 @@ async function submitEstimate() {
           document.getElementById('nav-estimates').textContent = result.estimates_remaining + ' estimates remaining';
         }
         showResults(result);
+        loadHistory();
         break;
       }
 
@@ -1380,6 +1439,145 @@ function showError(msg) {
 function hideError() {
   errorBox.classList.remove('visible');
   errorBox.textContent = '';
+}
+
+async function loadHistory() {
+  try {
+    var resp = await fetch('/api/estimates');
+    if (!resp.ok) return;
+    var estimates = await resp.json();
+    var section = document.getElementById('history-section');
+    var list = document.getElementById('history-list');
+
+    if (!estimates.length) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+
+    list.innerHTML = '';
+    estimates.forEach(function(est) {
+      var pLow = est.price_low || 0;
+      var pHigh = est.price_high || 0;
+      var date = est.created_at ? new Date(est.created_at) : null;
+      var dateStr = date ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+      var custStr = est.customer_name || '';
+
+      var div = document.createElement('div');
+      div.className = 'history-item';
+      div.setAttribute('role', 'button');
+      div.setAttribute('tabindex', '0');
+      div.innerHTML =
+        '<div class="history-left">' +
+          '<div class="history-price">$' + pLow.toLocaleString() + ' – $' + pHigh.toLocaleString() + '</div>' +
+          '<div class="history-meta">' + (est.photos_count || 0) + ' photo' + ((est.photos_count || 0) !== 1 ? 's' : '') + (custStr ? ' &middot; ' + esc(custStr) : '') + '</div>' +
+        '</div>' +
+        '<div class="history-right">' +
+          '<div class="history-cy">' + (est.cy_estimate || 0) + ' CY</div>' +
+          '<div class="history-date">' + dateStr + '</div>' +
+        '</div>';
+      div.addEventListener('click', function() { openDetail(est.id); });
+      div.addEventListener('keydown', function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(est.id); } });
+      list.appendChild(div);
+    });
+  } catch (e) {
+    console.error('Failed to load history:', e);
+  }
+}
+
+async function openDetail(id) {
+  try {
+    var resp = await fetch('/api/estimates/' + id);
+    if (!resp.ok) return;
+    var data = await resp.json();
+    var result = data.result || {};
+
+    var pLow = data.price_low || 0;
+    var pHigh = data.price_high || 0;
+    document.getElementById('detail-price').textContent = '$' + pLow.toLocaleString() + ' – $' + pHigh.toLocaleString();
+
+    var custParts = [];
+    if (data.customer_name) custParts.push(data.customer_name);
+    if (data.customer_email) custParts.push(data.customer_email);
+    if (data.customer_phone) custParts.push(data.customer_phone);
+    document.getElementById('detail-customer').textContent = custParts.join(' · ') || '';
+
+    var date = data.created_at ? new Date(data.created_at) : null;
+    var dateStr = date ? date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+    var confidence = result.confidence || '';
+    var jobType = result.job_type || 'standard';
+    var badgeLabels = { standard: 'Standard', premium: 'Premium', hoarder: 'Hoarder', truck_load: 'Truck Load' };
+
+    document.getElementById('detail-info').innerHTML =
+      '<div class="detail-info-item"><div class="lbl">Date</div><div class="val">' + dateStr + '</div></div>' +
+      '<div class="detail-info-item"><div class="lbl">Cubic Yards</div><div class="val">' + (data.cy_estimate || 0) + ' CY</div></div>' +
+      '<div class="detail-info-item"><div class="lbl">Photos</div><div class="val">' + (data.photos_count || 0) + '</div></div>' +
+      '<div class="detail-info-item"><div class="lbl">Confidence</div><div class="val">' + (confidence || '—') + '</div></div>' +
+      '<div class="detail-info-item"><div class="lbl">Job Type</div><div class="val">' + (badgeLabels[jobType] || jobType) + '</div></div>';
+
+    var items = result.items || [];
+    var normalItems = items.filter(function(i) { return !i.is_special; });
+    var specialItems = items.filter(function(i) { return i.is_special; });
+
+    var itemsHtml = '';
+    if (normalItems.length) {
+      itemsHtml += '<div class="detail-section-title">Item Breakdown</div>';
+      normalItems.forEach(function(item) {
+        itemsHtml += '<div class="detail-item-row">' +
+          '<div class="detail-item-name">' + esc(item.name || item.item_name || '') + '</div>' +
+          '<div class="detail-item-qty">x' + (item.quantity || 1) + '</div>' +
+          '<div class="detail-item-cy">' + (item.cubic_yards || 0) + ' CY</div>' +
+        '</div>';
+      });
+    }
+    document.getElementById('detail-items').innerHTML = itemsHtml;
+
+    var specialHtml = '';
+    if (specialItems.length) {
+      specialHtml += '<div class="detail-section-title" style="color:#f59e0b;">Special / Recycling Fee Items</div>';
+      specialItems.forEach(function(item) {
+        specialHtml += '<div class="detail-item-row detail-special-row">' +
+          '<div class="detail-item-name">' + esc(item.name || item.item_name || '') + '</div>' +
+          '<div class="detail-item-qty">x' + (item.quantity || 1) + '</div>' +
+          '<div class="detail-item-cy">' + (item.cubic_yards || 0) + ' CY</div>' +
+        '</div>';
+      });
+    }
+    document.getElementById('detail-special').innerHTML = specialHtml;
+
+    document.getElementById('detail-actions').innerHTML =
+      '<button style="background:var(--accent);color:#fff;" onclick="detailPDF(' + data.id + ')">Download PDF</button>' +
+      '<button style="background:var(--border);color:var(--text);" onclick="closeDetail()">Close</button>';
+
+    document.getElementById('detail-overlay').classList.add('visible');
+  } catch (e) {
+    console.error('Failed to load estimate detail:', e);
+  }
+}
+
+function closeDetail() {
+  document.getElementById('detail-overlay').classList.remove('visible');
+}
+
+document.getElementById('detail-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeDetail();
+});
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && document.getElementById('detail-overlay').classList.contains('visible')) closeDetail();
+});
+
+async function detailPDF(id) {
+  try {
+    var resp = await fetch('/api/estimate/' + id + '/pdf', { method: 'POST' });
+    if (!resp.ok) return;
+    var blob = await resp.blob();
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'estimate_' + id + '.pdf';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    console.error('PDF download failed:', e);
+  }
 }
 </script>
 </body>

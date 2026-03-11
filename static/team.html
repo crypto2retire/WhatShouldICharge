@@ -350,15 +350,17 @@
 <main class="container">
 
   <div id="upload-section">
-    <div class="section-title">Customer Info (optional)</div>
+    <div class="section-title">Job Info</div>
     <div class="card">
       <div class="customer-fields">
+        <label for="estimate-name" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Estimate name</label>
+        <input type="text" id="estimate-name" placeholder="Estimate name (e.g. 123 Main St)" maxlength="100">
         <label for="cust-name" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Customer name</label>
-        <input type="text" id="cust-name" placeholder="Customer name">
+        <input type="text" id="cust-name" placeholder="Customer name (optional)">
         <label for="cust-email" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Customer email</label>
-        <input type="email" id="cust-email" placeholder="Customer email">
+        <input type="email" id="cust-email" placeholder="Customer email (optional)">
         <label for="cust-phone" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Customer phone</label>
-        <input type="tel" id="cust-phone" placeholder="Customer phone">
+        <input type="tel" id="cust-phone" placeholder="Customer phone (optional)">
       </div>
     </div>
 
@@ -394,6 +396,7 @@
     <div id="ref-photos-section" class="ref-photos" style="display:none;"></div>
 
     <div class="price-box">
+      <div class="price-label" id="res-job-name" style="display:none;font-size:1.1rem;font-weight:600;margin-bottom:4px;"></div>
       <div class="price-label">Estimated Price Range</div>
       <div class="price-range" id="res-price"></div>
       <div class="price-meta">
@@ -537,6 +540,7 @@ async function submitEstimate() {
   var formData = new FormData();
   photos.forEach(function(p) { formData.append('files', p.file); });
   formData.append('rooms', JSON.stringify(photos.map(function(p) { return p.room; })));
+  formData.append('estimate_name', document.getElementById('estimate-name').value.trim());
   formData.append('customer_name', document.getElementById('cust-name').value);
   formData.append('customer_email', document.getElementById('cust-email').value);
   formData.append('customer_phone', document.getElementById('cust-phone').value);
@@ -590,6 +594,11 @@ function showResults(data) {
   excludedItems = new Set();
   document.getElementById('recalc-btn').style.display = 'none';
   document.getElementById('results').classList.add('visible');
+
+  var estName = data.estimate_name || document.getElementById('estimate-name').value.trim();
+  var jobNameEl = document.getElementById('res-job-name');
+  if (estName) { jobNameEl.textContent = estName; jobNameEl.style.display = 'block'; }
+  else { jobNameEl.style.display = 'none'; }
 
   document.getElementById('res-price').textContent = '$' + (data.price_low || 0).toLocaleString() + ' — $' + (data.price_high || 0).toLocaleString();
   document.getElementById('res-cy').textContent = (data.cy_estimate || 0) + ' CY';
@@ -783,6 +792,7 @@ function newEstimate() {
   document.getElementById('upload-section').style.display = 'block';
   document.getElementById('photo-count').textContent = '0 / 30 photos';
   document.getElementById('submit-btn').disabled = true;
+  document.getElementById('estimate-name').value = '';
   document.getElementById('cust-name').value = '';
   document.getElementById('cust-email').value = '';
   document.getElementById('cust-phone').value = '';

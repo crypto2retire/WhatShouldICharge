@@ -696,6 +696,10 @@
   <div class="card" id="upload-card">
     <div class="card-title">Upload Photos</div>
 
+    <div style="margin-bottom:16px;">
+      <input type="text" id="estimate-name" placeholder="Estimate name (e.g. 123 Main St, Smith garage cleanout)" style="width:100%;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.95rem;" maxlength="100">
+    </div>
+
     <div id="drop-zone" role="button" tabindex="0" aria-label="Upload photos. Drop photos here or click to upload.">
       <div class="upload-icon" aria-hidden="true">📷</div>
       <div class="upload-label">Drop photos here or click to upload</div>
@@ -767,6 +771,7 @@
   <section id="results" aria-label="Estimate Results">
     <div id="ref-photos" class="ref-photos" style="display:none;"></div>
     <div class="price-banner">
+      <div class="label" id="res-job-name" style="display:none;font-size:1.1rem;font-weight:600;margin-bottom:4px;"></div>
       <div class="label">Estimated Price Range</div>
       <div class="price-range" id="res-price"></div>
       <div class="price-meta">
@@ -1146,6 +1151,7 @@ async function submitEstimate() {
   const rooms = photos.map(p => p.room);
   photos.forEach(p => formData.append('files', p.file));
   formData.append('rooms', JSON.stringify(rooms));
+  formData.append('estimate_name', document.getElementById('estimate-name').value.trim());
 
   const hasTruck = photos.some(p => p.room === 'Truck Load');
   if (hasTruck && truckLoadPct) {
@@ -1270,6 +1276,11 @@ function showResults(data) {
   excludedItems = new Set();
   document.getElementById('recalc-btn').style.display = 'none';
   renderRefPhotos();
+
+  var estName = data.estimate_name || document.getElementById('estimate-name').value.trim();
+  var jobNameEl = document.getElementById('res-job-name');
+  if (estName) { jobNameEl.textContent = estName; jobNameEl.style.display = 'block'; }
+  else { jobNameEl.style.display = 'none'; }
 
   var priceLow = data.price_low || 0;
   var priceHigh = data.price_high || 0;
@@ -1607,15 +1618,20 @@ async function loadHistory() {
       var date = est.created_at ? new Date(est.created_at) : null;
       var dateStr = date ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
       var custStr = est.customer_name || '';
+      var nameStr = est.estimate_name || '';
 
       var div = document.createElement('div');
       div.className = 'history-item';
       div.setAttribute('role', 'button');
       div.setAttribute('tabindex', '0');
+      var metaParts = [];
+      if (nameStr) metaParts.push('<strong>' + esc(nameStr) + '</strong>');
+      metaParts.push((est.photos_count || 0) + ' photo' + ((est.photos_count || 0) !== 1 ? 's' : ''));
+      if (custStr) metaParts.push(esc(custStr));
       div.innerHTML =
         '<div class="history-left">' +
           '<div class="history-price">$' + pLow.toLocaleString() + ' – $' + pHigh.toLocaleString() + '</div>' +
-          '<div class="history-meta">' + (est.photos_count || 0) + ' photo' + ((est.photos_count || 0) !== 1 ? 's' : '') + (custStr ? ' &middot; ' + esc(custStr) : '') + '</div>' +
+          '<div class="history-meta">' + metaParts.join(' &middot; ') + '</div>' +
         '</div>' +
         '<div class="history-right">' +
           '<div class="history-cy">' + (est.cy_estimate || 0) + ' CY</div>' +
@@ -1653,12 +1669,17 @@ async function openDetail(id) {
     var jobType = result.job_type || 'standard';
     var badgeLabels = { standard: 'Standard', premium: 'Premium', hoarder: 'Hoarder', truck_load: 'Truck Load' };
 
-    document.getElementById('detail-info').innerHTML =
+    var infoHtml = '';
+    if (data.estimate_name) {
+      infoHtml += '<div class="detail-info-item" style="grid-column:1/-1;"><div class="lbl">Job Name</div><div class="val" style="font-weight:600;">' + esc(data.estimate_name) + '</div></div>';
+    }
+    infoHtml +=
       '<div class="detail-info-item"><div class="lbl">Date</div><div class="val">' + dateStr + '</div></div>' +
       '<div class="detail-info-item"><div class="lbl">Cubic Yards</div><div class="val">' + (data.cy_estimate || 0) + ' CY</div></div>' +
       '<div class="detail-info-item"><div class="lbl">Photos</div><div class="val">' + (data.photos_count || 0) + '</div></div>' +
       '<div class="detail-info-item"><div class="lbl">Confidence</div><div class="val">' + (confidence || '—') + '</div></div>' +
       '<div class="detail-info-item"><div class="lbl">Job Type</div><div class="val">' + (badgeLabels[jobType] || jobType) + '</div></div>';
+    document.getElementById('detail-info').innerHTML = infoHtml;
 
     var items = result.items || [];
     var normalItems = items.filter(function(i) { return !i.is_special; });

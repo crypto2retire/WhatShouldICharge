@@ -196,6 +196,7 @@ class Estimate(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, default=0, index=True)
     team_member_id = Column(Integer, default=0, index=True)
+    estimate_name = Column(String, default="")
     customer_name = Column(String, default="")
     customer_email = Column(String, default="")
     customer_phone = Column(String, default="")
@@ -238,6 +239,7 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN customer_email TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN customer_phone TEXT DEFAULT ''",
             "ALTER TABLE item_reference_library ADD COLUMN dimensions TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN estimate_name TEXT DEFAULT ''",
         ]
         for stmt in alter_statements:
             try:
@@ -1388,6 +1390,7 @@ async def create_estimate(
     files: list[UploadFile] = File(...),
     rooms: str = Form(default="[]"),
     truck_load_pct: Optional[float] = Form(default=None),
+    estimate_name: str = Form(default=""),
 ):
     user = await require_user(request)
     cleanup_expired_jobs()
@@ -1469,6 +1472,7 @@ async def create_estimate(
         "message": "Analyzing photos...",
         "result": None,
         "user_id": user.id,
+        "estimate_name": estimate_name.strip(),
         "created_at": datetime.utcnow(),
     }
 
@@ -1591,6 +1595,7 @@ async def run_estimate(
             est = Estimate(
                 user_id=user.id,
                 team_member_id=job.get("team_member_id", 0),
+                estimate_name=job.get("estimate_name", ""),
                 customer_name=job.get("customer_name", ""),
                 customer_email=job.get("customer_email", ""),
                 customer_phone=job.get("customer_phone", ""),
@@ -1625,6 +1630,7 @@ async def run_estimate(
 
         resp = {
             "id": estimate_id,
+            "estimate_name": job.get("estimate_name", ""),
             "price_low": price_low,
             "price_high": price_high,
             "cy_estimate": cy_mid,
@@ -1814,6 +1820,7 @@ async def get_estimates(request: Request):
                 "price_low": e.price_low,
                 "price_high": e.price_high,
                 "cy_estimate": e.cy_estimate,
+                "estimate_name": e.estimate_name or "",
                 "customer_name": e.customer_name or "",
                 "customer_email": e.customer_email or "",
             }
@@ -1844,6 +1851,7 @@ async def get_estimate_detail(request: Request, estimate_id: int):
             "price_low": e.price_low,
             "price_high": e.price_high,
             "cy_estimate": e.cy_estimate,
+            "estimate_name": e.estimate_name or "",
             "customer_name": e.customer_name or "",
             "customer_email": e.customer_email or "",
             "customer_phone": e.customer_phone or "",
@@ -2217,6 +2225,7 @@ async def team_create_estimate(
     files: list[UploadFile] = File(...),
     rooms: str = Form(default="[]"),
     truck_load_pct: Optional[float] = Form(default=None),
+    estimate_name: str = Form(default=""),
     customer_name: str = Form(default=""),
     customer_email: str = Form(default=""),
     customer_phone: str = Form(default=""),
@@ -2290,6 +2299,7 @@ async def team_create_estimate(
         "result": None,
         "user_id": owner.id,
         "team_member_id": member.id,
+        "estimate_name": estimate_name.strip(),
         "customer_name": customer_name,
         "customer_email": customer_email,
         "customer_phone": customer_phone,
@@ -2342,6 +2352,7 @@ async def team_estimates(request: Request):
             {"id": e.id, "created_at": e.created_at.isoformat() if e.created_at else None,
              "photos_count": e.photos_count, "price_low": e.price_low,
              "price_high": e.price_high, "cy_estimate": e.cy_estimate,
+             "estimate_name": e.estimate_name or "",
              "customer_name": e.customer_name}
             for e in estimates
         ]
@@ -2398,6 +2409,8 @@ def generate_estimate_pdf(estimate, user, items, special_items):
         ["Estimate #:", str(estimate.id), "Date:", estimate.created_at.strftime("%B %d, %Y") if estimate.created_at else "N/A"],
         ["Photos:", str(estimate.photos_count or 0), "Volume:", f"{estimate.cy_estimate or 0} CY"],
     ]
+    if estimate.estimate_name:
+        info_data.append(["Job Name:", estimate.estimate_name, "", ""])
     if estimate.customer_name:
         info_data.append(["Customer:", estimate.customer_name, "", ""])
 

@@ -686,6 +686,7 @@
     <a class="nav-link" id="nav-admin-link" href="/admin" style="display:none;background:#f59e0b;color:#000;padding:4px 14px;border-radius:6px;font-weight:700;font-size:0.8rem;text-decoration:none;">Admin Dashboard</a>
     <span class="nav-company" id="nav-company-name"></span>
     <span class="nav-estimates" id="nav-estimates"></span>
+    <a class="nav-link" id="nav-settings" role="button" tabindex="0" title="Settings" style="cursor:pointer;font-size:1.1rem;">&#9881;</a>
     <a class="nav-link" id="nav-logout" role="button" tabindex="0">Logout</a>
   </div>
 </nav>
@@ -876,6 +877,64 @@
     </div>
   </div>
 
+  <!-- Settings Modal -->
+  <div id="settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:420px;width:90%;max-height:80vh;overflow-y:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h3 style="margin:0;color:var(--text);font-size:1.1rem;">Settings</h3>
+        <button id="settings-close" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;">&times;</button>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">Company Name</label>
+        <input type="text" id="set-company-name" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;">
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:14px;">
+        <div style="flex:1;">
+          <label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">City</label>
+          <input type="text" id="set-city" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;">
+        </div>
+        <div style="flex:1;">
+          <label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">State</label>
+          <input type="text" id="set-state" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;" maxlength="2" placeholder="WI">
+        </div>
+      </div>
+
+      <hr style="border-color:var(--border);margin:18px 0;">
+      <div style="font-size:0.85rem;color:var(--text);font-weight:600;margin-bottom:12px;">Pricing</div>
+
+      <div style="display:flex;gap:10px;margin-bottom:14px;">
+        <div style="flex:1;">
+          <label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">Standard $/CY (Low)</label>
+          <input type="number" id="set-rate-low" step="0.01" min="0" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;">
+        </div>
+        <div style="flex:1;">
+          <label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">Standard $/CY (High)</label>
+          <input type="number" id="set-rate-high" step="0.01" min="0" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:14px;">
+        <div style="flex:1;">
+          <label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">Premium $/CY</label>
+          <input type="number" id="set-rate-premium" step="0.01" min="0" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;">
+        </div>
+        <div style="flex:1;">
+          <label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">Minimum Charge ($)</label>
+          <input type="number" id="set-min-charge" step="0.01" min="0" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;">
+        </div>
+      </div>
+      <div style="font-size:0.75rem;color:var(--muted);margin-bottom:18px;">Minimum charge: estimates will never quote below this amount.</div>
+
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">Truck Capacity (CY)</label>
+        <input type="number" id="set-truck-capacity" step="0.1" min="1" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;">
+      </div>
+
+      <button id="settings-save" style="width:100%;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-weight:700;font-size:0.9rem;cursor:pointer;">Save Settings</button>
+      <div id="settings-msg" style="text-align:center;font-size:0.8rem;margin-top:8px;color:var(--accent);display:none;"></div>
+    </div>
+  </div>
+
 </main>
 
 <script>
@@ -912,6 +971,73 @@ document.getElementById('nav-logout').addEventListener('click', async () => {
   await fetch('/api/auth/logout', { method: 'POST' });
   window.location.href = '/login';
 });
+
+// Settings modal
+(function() {
+  var modal = document.getElementById('settings-modal');
+  var openBtn = document.getElementById('nav-settings');
+  var closeBtn = document.getElementById('settings-close');
+  var saveBtn = document.getElementById('settings-save');
+  var msg = document.getElementById('settings-msg');
+
+  function openSettings() {
+    if (!currentUser) return;
+    document.getElementById('set-company-name').value = currentUser.company_name || '';
+    document.getElementById('set-city').value = currentUser.company_city || '';
+    document.getElementById('set-state').value = currentUser.company_state || '';
+    document.getElementById('set-rate-low').value = currentUser.price_per_cy_low || 35;
+    document.getElementById('set-rate-high').value = currentUser.price_per_cy_high || 40;
+    document.getElementById('set-rate-premium').value = currentUser.price_per_cy_premium || 55;
+    document.getElementById('set-min-charge').value = currentUser.min_charge || 75;
+    document.getElementById('set-truck-capacity').value = currentUser.truck_capacity_cy || 16;
+    msg.style.display = 'none';
+    modal.style.display = 'flex';
+  }
+
+  function closeSettings() { modal.style.display = 'none'; }
+
+  openBtn.addEventListener('click', openSettings);
+  closeBtn.addEventListener('click', closeSettings);
+  modal.addEventListener('click', function(e) { if (e.target === modal) closeSettings(); });
+
+  saveBtn.addEventListener('click', async function() {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+    try {
+      var body = {
+        company_name: document.getElementById('set-company-name').value,
+        company_city: document.getElementById('set-city').value,
+        company_state: document.getElementById('set-state').value,
+        price_per_cy_low: parseFloat(document.getElementById('set-rate-low').value) || 35,
+        price_per_cy_high: parseFloat(document.getElementById('set-rate-high').value) || 40,
+        price_per_cy_premium: parseFloat(document.getElementById('set-rate-premium').value) || 55,
+        min_charge: parseFloat(document.getElementById('set-min-charge').value) || 75,
+        truck_capacity_cy: parseFloat(document.getElementById('set-truck-capacity').value) || 16,
+      };
+      var resp = await fetch('/api/settings', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      var result = await resp.json();
+      if (result.ok) {
+        // Update local user object
+        Object.assign(currentUser, result);
+        document.getElementById('nav-company-name').textContent = result.company_name || currentUser.email;
+        msg.textContent = 'Settings saved!';
+        msg.style.color = 'var(--accent)';
+        msg.style.display = 'block';
+        setTimeout(function() { msg.style.display = 'none'; }, 2000);
+      } else {
+        msg.textContent = 'Error saving settings';
+        msg.style.color = '#ef4444';
+        msg.style.display = 'block';
+      }
+    } catch(e) {
+      msg.textContent = 'Error: ' + e.message;
+      msg.style.color = '#ef4444';
+      msg.style.display = 'block';
+    }
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save Settings';
+  });
+})();
 
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');

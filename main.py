@@ -300,157 +300,112 @@ async def init_db():
 
 
 SEED_ITEMS = [
-    ("king mattress", "furniture", 2.5, True, 25.0, "76×80×11 in"),
-    ("queen mattress", "furniture", 2.0, True, 25.0, "60×80×11 in"),
-    ("full mattress", "furniture", 1.5, True, 25.0, "54×75×11 in"),
-    ("twin mattress", "furniture", 1.5, True, 25.0, "38×75×11 in"),
-    ("box spring", "furniture", 1.5, True, 25.0, "60×80×9 in"),
-    ("large sectional sofa", "furniture", 5.0, False, 0, "120×90×36 in"),
-    ("sofa", "furniture", 3.5, False, 0, "84×36×34 in"),
-    ("loveseat", "furniture", 2.0, False, 0, "60×36×34 in"),
-    ("recliner", "furniture", 1.5, False, 0, "36×38×40 in"),
-    ("armchair", "furniture", 1.2, False, 0, "32×34×34 in"),
-    ("king bed frame", "furniture", 3.0, False, 0, "80×76×14 in"),
-    ("queen bed frame", "furniture", 2.5, False, 0, "80×60×14 in"),
-    ("twin bed frame", "furniture", 1.5, False, 0, "75×38×14 in"),
-    ("large dresser", "furniture", 2.0, False, 0, "60×18×34 in"),
-    ("small dresser", "furniture", 1.0, False, 0, "36×18×30 in"),
-    ("nightstand", "furniture", 0.5, False, 0, "24×16×26 in"),
-    ("coffee table", "furniture", 0.8, False, 0, "48×24×18 in"),
-    ("dining table large", "furniture", 3.0, False, 0, "72×42×30 in"),
-    ("dining table small", "furniture", 1.5, False, 0, "48×30×30 in"),
-    ("dining chair", "furniture", 0.4, False, 0, "18×20×38 in"),
-    ("large workbench", "furniture", 4.5, False, 0, "96×30×36 in"),
-    ("small workbench", "furniture", 2.0, False, 0, "60×24×34 in"),
-    ("bookshelf large", "furniture", 1.5, False, 0, "36×12×72 in"),
-    ("bookshelf small", "furniture", 0.8, False, 0, "30×10×48 in"),
-    ("desk large", "furniture", 2.5, False, 0, "60×30×30 in"),
-    ("desk small", "furniture", 1.2, False, 0, "42×24×30 in"),
-    ("refrigerator large", "appliance", 2.5, False, 0, "36×30×70 in"),
-    ("refrigerator small", "appliance", 1.5, False, 0, "28×28×60 in"),
-    ("washing machine", "appliance", 2.0, False, 0, "27×27×38 in"),
-    ("dryer", "appliance", 2.0, False, 0, "27×29×38 in"),
-    ("dishwasher", "appliance", 1.5, False, 0, "24×24×35 in"),
-    ("stove", "appliance", 2.0, False, 0, "30×26×36 in"),
-    ("microwave large", "appliance", 0.5, False, 0, "24×18×14 in"),
-    ("microwave small", "appliance", 0.3, False, 0, "18×14×11 in"),
-    ("air conditioner window unit", "appliance", 0.8, False, 0, "24×20×16 in"),
-    ("dehumidifier", "appliance", 0.6, False, 0, "16×12×24 in"),
-    ("water heater", "appliance", 1.5, False, 0, "22×22×54 in"),
-    ("large flat screen tv 55+", "electronics", 0.6, True, 25.0, "49×4×29 in"),
-    ("medium flat screen tv 32-54", "electronics", 0.4, True, 25.0, "37×3×22 in"),
-    ("small flat screen tv under 32", "electronics", 0.25, True, 25.0, "28×3×17 in"),
-    ("crt television", "electronics", 0.8, True, 25.0, "24×20×20 in"),
-    ("desktop computer tower", "electronics", 0.2, False, 0, "18×8×17 in"),
-    ("monitor", "electronics", 0.2, False, 0, "24×8×18 in"),
-    ("printer large", "electronics", 0.3, False, 0, "20×18×14 in"),
+    # Volumes audited 2026-03-12. Calibrated against: 33-gal bag=0.15 CY, contractor bag=0.30 CY.
+    # 1 CY = 46,656 cubic inches = 27 cubic feet.
+    # Mattresses & bedding
+    ("king mattress", "furniture", 1.50, True, 25.0, "76×80×11 in"),
+    ("queen mattress", "furniture", 1.25, True, 25.0, "60×80×11 in"),
+    ("full mattress", "furniture", 1.00, True, 25.0, "54×75×11 in"),
+    ("twin mattress", "furniture", 0.75, True, 25.0, "38×75×11 in"),
+    ("box spring", "furniture", 1.00, True, 25.0, "60×80×9 in"),
+    # Seating
+    ("large sectional sofa", "furniture", 5.50, False, 0, "120×90×36 in"),
+    ("sofa", "furniture", 2.00, False, 0, "84×36×34 in"),
+    ("loveseat", "furniture", 1.50, False, 0, "60×36×34 in"),
+    ("recliner", "furniture", 1.25, False, 0, "36×38×40 in"),
+    ("armchair", "furniture", 0.75, False, 0, "32×34×34 in"),
+    # Bed frames
+    ("king bed frame", "furniture", 1.50, False, 0, "80×76×14 in"),
+    ("queen bed frame", "furniture", 1.25, False, 0, "80×60×14 in"),
+    ("twin bed frame", "furniture", 0.75, False, 0, "75×38×14 in"),
+    # Bedroom furniture
+    ("large dresser", "furniture", 1.25, False, 0, "60×18×34 in"),
+    ("small dresser", "furniture", 0.75, False, 0, "36×18×30 in"),
+    ("nightstand", "furniture", 0.25, False, 0, "24×16×26 in"),
+    # Tables
+    ("coffee table", "furniture", 0.50, False, 0, "48×24×18 in"),
+    ("dining table large", "furniture", 1.75, False, 0, "72×42×30 in"),
+    ("dining table small", "furniture", 0.75, False, 0, "48×30×30 in"),
+    ("dining chair", "furniture", 0.25, False, 0, "18×20×38 in"),
+    # Workbenches & desks
+    ("large workbench", "furniture", 2.50, False, 0, "96×30×36 in"),
+    ("small workbench", "furniture", 1.25, False, 0, "60×24×34 in"),
+    ("bookshelf large", "furniture", 0.75, False, 0, "36×12×72 in"),
+    ("bookshelf small", "furniture", 0.35, False, 0, "30×10×48 in"),
+    ("desk large", "furniture", 1.25, False, 0, "60×30×30 in"),
+    ("desk small", "furniture", 0.75, False, 0, "42×24×30 in"),
+    # Appliances
+    ("refrigerator large", "appliance", 2.00, False, 0, "36×30×70 in"),
+    ("refrigerator small", "appliance", 1.25, False, 0, "28×28×60 in"),
+    ("washing machine", "appliance", 1.00, False, 0, "27×27×38 in"),
+    ("dryer", "appliance", 1.00, False, 0, "27×29×38 in"),
+    ("dishwasher", "appliance", 0.75, False, 0, "24×24×35 in"),
+    ("stove", "appliance", 1.00, False, 0, "30×26×36 in"),
+    ("microwave large", "appliance", 0.25, False, 0, "24×18×14 in"),
+    ("microwave small", "appliance", 0.15, False, 0, "18×14×11 in"),
+    ("air conditioner window unit", "appliance", 0.35, False, 0, "24×20×16 in"),
+    ("dehumidifier", "appliance", 0.25, False, 0, "16×12×24 in"),
+    ("water heater", "appliance", 0.75, False, 0, "22×22×54 in"),
+    # Electronics
+    ("large flat screen tv 55+", "electronics", 0.50, True, 25.0, "49×4×29 in"),
+    ("medium flat screen tv 32-54", "electronics", 0.35, True, 25.0, "37×3×22 in"),
+    ("small flat screen tv under 32", "electronics", 0.20, True, 25.0, "28×3×17 in"),
+    ("crt television", "electronics", 0.50, True, 25.0, "24×20×20 in"),
+    ("desktop computer tower", "electronics", 0.15, False, 0, "18×8×17 in"),
+    ("monitor", "electronics", 0.20, False, 0, "24×8×18 in"),
+    ("printer large", "electronics", 0.20, False, 0, "20×18×14 in"),
+    # Boxes & containers
     ("large cardboard box", "debris", 0.15, False, 0, "24×18×18 in"),
     ("medium cardboard box", "debris", 0.10, False, 0, "18×14×14 in"),
-    ("small cardboard box", "debris", 0.06, False, 0, "12×12×12 in"),
-    ("large plastic tote with lid", "debris", 0.25, False, 0, "30×20×16 in"),
-    ("small plastic tote", "debris", 0.15, False, 0, "22×16×12 in"),
-    ("large trash bag full", "debris", 0.15, False, 0, "24×24×30 in"),
-    ("small trash bag full", "debris", 0.08, False, 0, "18×18×24 in"),
-    ("plastic outdoor chair", "outdoor", 0.5, False, 0, "22×24×34 in"),
-    ("metal outdoor chair", "outdoor", 0.5, False, 0, "22×24×34 in"),
-    ("outdoor dining set 4 chairs table", "outdoor", 4.0, False, 0, "48×48×30 in + 4 chairs"),
-    ("plastic outdoor table", "outdoor", 0.8, False, 0, "36×36×28 in"),
-    ("riding lawn mower", "outdoor", 4.0, False, 0, "66×42×44 in"),
-    ("push lawn mower", "outdoor", 1.0, False, 0, "56×22×42 in"),
-    ("gas grill large", "outdoor", 1.5, False, 0, "56×22×44 in"),
-    ("gas grill small", "outdoor", 0.8, False, 0, "40×18×38 in"),
-    ("trampoline", "outdoor", 5.0, False, 0, "144 in diameter × 36 in tall"),
-    ("swing set", "outdoor", 6.0, False, 0, "144×96×84 in"),
-    ("hot tub", "outdoor", 15.0, False, 0, "84×84×36 in"),
-    ("above ground pool", "outdoor", 8.0, False, 0, "180 in diameter × 52 in tall"),
+    ("small cardboard box", "debris", 0.05, False, 0, "12×12×12 in"),
+    ("large plastic tote with lid", "debris", 0.20, False, 0, "30×20×16 in"),
+    ("small plastic tote", "debris", 0.10, False, 0, "22×16×12 in"),
+    # Trash bags (calibration anchors — used for scale reference)
+    ("contractor trash bag full", "debris", 0.30, False, 0, "24×24×30 in"),
+    ("standard trash bag full 33 gal", "debris", 0.15, False, 0, "22×20×26 in"),
+    ("small trash bag full", "debris", 0.10, False, 0, "18×18×24 in"),
+    # Outdoor furniture
+    ("plastic outdoor chair", "outdoor", 0.25, False, 0, "22×24×34 in"),
+    ("metal outdoor chair", "outdoor", 0.35, False, 0, "22×24×34 in"),
+    ("outdoor dining set 4 chairs table", "outdoor", 2.50, False, 0, "48×48×30 in + 4 chairs"),
+    ("plastic outdoor table", "outdoor", 0.60, False, 0, "36×36×28 in"),
+    # Outdoor equipment
+    ("riding lawn mower", "outdoor", 3.00, False, 0, "66×42×44 in"),
+    ("push lawn mower", "outdoor", 1.00, False, 0, "56×22×42 in"),
+    ("gas grill large", "outdoor", 1.25, False, 0, "56×22×44 in"),
+    ("gas grill small", "outdoor", 0.75, False, 0, "40×18×38 in"),
+    ("trampoline", "outdoor", 4.00, False, 0, "144 in diameter × 36 in tall"),
+    ("swing set", "outdoor", 6.00, False, 0, "144×96×84 in"),
+    ("hot tub", "outdoor", 6.00, False, 0, "84×84×36 in"),
+    ("above ground pool", "outdoor", 8.00, False, 0, "180 in diameter × 52 in tall"),
+    # Office
     ("4 drawer file cabinet", "other", 0.75, False, 0, "15×25×52 in"),
-    ("2 drawer file cabinet", "other", 0.4, False, 0, "15×25×29 in"),
-    ("lateral file cabinet", "other", 1.0, False, 0, "36×18×28 in"),
-    ("treadmill", "sports", 3.0, False, 0, "72×34×56 in"),
-    ("elliptical", "sports", 2.5, False, 0, "70×28×64 in"),
-    ("stationary bike", "sports", 1.5, False, 0, "42×22×48 in"),
-    ("weight bench", "sports", 1.5, False, 0, "56×26×46 in"),
-    ("weight set with rack", "sports", 3.0, False, 0, "48×24×52 in"),
-    ("ping pong table", "sports", 3.0, False, 0, "108×60×30 in"),
-    ("pool table", "sports", 8.0, False, 0, "100×56×32 in"),
-    ("wheelchair", "medical", 1.0, False, 0, "26×16×36 in"),
-    ("hospital bed", "medical", 4.0, False, 0, "84×36×24 in"),
-    ("walker", "medical", 0.3, False, 0, "22×18×34 in"),
-    ("propane tank large", "hazardous", 0.5, True, 50.0, "12×12×48 in"),
-    ("propane tank small", "hazardous", 0.2, True, 25.0, "12×12×18 in"),
-    ("paint cans box", "hazardous", 0.3, True, 25.0, "18×12×12 in"),
-    ("car battery", "hazardous", 0.1, True, 15.0, "10×7×8 in"),
-    ("tire car", "hazardous", 0.5, True, 15.0, "26 in diameter × 8 in wide"),
-    ("tire truck", "hazardous", 0.8, True, 25.0, "34 in diameter × 12 in wide"),
-    ("lumber pile small", "debris", 1.0, False, 0, "48×24×24 in"),
-    ("lumber pile large", "debris", 3.0, False, 0, "96×24×36 in"),
-    ("drywall sheets", "debris", 0.5, False, 0, "96×48×0.5 in per sheet"),
-    ("carpet room", "debris", 2.0, False, 0, "rolled: 12 ft × 18 in diameter"),
-    # --- Added items: common junk removal encounters ---
-    # Containers & buckets
-    ("5 gallon bucket", "debris", 0.05, False, 0, "12×12×15 in"),
-    ("5 gallon bucket stack", "debris", 0.15, False, 0, "12×12×36 in (stack of 3-4)"),
-    ("rubbermaid storage bin large", "debris", 0.30, False, 0, "36×20×18 in"),
-    ("rubbermaid storage bin medium", "debris", 0.20, False, 0, "28×16×14 in"),
-    # Furniture additions
-    ("futon", "furniture", 2.5, False, 0, "72×36×34 in"),
-    ("ottoman", "furniture", 0.5, False, 0, "24×24×18 in"),
-    ("tv stand", "furniture", 0.8, False, 0, "48×16×20 in"),
-    ("entertainment center", "furniture", 3.0, False, 0, "60×18×48 in"),
-    ("china cabinet", "furniture", 2.5, False, 0, "42×16×72 in"),
-    ("wardrobe armoire", "furniture", 3.0, False, 0, "40×22×72 in"),
-    ("folding table", "furniture", 0.5, False, 0, "72×30×2 in folded"),
-    ("folding chair", "furniture", 0.15, False, 0, "18×20×3 in folded"),
-    ("baby crib", "furniture", 1.5, False, 0, "54×30×36 in"),
-    ("changing table", "furniture", 1.0, False, 0, "36×20×38 in"),
-    ("high chair", "furniture", 0.4, False, 0, "24×22×38 in"),
-    ("bar stool", "furniture", 0.4, False, 0, "16×16×30 in"),
-    ("office chair", "furniture", 0.8, False, 0, "24×24×40 in"),
-    ("patio umbrella", "outdoor", 0.3, False, 0, "6 in diameter × 84 in tall"),
-    # Appliances additions
-    ("chest freezer", "appliance", 2.0, False, 0, "48×28×34 in"),
-    ("upright freezer", "appliance", 2.0, False, 0, "30×28×60 in"),
-    ("space heater", "appliance", 0.15, False, 0, "12×8×16 in"),
-    ("vacuum cleaner", "appliance", 0.3, False, 0, "14×12×44 in"),
-    ("shop vac", "appliance", 0.4, False, 0, "18×18×24 in"),
-    # Electronics additions
-    ("printer small", "electronics", 0.15, False, 0, "16×12×8 in"),
-    ("laptop", "electronics", 0.05, False, 0, "14×10×1 in"),
-    ("speakers large", "electronics", 0.3, False, 0, "12×12×36 in"),
-    ("speakers small", "electronics", 0.1, False, 0, "6×6×10 in"),
-    ("cable box or router", "electronics", 0.02, False, 0, "10×8×2 in"),
-    # Outdoor additions
-    ("wheelbarrow", "outdoor", 0.8, False, 0, "60×26×26 in"),
-    ("garden hose reel", "outdoor", 0.3, False, 0, "18×18×18 in"),
-    ("ladder 6ft", "outdoor", 0.5, False, 0, "72×20×4 in folded"),
-    ("ladder extension", "outdoor", 1.0, False, 0, "144×18×6 in"),
-    ("patio chair cushion", "outdoor", 0.1, False, 0, "20×20×4 in"),
-    ("kiddie pool", "outdoor", 0.5, False, 0, "48 in diameter × 10 in tall"),
-    ("bicycle adult", "outdoor", 1.5, False, 0, "68×24×40 in"),
-    ("bicycle child", "outdoor", 0.8, False, 0, "48×18×32 in"),
-    ("scooter", "outdoor", 0.3, False, 0, "36×14×40 in"),
-    # Debris & misc additions
-    ("concrete chunks pile", "debris", 2.0, False, 0, "36×24×18 in pile"),
-    ("brick pile", "debris", 1.0, False, 0, "24×18×12 in pile"),
-    ("roofing shingles bundle", "debris", 0.3, False, 0, "36×12×6 in per bundle"),
-    ("insulation roll", "debris", 0.5, False, 0, "24×15 in × 48 in long"),
-    ("window frame", "debris", 0.3, False, 0, "36×24×4 in"),
-    ("door slab", "debris", 0.4, False, 0, "80×32×1.75 in"),
-    ("toilet", "other", 1.0, False, 0, "28×18×28 in"),
-    ("bathroom vanity", "other", 1.0, False, 0, "36×21×34 in"),
-    ("kitchen cabinet section", "other", 0.8, False, 0, "36×24×30 in"),
-    ("shelving unit metal", "other", 1.0, False, 0, "48×18×72 in"),
-    ("plastic shelving unit", "other", 0.5, False, 0, "36×14×60 in"),
-    ("safe small", "other", 0.3, False, 0, "14×14×20 in"),
-    ("safe large", "other", 1.5, False, 0, "24×24×36 in"),
-    ("piano upright", "furniture", 6.0, False, 0, "58×24×48 in"),
-    ("piano grand", "furniture", 12.0, False, 0, "72×60×40 in"),
-    # Hazardous additions
-    ("fluorescent light tube 4ft", "hazardous", 0.05, True, 10.0, "48×1.5 in diameter"),
-    ("motor oil jugs", "hazardous", 0.1, True, 15.0, "8×4×10 in per jug"),
-    # Window screens (common false TV detections)
-    ("window screen", "debris", 0.1, False, 0, "36×24×1 in"),
-    ("storm window", "debris", 0.15, False, 0, "36×24×2 in"),
+    ("2 drawer file cabinet", "other", 0.40, False, 0, "15×25×29 in"),
+    ("lateral file cabinet", "other", 0.75, False, 0, "36×18×28 in"),
+    # Exercise equipment
+    ("treadmill", "sports", 2.50, False, 0, "72×34×56 in"),
+    ("elliptical", "sports", 2.50, False, 0, "70×28×64 in"),
+    ("stationary bike", "sports", 1.00, False, 0, "42×22×48 in"),
+    ("weight bench", "sports", 1.25, False, 0, "56×26×46 in"),
+    ("weight set with rack", "sports", 2.00, False, 0, "48×24×52 in"),
+    ("ping pong table", "sports", 2.50, False, 0, "108×60×30 in"),
+    ("pool table", "sports", 5.00, False, 0, "100×56×32 in"),
+    # Medical
+    ("wheelchair", "medical", 0.50, False, 0, "26×16×36 in"),
+    ("hospital bed", "medical", 2.50, False, 0, "84×36×24 in"),
+    ("walker", "medical", 0.25, False, 0, "22×18×34 in"),
+    # Hazardous
+    ("propane tank large", "hazardous", 0.25, True, 50.0, "12×12×48 in"),
+    ("propane tank small", "hazardous", 0.10, True, 25.0, "12×12×18 in"),
+    ("paint cans box", "hazardous", 0.15, True, 25.0, "18×12×12 in"),
+    ("car battery", "hazardous", 0.10, True, 15.0, "10×7×8 in"),
+    ("tire car", "hazardous", 0.25, True, 15.0, "26 in diameter × 8 in wide"),
+    ("tire truck", "hazardous", 0.35, True, 25.0, "34 in diameter × 12 in wide"),
+    # Construction debris
+    ("lumber pile small", "debris", 0.75, False, 0, "48×24×24 in"),
+    ("lumber pile large", "debris", 1.75, False, 0, "96×24×36 in"),
+    ("drywall sheets", "debris", 0.15, False, 0, "96×48×0.5 in per sheet"),
+    ("carpet room", "debris", 1.25, False, 0, "rolled: 12 ft × 18 in diameter"),
 ]
 
 
@@ -954,6 +909,57 @@ async def auth_me(request: Request):
         "truck_capacity_cy": user.truck_capacity_cy,
         "is_admin": bool(user.is_admin),
     }
+
+
+@app.put("/api/settings")
+async def update_settings(request: Request):
+    user = await require_user(request)
+    body = await request.json()
+
+    allowed_fields = {
+        "company_name": str,
+        "company_city": str,
+        "company_state": str,
+        "price_per_cy_low": float,
+        "price_per_cy_high": float,
+        "price_per_cy_premium": float,
+        "min_charge": float,
+        "truck_capacity_cy": float,
+    }
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == user.id))
+        u = result.scalar_one_or_none()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        updated = []
+        for field, typ in allowed_fields.items():
+            if field in body:
+                val = body[field]
+                if typ == float:
+                    val = float(val) if val not in (None, "") else None
+                elif typ == str:
+                    val = str(val).strip()
+                setattr(u, field, val)
+                updated.append(field)
+
+        if updated:
+            await db.commit()
+            await db.refresh(u)
+
+        return {
+            "ok": True,
+            "updated": updated,
+            "company_name": u.company_name,
+            "company_city": u.company_city,
+            "company_state": u.company_state,
+            "price_per_cy_low": u.price_per_cy_low,
+            "price_per_cy_high": u.price_per_cy_high,
+            "price_per_cy_premium": u.price_per_cy_premium,
+            "min_charge": u.min_charge,
+            "truck_capacity_cy": u.truck_capacity_cy,
+        }
 
 
 @app.get("/api/library")

@@ -1102,7 +1102,7 @@ async def library_stats(request: Request):
         }
 
 
-def calculate_price(result_data: dict, rate_low=35.0, rate_high=40.0, rate_premium=55.0, min_charge=75.0) -> tuple:
+def calculate_price(result_data: dict, rate_low=35.0, rate_high=40.0, rate_premium=55.0, min_charge=75.0, market_rates=None) -> tuple:
     job_type = result_data.get("job_type", "standard")
     totals = result_data.get("totals", {})
     conditions = result_data.get("conditions", [])
@@ -1120,12 +1120,27 @@ def calculate_price(result_data: dict, rate_low=35.0, rate_high=40.0, rate_premi
         or cy_mid > 10
     )
 
-    if is_premium:
-        r_low = rate_premium
-        r_high = rate_premium
+    # If live market rates are available, blend them with user rates
+    # Market rates inform what competitors charge; user rates are the floor
+    if market_rates and market_rates.get("source") == "live_market_search":
+        mkt_low = market_rates.get("low", rate_low)
+        mkt_high = market_rates.get("high", rate_high)
+        mkt_premium = market_rates.get("premium", rate_premium)
+        # Use the higher of user rate or market rate (don't underprice the market)
+        eff_low = max(rate_low, mkt_low)
+        eff_high = max(rate_high, mkt_high)
+        eff_premium = max(rate_premium, mkt_premium)
     else:
-        r_low = rate_low
-        r_high = rate_high
+        eff_low = rate_low
+        eff_high = rate_high
+        eff_premium = rate_premium
+
+    if is_premium:
+        r_low = eff_premium
+        r_high = eff_premium
+    else:
+        r_low = eff_low
+        r_high = eff_high
 
     price_low = cy_low * r_low
     price_high = cy_high * r_high
@@ -1166,48 +1181,61 @@ def compress_image(image_bytes: bytes, max_size_kb: int = 1000) -> bytes:
 
 
 async def get_market_rates(city: str, state: str) -> dict:
+    default = {"low": 35, "high": 40, "premium": 55, "source": "default_rates"}
     if not city or not state:
-        return {"low": 35, "high": 40, "premium": 55, "source": "default_rates"}
+        return default
 
     tavily_key = os.environ.get("TAVILY_API_KEY")
     if not tavily_key:
-        return {"low": 35, "high": 40, "premium": 55, "source": "default_rates"}
+        return default
 
     try:
         async with httpx.AsyncClient() as client:
+            # Search for local junk removal pricing
             response = await client.post(
                 "https://api.tavily.com/search",
                 json={
                     "api_key": tavily_key,
-                    "query": f"junk removal prices cost per cubic yard {city} {state} 2024 2025",
+                    "query": f"junk removal prices cost per cubic yard {city} {state} 2025 2026",
                     "search_depth": "basic",
                     "max_results": 5
                 },
                 timeout=8.0
             )
             data = response.json()
-
             content = " ".join([r.get("content", "") for r in data.get("results", [])])
 
+            # Extract $/cubic yard prices with multiple patterns
             cy_prices = re.findall(
-                r'\$(\d+(?:\.\d+)?)\s*(?:per|/)\s*cubic\s*yard',
+                r'\$(\d+(?:\.\d+)?)\s*(?:per|/)\s*(?:cubic\s*yard|cu\.?\s*yd|CY)',
                 content, re.IGNORECASE
             )
+            # Also match "XX dollars per cubic yard"
+            word_prices = re.findall(
+                r'(\d+(?:\.\d+)?)\s*dollars?\s*(?:per|/)\s*(?:cubic\s*yard|cu\.?\s*yd|CY)',
+                content, re.IGNORECASE
+            )
+            all_prices = [float(p) for p in cy_prices + word_prices]
 
-            if cy_prices:
-                prices = [float(p) for p in cy_prices]
-                avg = sum(prices) / len(prices)
+            # Filter out outliers (prices below $15 or above $120 per CY are likely errors)
+            all_prices = [p for p in all_prices if 15 <= p <= 120]
+
+            if all_prices:
+                avg = sum(all_prices) / len(all_prices)
                 return {
                     "low": round(avg * 0.85, 2),
                     "high": round(avg * 1.15, 2),
                     "premium": round(avg * 1.5, 2),
                     "market_avg": round(avg, 2),
-                    "source": "live_market_search"
+                    "source": "live_market_search",
+                    "city": city,
+                    "state": state,
+                    "samples": len(all_prices),
                 }
     except Exception:
         pass
 
-    return {"low": 35, "high": 40, "premium": 55, "source": "default_rates"}
+    return default
 
 
 SYSTEM_PROMPT_BASE = """You are an expert junk removal estimator with years of field experience.
@@ -1740,6 +1768,7 @@ async def run_estimate(
                     result_data["totals"] = totals
 
         market_context = None
+        market_rates = None
         try:
             market_rates = await get_market_rates(user.company_city, user.company_state)
             if market_rates.get("source") == "live_market_search":
@@ -1749,6 +1778,7 @@ async def run_estimate(
                     "market_avg": market_rates.get("market_avg"),
                     "market_low": market_rates.get("low"),
                     "market_high": market_rates.get("high"),
+                    "samples": market_rates.get("samples", 0),
                 }
         except Exception:
             pass
@@ -1759,6 +1789,7 @@ async def run_estimate(
             rate_high=user.price_per_cy_high or 40.0,
             rate_premium=user.price_per_cy_premium or 55.0,
             min_charge=user.min_charge or 75.0,
+            market_rates=market_rates,
         )
 
         async with AsyncSessionLocal() as db:

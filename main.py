@@ -1382,6 +1382,24 @@ ITEM IDENTIFICATION RULES:
   - Solar panels or glass panels (metal frame, grid pattern)
 
   When uncertain: label as "flat rectangular object — verify if TV on site" and set is_special: false. Only flag as TV (is_special: true) when you are confident based on 2+ positive indicators.
+- BED SIZE IDENTIFICATION — COMMON MISIDENTIFICATION ERROR:
+  Beds are frequently mis-sized (e.g., calling a queen a twin). ALWAYS determine bed size by measuring the mattress WIDTH against a nearby anchor. Standard mattress widths:
+  - Twin: 38" wide (just over 3 feet — barely wider than a door frame)
+  - Full: 54" wide (4.5 feet — about 1.5× a standard door width)
+  - Queen: 60" wide (5 feet — nearly twice the width of a twin)
+  - King: 76" wide (6.3 feet — over twice the width of a twin)
+
+  HOW TO VERIFY: Compare the mattress width to the nearest door frame (32-36" wide), wall segment, or baseboard. A queen mattress is roughly TWO door-frame widths. A twin is roughly ONE door-frame width. This difference is visually obvious — if the bed looks significantly wider than a single door, it is NOT a twin.
+
+  If bedding or sheets obscure the edges, look for the bed frame width instead. Captain's beds, platform beds, and storage beds may add 2-4 inches to each side but the mattress width determines the size name.
+
+- BED VARIANTS — classify correctly:
+  - Captain's bed: A bed frame with built-in storage drawers underneath. List as "[size] captain's bed" (e.g., "queen captain's bed"). CY includes the frame + drawers — typically 15-25% more than a standard bed frame of the same size.
+  - Bookcase headboard: A headboard with shelves/storage built in. List as a SEPARATE item from the bed — "bookcase headboard" — not as a dresser or armoire. Typical CY: 0.3-0.5 depending on size. Do NOT misidentify as a tall dresser or armoire.
+  - Platform bed: A low bed frame with no box spring. List as "[size] platform bed". Similar CY to standard bed frame.
+  - Bunk bed: Two bed frames stacked. List as "bunk bed" with combined CY of both frames.
+  - Trundle bed: A bed with a pull-out bed underneath. List as "[size] trundle bed".
+
 - Wheelchairs and medical equipment: note in items, not special fee but flag in notes for crew (may be donateable)
 
 SPECIAL ITEM FLAGGING — set is_special: true for ANY of these (do NOT calculate fees, just flag them):

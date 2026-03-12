@@ -1009,22 +1009,28 @@ document.getElementById('nav-logout').addEventListener('click', async () => {
   var saveBtn = document.getElementById('settings-save');
   var msg = document.getElementById('settings-msg');
 
-  function openSettings() {
+  async function openSettings() {
     if (!currentUser) return;
-    document.getElementById('set-company-name').value = currentUser.company_name || '';
-    document.getElementById('set-city').value = currentUser.company_city || '';
-    document.getElementById('set-state').value = currentUser.company_state || '';
-    document.getElementById('set-rate-low').value = currentUser.price_per_cy_low || 35;
-    document.getElementById('set-rate-high').value = currentUser.price_per_cy_high || 40;
-    document.getElementById('set-rate-premium').value = currentUser.price_per_cy_premium || 55;
-    document.getElementById('set-min-charge').value = currentUser.min_charge || 75;
-    document.getElementById('set-truck-capacity').value = currentUser.truck_capacity_cy || 16;
-    document.getElementById('set-slug').value = currentUser.company_slug || '';
-    document.getElementById('set-phone').value = currentUser.company_phone || '';
-    document.getElementById('set-logo').value = currentUser.company_logo_url || '';
-    updateSlugPreview();
     msg.style.display = 'none';
     modal.style.display = 'flex';
+    try {
+      var resp = await fetch('/api/settings');
+      if (resp.ok) {
+        var s = await resp.json();
+        document.getElementById('set-company-name').value = s.company_name || '';
+        document.getElementById('set-city').value = s.company_city || '';
+        document.getElementById('set-state').value = s.company_state || '';
+        document.getElementById('set-rate-low').value = s.price_per_cy_low;
+        document.getElementById('set-rate-high').value = s.price_per_cy_high;
+        document.getElementById('set-rate-premium').value = s.price_per_cy_premium;
+        document.getElementById('set-min-charge').value = s.min_charge;
+        document.getElementById('set-truck-capacity').value = s.truck_capacity_cy;
+        document.getElementById('set-slug').value = s.company_slug || '';
+        document.getElementById('set-phone').value = s.company_phone || '';
+        document.getElementById('set-logo').value = s.company_logo_url || '';
+        updateSlugPreview();
+      }
+    } catch(e) {}
   }
 
   function closeSettings() { modal.style.display = 'none'; }

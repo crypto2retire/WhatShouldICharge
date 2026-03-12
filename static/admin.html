@@ -643,19 +643,19 @@ async function loadEstimates(page) {
 // My Settings
 async function loadMySettings() {
   try {
-    var resp = await fetch('/api/auth/me');
+    var resp = await fetch('/api/settings');
+    if (!resp.ok) return;
     var d = await resp.json();
-    if (!d.authenticated) return;
     document.getElementById('ms-company-name').value = d.company_name || '';
     document.getElementById('ms-phone').value = d.company_phone || '';
     document.getElementById('ms-city').value = d.company_city || '';
     document.getElementById('ms-state').value = d.company_state || '';
     document.getElementById('ms-logo').value = d.company_logo_url || '';
-    document.getElementById('ms-rate-low').value = d.price_per_cy_low || 35;
-    document.getElementById('ms-rate-high').value = d.price_per_cy_high || 40;
-    document.getElementById('ms-rate-premium').value = d.price_per_cy_premium || 55;
-    document.getElementById('ms-min-charge').value = d.min_charge || 75;
-    document.getElementById('ms-truck').value = d.truck_capacity_cy || 16;
+    document.getElementById('ms-rate-low').value = d.price_per_cy_low;
+    document.getElementById('ms-rate-high').value = d.price_per_cy_high;
+    document.getElementById('ms-rate-premium').value = d.price_per_cy_premium;
+    document.getElementById('ms-min-charge').value = d.min_charge;
+    document.getElementById('ms-truck').value = d.truck_capacity_cy;
     document.getElementById('ms-slug').value = d.company_slug || '';
     updateMsSlugPreview();
   } catch(e) {}

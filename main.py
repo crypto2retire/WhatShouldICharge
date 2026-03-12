@@ -286,6 +286,11 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS company_slug TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS company_phone TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS company_logo_url TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS price_per_cy_low DOUBLE PRECISION DEFAULT 35.0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS price_per_cy_high DOUBLE PRECISION DEFAULT 40.0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS price_per_cy_premium DOUBLE PRECISION DEFAULT 55.0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS min_charge DOUBLE PRECISION DEFAULT 75.0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS truck_capacity_cy DOUBLE PRECISION DEFAULT 16.0",
         ]
     else:
         alter_statements = [
@@ -299,6 +304,11 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN company_slug TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN company_phone TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN company_logo_url TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN price_per_cy_low REAL DEFAULT 35.0",
+            "ALTER TABLE users ADD COLUMN price_per_cy_high REAL DEFAULT 40.0",
+            "ALTER TABLE users ADD COLUMN price_per_cy_premium REAL DEFAULT 55.0",
+            "ALTER TABLE users ADD COLUMN min_charge REAL DEFAULT 75.0",
+            "ALTER TABLE users ADD COLUMN truck_capacity_cy REAL DEFAULT 16.0",
         ]
 
     async with engine.begin() as conn:
@@ -1520,21 +1530,45 @@ async def auth_me(request: Request):
     return {
         "authenticated": True,
         "email": user.email,
-        "company_name": user.company_name,
-        "company_city": user.company_city,
-        "company_state": user.company_state,
+        "company_name": user.company_name or "",
+        "company_city": user.company_city or "",
+        "company_state": user.company_state or "",
         "subscription_tier": user.subscription_tier,
         "estimates_used": user.estimates_used,
         "estimates_limit": user.estimates_limit,
-        "price_per_cy_low": user.price_per_cy_low,
-        "price_per_cy_high": user.price_per_cy_high,
-        "price_per_cy_premium": user.price_per_cy_premium,
-        "min_charge": user.min_charge,
-        "truck_capacity_cy": user.truck_capacity_cy,
+        "price_per_cy_low": user.price_per_cy_low if user.price_per_cy_low is not None else 35.0,
+        "price_per_cy_high": user.price_per_cy_high if user.price_per_cy_high is not None else 40.0,
+        "price_per_cy_premium": user.price_per_cy_premium if user.price_per_cy_premium is not None else 55.0,
+        "min_charge": user.min_charge if user.min_charge is not None else 75.0,
+        "truck_capacity_cy": user.truck_capacity_cy if user.truck_capacity_cy is not None else 16.0,
         "is_admin": bool(user.is_admin),
         "company_slug": user.company_slug or "",
         "company_phone": user.company_phone or "",
         "company_logo_url": user.company_logo_url or "",
+    }
+
+
+@app.get("/api/settings")
+async def get_settings(request: Request):
+    """Return all user settings from the database."""
+    user = await require_user(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == user.id))
+        u = result.scalar_one_or_none()
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "company_name": u.company_name or "",
+        "company_city": u.company_city or "",
+        "company_state": u.company_state or "",
+        "price_per_cy_low": u.price_per_cy_low if u.price_per_cy_low is not None else 35.0,
+        "price_per_cy_high": u.price_per_cy_high if u.price_per_cy_high is not None else 40.0,
+        "price_per_cy_premium": u.price_per_cy_premium if u.price_per_cy_premium is not None else 55.0,
+        "min_charge": u.min_charge if u.min_charge is not None else 75.0,
+        "truck_capacity_cy": u.truck_capacity_cy if u.truck_capacity_cy is not None else 16.0,
+        "company_slug": u.company_slug or "",
+        "company_phone": u.company_phone or "",
+        "company_logo_url": u.company_logo_url or "",
     }
 
 

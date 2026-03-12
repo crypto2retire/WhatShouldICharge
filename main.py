@@ -754,27 +754,42 @@ async def customer_estimate_page(slug: str):
 
     canonical = f"https://whatshouldicharge.app/estimate/{safe_slug}"
 
-    # FAQ content unique per company
+    # --- Rich FAQ content (8 questions, detailed answers, unique per company) ---
+    loc_phrase = f" in {location}" if location else ""
+    contact_phrase = f"call {name} at {phone}" if phone else f"contact {name}"
+
     faq_items = [
         (
-            f"How does {name}'s instant estimate work?",
-            f"Simply upload photos of the items you need removed. Our AI analyzes the images to identify each item, calculate the volume, and provide an accurate price range — all in under 60 seconds."
+            f"How much does junk removal cost in {city or 'my area'}?",
+            f"Junk removal pricing{loc_phrase} typically ranges from $75 for a minimum load to $500 or more for a full truckload. The exact cost depends on the volume of items, the type of materials being removed, and whether any items require special handling such as appliances with refrigerants or electronics that need proper recycling. {name} uses an AI-powered photo estimate system that calculates your specific price based on the actual items in your photos — so you get a personalized quote, not a generic range. Most single-item pickups like a couch or mattress fall between $75 and $150, while full garage cleanouts or estate cleanouts can range from $300 to $600 depending on volume."
         ),
         (
-            "What items can you remove?",
-            f"{name} handles furniture, appliances, electronics, yard waste, construction debris, mattresses, and more. Upload a photo and we'll identify everything for you."
+            f"What is the cheapest way to get rid of junk in {city or 'my area'}?",
+            f"The most affordable option depends on what you're removing and how much of it there is. For small amounts, you could haul items to the local transfer station yourself, but you'll need a truck, pay dump fees, and spend your own time loading and driving. For larger jobs, hiring a professional junk removal service like {name} is often more cost-effective when you factor in your time, vehicle rental, and disposal fees. {name} offers a free photo-based estimate so you can see the exact cost before committing — no surprises. We also handle the sorting, loading, hauling, and responsible disposal so you don't have to."
         ),
         (
-            f"How accurate is the photo estimate?",
-            f"Our AI uses advanced image analysis calibrated against thousands of items. The estimate gives you a reliable price range. Final pricing is confirmed on-site when our crew arrives."
+            f"Does {name} offer same-day junk removal?",
+            f"Yes, {name} offers same-day and next-day junk removal{loc_phrase} based on availability. For the fastest service, {contact_phrase} directly after getting your photo estimate. We understand that junk removal is often time-sensitive — whether you're preparing for a move, finishing a renovation, or just need items gone quickly. Our photo estimate tool gives you a price in under 60 seconds so you can make a decision and book immediately."
         ),
         (
-            f"Is there a minimum charge?",
-            f"Yes, most junk removal jobs have a minimum charge to cover basic truck and labor costs. Your estimate will reflect this if applicable."
+            "What items can't be removed?",
+            f"Most household and commercial items can be removed, but there are some exceptions for safety and regulatory reasons. Items that {name} and most junk removal services cannot accept include hazardous materials (paint, chemicals, solvents, pesticides), asbestos-containing materials, medical waste, and certain types of batteries. Large propane tanks and materials contaminated with biohazards also require specialized disposal services. If you're unsure whether your items qualify, upload a photo and our system will identify anything that may require special handling. We always prioritize safe, legal, and environmentally responsible disposal."
         ),
         (
-            f"How do I schedule a pickup{' in ' + location if location else ''}?",
-            f"After getting your estimate, {'call us at ' + phone + ' to' if phone else 'contact us to'} schedule a pickup at a time that works for you. We offer flexible scheduling to fit your needs."
+            f"How does {name}'s photo estimate work?",
+            f"Our AI-powered photo estimate system uses advanced image recognition to identify every item in your photos, calculate the total volume in cubic yards, and generate an accurate price range — all in under 60 seconds. Here's how it works: you upload one or more photos of the items you need removed. Our AI identifies each item (furniture, appliances, boxes, debris, etc.), measures the approximate dimensions using reference objects in the photo for scale, and calculates the total truck space required. The system then applies {name}'s pricing rates to give you a low-to-high price range. This estimate is based on the same volume-based pricing that professional junk removal companies use industry-wide."
+        ),
+        (
+            f"Is there a minimum charge for junk removal{loc_phrase}?",
+            f"Yes, {name} has a minimum charge that covers the base cost of dispatching a truck and crew to your location. This minimum typically applies to very small jobs — a single item or a few bags of junk. The minimum charge covers labor, fuel, truck operation, and disposal fees. Even for minimum-charge jobs, we handle all the lifting, loading, and hauling. Your photo estimate will automatically show if the minimum charge applies and what the exact amount is, so you'll know the cost before you book."
+        ),
+        (
+            f"Does {name} donate or recycle items?",
+            f"{name} is committed to responsible disposal. Whenever possible, we divert items from landfills by donating usable furniture, clothing, and household goods to local charities and thrift stores{loc_phrase}. Recyclable materials like metal, cardboard, electronics, and appliances are taken to appropriate recycling facilities. Construction debris is sorted for recycling where available. Our goal is to recycle or donate as much as possible from every job. Responsible disposal is not just good for the environment — it's the right thing to do for our community."
+        ),
+        (
+            f"How do I schedule a junk removal pickup{loc_phrase}?",
+            f"Scheduling is simple. Start by uploading photos of your items on this page to get a free instant estimate. Once you see your price range and decide to move forward, {contact_phrase} to book your pickup. We offer flexible scheduling including weekday, evening, and weekend availability{loc_phrase}. On the day of your appointment, our crew will arrive at the scheduled time, confirm the items and pricing with you on-site, then handle all the loading and hauling. You don't need to move anything — just point to what needs to go and we take care of the rest."
         ),
     ]
 
@@ -787,11 +802,25 @@ async def customer_estimate_page(slug: str):
         "@context": "https://schema.org",
         "@type": "LocalBusiness",
         "name": u.company_name or "Junk Removal",
-        "description": f"Professional junk removal services{' in ' + location if location else ''}. Get a free instant estimate.",
+        "description": f"Professional junk removal services{loc_phrase}. Get a free instant AI-powered estimate in under 60 seconds. We remove furniture, appliances, electronics, yard waste, construction debris, and more.",
+        "priceRange": "$$",
         **({"telephone": u.company_phone} if u.company_phone else {}),
         **({"image": u.company_logo_url} if u.company_logo_url else {}),
         **({"areaServed": {"@type": "City", "name": u.company_city, "addressRegion": u.company_state}} if u.company_city else {}),
         "url": canonical,
+        "knowsAbout": ["junk removal", "furniture removal", "appliance removal", "estate cleanout", "construction debris removal", "yard waste removal"],
+    })
+
+    # Speakable schema for voice search
+    jsonld_speakable = json.dumps({
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": title,
+        "url": canonical,
+        "speakable": {
+            "@type": "SpeakableSpecification",
+            "cssSelector": [".quick-facts", ".hero", ".faq-section"]
+        },
     })
 
     logo_html = f'<img src="{logo}" alt="{name}" class="logo">' if logo else ""
@@ -826,6 +855,7 @@ async def customer_estimate_page(slug: str):
   "@type":"FAQPage",
   "mainEntity":{faq_schema}
 }}</script>
+<script type="application/ld+json">{jsonld_speakable}</script>
 <style>
 *{{margin:0;padding:0;box-sizing:border-box}}
 body{{font-family:'Inter',system-ui,sans-serif;background:#f8fafc;color:#1e293b;min-height:100vh;-webkit-font-smoothing:antialiased}}
@@ -912,9 +942,17 @@ details[open] summary::after{{content:"−"}}
 details p{{padding:0 18px 14px;font-size:0.84rem;color:#64748b;line-height:1.6}}
 
 /* Content */
-.content-section{{margin-top:24px;padding:20px;background:#fff;border:1px solid #e2e8f0;border-radius:14px}}
-.content-section h2{{font-size:1rem;font-weight:700;color:#0f172a;margin-bottom:10px}}
-.content-section p{{font-size:0.85rem;color:#64748b;line-height:1.7;margin-bottom:10px}}
+.content-section{{margin-top:20px;padding:22px;background:#fff;border:1px solid #e2e8f0;border-radius:14px}}
+.content-section h2{{font-size:1.05rem;font-weight:700;color:#0f172a;margin-bottom:10px}}
+.content-section p{{font-size:0.85rem;color:#475569;line-height:1.75;margin-bottom:12px}}
+.content-section p:last-child{{margin-bottom:0}}
+
+/* Quick Facts */
+.quick-facts{{margin-top:20px;padding:22px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px}}
+.quick-facts h2{{font-size:1.05rem;font-weight:700;color:#0f172a;margin-bottom:14px}}
+.quick-facts dl{{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:0.85rem}}
+.quick-facts dt{{color:#64748b;font-weight:500}}
+.quick-facts dd{{color:#1e293b;font-weight:600;margin:0}}
 
 .footer{{text-align:center;padding:24px 0;font-size:0.72rem;color:#94a3b8}}
 .footer a{{color:#94a3b8;text-decoration:none}}
@@ -1004,16 +1042,54 @@ details p{{padding:0 18px 14px;font-size:0.84rem;color:#64748b;line-height:1.6}}
     </div>
   </div>
 
-  <!-- SEO Content Section -->
-  <section class="content-section">
-    <h2>Professional Junk Removal{' in ' + location if location else ''}</h2>
-    <p>{name} provides fast, affordable junk removal services{' for homes and businesses in ' + location if location else ''}. Whether you're clearing out a garage, renovating a room, or cleaning up after a move, we handle the heavy lifting so you don't have to.</p>
-    <p>We remove furniture, appliances, electronics, mattresses, yard waste, construction debris, and more. Our photo-based estimating tool gives you an accurate price range before we arrive — no surprises, no hidden fees.</p>
+  <!-- Quick Facts (LLM-optimized structured data for quick answers) -->
+  <section class="quick-facts" aria-label="Quick Facts">
+    <h2>Quick Facts — {name}</h2>
+    <dl>
+      <dt>Business</dt><dd>{name}</dd>
+      {f'<dt>Location</dt><dd>{location}</dd>' if location else ''}
+      {f'<dt>Phone</dt><dd><a href="tel:{phone}" style="color:#16a34a;text-decoration:none">{phone}</a></dd>' if phone else ''}
+      <dt>Service</dt><dd>Junk Removal &amp; Hauling</dd>
+      <dt>Estimate</dt><dd>Free — AI photo analysis in 60 seconds</dd>
+      <dt>Items Accepted</dt><dd>Furniture, appliances, electronics, mattresses, yard waste, construction debris, and more</dd>
+      <dt>Pricing</dt><dd>Volume-based — get your exact price from photos</dd>
+    </dl>
   </section>
+
+  <!-- About Section -->
+  <section class="content-section">
+    <h2>About {name}</h2>
+    <p>{name} is a professional junk removal service{f' based in {location}' if location else ''} dedicated to making cleanouts fast, affordable, and stress-free for homeowners and businesses. We specialize in residential and commercial junk removal — from single-item pickups to full property cleanouts, estate cleanouts, and post-renovation debris removal.</p>
+    <p>What sets {name} apart is our technology-first approach to pricing. Instead of vague phone quotes, we use AI-powered photo analysis to identify exactly what you need removed, measure the volume, and calculate a fair price — all before we arrive. This means no surprises on pickup day, no hidden fees, and no haggling. You see the price upfront and decide on your terms.</p>
+    <p>{f'{name} proudly serves {city} and the surrounding {state} communities' if city and state else f'{name} serves local homes and businesses'}, handling everything from routine furniture removal to complex cleanout projects. Whether you{"'" + "re moving out of a home in " + city + ", renovating a space" if city else "'re moving, renovating"}, or finally clearing out that garage — we make it easy.</p>
+  </section>
+
+  <!-- What We Remove Section -->
+  <section class="content-section">
+    <h2>What We Remove{f' in {city}' if city else ''}</h2>
+    <p>{name} removes a wide range of household, commercial, and outdoor items. Common items include couches, recliners, dining tables, desks, dressers, bed frames, and mattresses of all sizes — twin, full, queen, and king. We also haul away large appliances including refrigerators, washing machines, dryers, dishwashers, stoves, water heaters, and window AC units.</p>
+    <p>For electronics, we handle TVs, monitors, computers, printers, and other e-waste that requires proper recycling. Outdoor and yard items include patio furniture, grills, swing sets, fencing, lumber, branches, and bagged yard waste. We also take on heavier items like hot tubs, pianos, pool tables, exercise equipment, and safes — items that most haulers won't touch.</p>
+    <p>Construction and renovation debris is another specialty: drywall, flooring, tile, cabinets, carpet, roofing materials, and general contractor debris. For estate cleanouts and hoarding situations, {name} can handle large-volume jobs that require multiple truck loads. If you're unsure whether we can take something, upload a photo and our AI will identify it instantly.</p>
+  </section>
+
+  <!-- How Pricing Works Section -->
+  <section class="content-section">
+    <h2>How Our Pricing Works</h2>
+    <p>{name} uses volume-based pricing, which is the industry standard for junk removal. The cost is determined by how much space your items take up in the truck, measured in cubic yards. A single piece of furniture like a couch takes about 2 cubic yards, while a full garage cleanout might be 10 to 15 cubic yards.</p>
+    <p>Our AI photo estimate calculates the exact volume by identifying each item in your photos and measuring its dimensions using reference objects in the scene for scale. The system then applies per-cubic-yard pricing rates to generate a low-to-high price range. Factors that can affect your final price include total volume, the presence of heavy items (concrete, dirt, large appliances), items that require special disposal (refrigerators, TVs, mattresses), and accessibility — whether items are at ground level or require stair carries.</p>
+    <p>There are no hidden fees with {name}. The estimate you receive is based on the same pricing our crew uses on-site. If the actual volume on pickup day differs from the photos, the crew will confirm the adjusted price before starting work. Most estimates are within 10-15% of the final price.</p>
+  </section>
+
+  <!-- Service Area Section -->
+  {f"""<section class="content-section">
+    <h2>Junk Removal Service Area — {location}</h2>
+    <p>{name} provides junk removal services throughout {city}, {state} and the surrounding area. We serve residential neighborhoods, commercial districts, apartment complexes, and construction sites across the {city} metro area. Whether you're in downtown {city} or the surrounding suburbs, our team can reach you for same-day or next-day pickup.</p>
+    <p>If you're located near {city} but outside the immediate area, {contact_phrase} to confirm service availability. We accommodate most locations within a reasonable driving distance and can often provide same-week scheduling for areas just outside our primary service zone.</p>
+  </section>""" if city and state else ""}
 
   <!-- FAQ Section -->
   <section class="faq-section">
-    <h2>Frequently Asked Questions</h2>
+    <h2>Junk Removal FAQ{f' — {city}, {state}' if city and state else ''}</h2>
     {faq_html}
   </section>
 

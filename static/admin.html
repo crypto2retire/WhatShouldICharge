@@ -265,6 +265,7 @@
   <button class="tab" data-panel="team" role="tab" aria-selected="false" aria-controls="panel-team">Team</button>
   <button class="tab" data-panel="site-config" role="tab" aria-selected="false" aria-controls="panel-site-config">Site Config</button>
   <button class="tab" data-panel="estimates" role="tab" aria-selected="false" aria-controls="panel-estimates">Estimates</button>
+  <button class="tab" data-panel="my-settings" role="tab" aria-selected="false" aria-controls="panel-my-settings" style="margin-left:auto;color:var(--green);">My Settings</button>
 </div>
 
 <main class="content">
@@ -346,6 +347,60 @@
       </table>
       <div class="pagination" id="estimates-pagination"></div>
     </div>
+  </div>
+
+  <!-- My Settings Panel -->
+  <div class="panel" id="panel-my-settings" role="tabpanel" aria-labelledby="tab-my-settings">
+
+    <div class="card">
+      <div class="card-title">Company Profile</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Company Name</label><input type="text" id="ms-company-name"></div>
+        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Phone</label><input type="text" id="ms-phone"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">City</label><input type="text" id="ms-city"></div>
+        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">State</label><input type="text" id="ms-state" maxlength="2" placeholder="WI"></div>
+      </div>
+      <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Logo URL</label><input type="text" id="ms-logo" placeholder="https://example.com/logo.png"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Pricing</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Standard $/CY (Low)</label><input type="number" id="ms-rate-low" step="0.01" min="0"></div>
+        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Standard $/CY (High)</label><input type="number" id="ms-rate-high" step="0.01" min="0"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Premium $/CY</label><input type="number" id="ms-rate-premium" step="0.01" min="0"></div>
+        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Minimum Charge ($)</label><input type="number" id="ms-min-charge" step="0.01" min="0"></div>
+      </div>
+      <div style="font-size:0.75rem;color:var(--muted);margin-bottom:12px;">Estimates will never quote below the minimum charge amount.</div>
+      <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Truck Capacity (CY)</label><input type="number" id="ms-truck" step="0.1" min="1" style="max-width:200px;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Customer Estimate Page</div>
+      <div style="font-size:0.8rem;color:var(--muted);margin-bottom:12px;">Let your customers submit photos for estimates. Set a slug to enable your public page.</div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Company Slug (URL)</label>
+        <div style="display:flex;align-items:center;">
+          <span style="padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-right:none;border-radius:8px 0 0 8px;color:var(--muted);font-size:0.8rem;white-space:nowrap;">/estimate/</span>
+          <input type="text" id="ms-slug" placeholder="your-company-name" style="border-radius:0 8px 8px 0;" maxlength="60">
+        </div>
+        <div id="ms-slug-preview" style="font-size:0.75rem;color:var(--muted);margin-top:6px;"></div>
+      </div>
+      <div id="ms-embed-section" style="display:none;margin-bottom:12px;">
+        <label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Embed Code</label>
+        <div style="display:flex;gap:8px;align-items:start;">
+          <textarea id="ms-embed-code" readonly rows="2" style="font-family:monospace;font-size:0.75rem;color:var(--green);resize:none;flex:1;"></textarea>
+          <button class="btn btn-sm btn-primary" id="ms-copy-embed">Copy</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-green" id="ms-save" style="min-width:160px;">Save All Settings</button>
+    <span id="ms-msg" style="margin-left:12px;font-size:0.83rem;color:var(--green);display:none;"></span>
   </div>
 
 </div>
@@ -585,12 +640,101 @@ async function loadEstimates(page) {
   renderPagination('estimates-pagination', d.page, d.pages, function(p) { estPage = p; loadEstimates(p); });
 }
 
+// My Settings
+async function loadMySettings() {
+  try {
+    var resp = await fetch('/api/auth/me');
+    var d = await resp.json();
+    if (!d.authenticated) return;
+    document.getElementById('ms-company-name').value = d.company_name || '';
+    document.getElementById('ms-phone').value = d.company_phone || '';
+    document.getElementById('ms-city').value = d.company_city || '';
+    document.getElementById('ms-state').value = d.company_state || '';
+    document.getElementById('ms-logo').value = d.company_logo_url || '';
+    document.getElementById('ms-rate-low').value = d.price_per_cy_low || 35;
+    document.getElementById('ms-rate-high').value = d.price_per_cy_high || 40;
+    document.getElementById('ms-rate-premium').value = d.price_per_cy_premium || 55;
+    document.getElementById('ms-min-charge').value = d.min_charge || 75;
+    document.getElementById('ms-truck').value = d.truck_capacity_cy || 16;
+    document.getElementById('ms-slug').value = d.company_slug || '';
+    updateMsSlugPreview();
+  } catch(e) {}
+}
+
+function updateMsSlugPreview() {
+  var slug = document.getElementById('ms-slug').value.trim();
+  var preview = document.getElementById('ms-slug-preview');
+  var embedSection = document.getElementById('ms-embed-section');
+  if (slug) {
+    preview.innerHTML = 'Public page: <a href="/estimate/' + esc(slug) + '" target="_blank" style="color:var(--accent);">whatshouldicharge.app/estimate/' + esc(slug) + '</a>';
+    document.getElementById('ms-embed-code').value = '<script src="https://whatshouldicharge.app/static/widget.js" data-slug="' + esc(slug) + '"></' + 'script>';
+    embedSection.style.display = 'block';
+  } else {
+    preview.textContent = 'Set a slug to enable your public estimate page.';
+    embedSection.style.display = 'none';
+  }
+}
+
+document.getElementById('ms-slug').addEventListener('input', updateMsSlugPreview);
+
+document.getElementById('ms-copy-embed').addEventListener('click', function() {
+  var ta = document.getElementById('ms-embed-code');
+  ta.select();
+  document.execCommand('copy');
+  this.textContent = 'Copied!';
+  var btn = this;
+  setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
+});
+
+document.getElementById('ms-save').addEventListener('click', async function() {
+  var btn = this;
+  var msg = document.getElementById('ms-msg');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  try {
+    var body = {
+      company_name: document.getElementById('ms-company-name').value.trim(),
+      company_phone: document.getElementById('ms-phone').value.trim(),
+      company_city: document.getElementById('ms-city').value.trim(),
+      company_state: document.getElementById('ms-state').value.trim(),
+      company_logo_url: document.getElementById('ms-logo').value.trim(),
+      price_per_cy_low: parseFloat(document.getElementById('ms-rate-low').value) || 35,
+      price_per_cy_high: parseFloat(document.getElementById('ms-rate-high').value) || 40,
+      price_per_cy_premium: parseFloat(document.getElementById('ms-rate-premium').value) || 55,
+      min_charge: parseFloat(document.getElementById('ms-min-charge').value) || 75,
+      truck_capacity_cy: parseFloat(document.getElementById('ms-truck').value) || 16,
+      company_slug: document.getElementById('ms-slug').value.trim(),
+    };
+    var resp = await fetch('/api/settings', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    var result = await resp.json();
+    if (resp.ok && result.ok) {
+      showToast('Settings saved');
+      msg.textContent = 'Saved!';
+      msg.style.color = 'var(--green)';
+      msg.style.display = 'inline';
+      setTimeout(function() { msg.style.display = 'none'; }, 2000);
+      updateMsSlugPreview();
+    } else {
+      msg.textContent = result.detail || 'Error saving';
+      msg.style.color = 'var(--red)';
+      msg.style.display = 'inline';
+    }
+  } catch(e) {
+    msg.textContent = 'Error: ' + e.message;
+    msg.style.color = 'var(--red)';
+    msg.style.display = 'inline';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Save All Settings';
+});
+
 loadAnalytics();
 loadUsers();
 loadPlans();
 loadTeam();
 loadSiteConfig();
 loadEstimates();
+loadMySettings();
 </script>
 </body>
 </html>

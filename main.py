@@ -1273,9 +1273,20 @@ APPROXIMATE (use only when no better reference is available):
 
 Outlet plates and stud spacing are your most reliable architectural rulers. A visible outlet immediately tells you the scale of everything around it. Studs at 16" spacing give you a built-in ruler across the entire wall. Door height (80") is a strong vertical reference. Use as many of these as you can find in addition to junk items from the reference library. When using "common" or "approximate" fixtures, note the uncertainty in your confidence score.
 
-Step 2 — ESTABLISH SCALE AND DEPTH: Use the known real-world dimensions of those 5-10 reference items AND any architectural fixtures to calibrate the photo's perspective. A couch you know is 7ft long tells you how big everything near it is. A refrigerator in the background tells you the scale of that area. A visible door frame gives you an 80-inch vertical ruler. Wall studs at 16-inch spacing give you a horizontal ruler across the wall. An outlet plate tells you the scale of nearby items. By triangulating between multiple known objects and fixtures at different depths, you can determine the true 3D volume of the entire scene.
+Step 2 — ESTABLISH SCALE AND DEPTH WITH PERSPECTIVE CORRECTION:
+Use the known real-world dimensions of those 5-10 reference items AND any architectural fixtures to calibrate the photo's perspective. A couch you know is 7ft long tells you how big everything near it is. A refrigerator in the background tells you the scale of that area. A visible door frame gives you an 80-inch vertical ruler. Wall studs at 16-inch spacing give you a horizontal ruler across the wall. An outlet plate tells you the scale of nearby items. By triangulating between multiple known objects and fixtures at different depths, you can determine the true 3D volume of the entire scene.
 
-Step 3 — MEASURE UNKNOWN ITEMS: Now that you understand the photo's scale and depth, estimate the cubic yards of every other item by comparing its apparent size to your reference points. An unknown box sitting next to a known chair can be sized accurately because you know how big the chair really is.
+PERSPECTIVE CORRECTION (CRITICAL — DO NOT SKIP):
+- Objects CLOSER to the camera appear LARGER than their real size. Objects FARTHER from the camera appear SMALLER.
+- A trash bag in the foreground (3 feet from camera) may look twice as large as an identical bag in the background (10 feet from camera). They are the SAME SIZE — do not count the near bag as bigger.
+- To correct for perspective: compare each item to the nearest reference point at a SIMILAR DEPTH in the photo, not to reference points at different depths.
+- Foreground items: compare to foreground references. Background items: compare to background references.
+- If a reference point (like a door frame) is 10 feet behind an item, the item will appear proportionally larger relative to that reference — mentally adjust.
+- Floor lines, wall edges, and ceiling lines that converge toward a vanishing point give you the depth gradient. Use these converging lines to estimate how much objects shrink with distance.
+- When items are at the same depth (same distance from camera), their apparent sizes directly reflect their real size ratios.
+- COMMON MISTAKE: Items piled in the foreground near the camera look enormous. A pile of bags at 3 feet looks like it fills half the frame but may only be 2-3 cubic yards. Always calibrate against a reference at the same depth.
+
+Step 3 — MEASURE UNKNOWN ITEMS: Now that you understand the photo's scale, depth, and perspective distortion, estimate the cubic yards of every other item by comparing its apparent size to reference points AT THE SAME DEPTH. An unknown box sitting next to a known chair can be sized accurately because they are at the same distance from the camera and you know how big the chair really is. For items at different depths, apply perspective correction before comparing.
 
 Step 4 — CALCULATE TOTALS: Sum all items for total cubic yards. Use reference-calibrated measurements, not guesses.
 
@@ -1296,7 +1307,28 @@ ITEM IDENTIFICATION RULES:
 - Identify every visible item for removal individually, do not group unless identical (but if circled/marked items were detected, only list the marked items — see CIRCLED OR MARKED ITEMS section)
 - Assign cubic_yards to each item based on its size RELATIVE TO YOUR REFERENCE POINTS — not generic guesses
 - Look specifically along walls, in corners, behind other items
-- FLAT SCREEN TVs vs WINDOW SCREENS: Dark rectangular objects leaning against walls may be TVs OR window screens — distinguish carefully. A TV will have a visible stand base, port connections on the back/side, a brand logo, a glossy screen surface, or a thick plastic bezel. A window screen has a thin metal or wooden frame with mesh visible through it. When uncertain, add "possible TV or window screen, verify on site" in the notes field for the crew to check.
+- FLAT SCREEN TVs vs OTHER THIN RECTANGLES — FALSE TV DETECTION IS A COMMON ERROR:
+  Many thin, flat, rectangular objects get misidentified as TVs. DEFAULT ASSUMPTION: a thin rectangular object is NOT a TV unless you see clear TV-specific evidence.
+
+  POSITIVE TV indicators (need at least 2 of these to call it a TV):
+  - Glossy/reflective black screen surface (not matte)
+  - Visible brand logo (Samsung, LG, Sony, Vizio, TCL, etc.)
+  - Stand base or VESA mount bracket attached
+  - Ports/connections visible on back or side edge
+  - Thick plastic bezel (1-2 inches) framing the screen
+  - Power cord or cable visible
+
+  Things commonly MISIDENTIFIED as TVs — these are NOT TVs:
+  - Window screens (thin metal/wood frame with mesh — look for the mesh texture)
+  - Mirrors (reflective but shows room reflections, often has decorative frame)
+  - Picture frames or artwork (has visible image or canvas texture)
+  - Cabinet doors or panel boards (wood grain, hinges, or hardware visible)
+  - Whiteboards or chalkboards (writing surface, marker tray)
+  - Folding tables leaning on edge (metal legs visible, thicker than a TV)
+  - Headboards (fabric or wood, wider than typical TV)
+  - Solar panels or glass panels (metal frame, grid pattern)
+
+  When uncertain: label as "flat rectangular object — verify if TV on site" and set is_special: false. Only flag as TV (is_special: true) when you are confident based on 2+ positive indicators.
 - Wheelchairs and medical equipment: note in items, not special fee but flag in notes for crew (may be donateable)
 
 SPECIAL ITEM FLAGGING — set is_special: true for ANY of these (do NOT calculate fees, just flag them):

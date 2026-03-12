@@ -839,7 +839,7 @@ async def customer_estimate_page(slug: str):
 
     faq_html = ""
     for q, a in faq_items:
-        faq_html += f'<details><summary>{html_mod.escape(q)}</summary><p>{html_mod.escape(a)}</p></details>\n'
+        faq_html += f'<details><summary>{html_mod.escape(q)}</summary><div class="faq-answer">{html_mod.escape(a)}</div></details>\n'
 
     page_html = f'''<!DOCTYPE html>
 <html lang="en">
@@ -858,7 +858,7 @@ async def customer_estimate_page(slug: str):
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="{title}">
 <meta name="twitter:description" content="{html_mod.escape(meta_desc)}">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script type="application/ld+json">{jsonld_local}</script>
 <script type="application/ld+json">{{
   "@context":"https://schema.org",
@@ -868,105 +868,167 @@ async def customer_estimate_page(slug: str):
 <script type="application/ld+json">{jsonld_speakable}</script>
 <style>
 *{{margin:0;padding:0;box-sizing:border-box}}
-body{{font-family:'Inter',system-ui,sans-serif;background:#f8fafc;color:#1e293b;min-height:100vh;-webkit-font-smoothing:antialiased}}
-.page-wrap{{max-width:640px;margin:0 auto;padding:16px}}
+body{{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#ffffff;color:#1e293b;min-height:100vh;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}}
+@media (prefers-reduced-motion:reduce){{*{{animation:none!important;transition:none!important}}}}
 
-/* Header */
-.site-header{{text-align:center;padding:28px 0 20px}}
-.logo{{max-height:56px;margin-bottom:12px;border-radius:8px}}
-.site-header h1{{font-size:1.4rem;font-weight:800;color:#0f172a;line-height:1.25}}
-.location-badge{{display:inline-block;margin-top:6px;padding:3px 12px;background:#e0f2fe;color:#0369a1;border-radius:20px;font-size:0.78rem;font-weight:600}}
-.phone{{margin-top:8px;font-size:0.9rem}}
-.phone a{{color:#16a34a;text-decoration:none;font-weight:600}}
+/* --- Layout --- */
+.page-wrap{{max-width:680px;margin:0 auto;padding:20px 16px}}
 
-/* Hero */
-.hero{{text-align:center;padding:20px 0 8px}}
-.hero h2{{font-size:1.6rem;font-weight:800;color:#0f172a;line-height:1.2;margin-bottom:8px}}
-.hero p{{font-size:0.92rem;color:#64748b;max-width:420px;margin:0 auto}}
+/* --- Header --- */
+.site-header{{text-align:center;padding:32px 0 12px}}
+.logo{{max-height:64px;margin-bottom:14px;border-radius:10px}}
+.site-header h1{{font-size:1.5rem;font-weight:800;color:#0f172a;line-height:1.2;letter-spacing:-0.02em}}
+.location-badge{{display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:5px 14px;background:#ecfdf5;color:#059669;border-radius:24px;font-size:0.78rem;font-weight:600}}
+.location-badge svg{{width:14px;height:14px;flex-shrink:0}}
+.header-phone{{margin-top:10px}}
+.header-phone a{{display:inline-flex;align-items:center;gap:6px;color:#16a34a;text-decoration:none;font-weight:600;font-size:0.9rem;padding:6px 16px;border-radius:24px;transition:background .2s}}
+.header-phone a:hover{{background:#f0fdf4}}
+.header-phone svg{{width:16px;height:16px}}
 
-/* Steps */
-.steps{{display:flex;gap:12px;margin:20px 0;padding:0 4px}}
-.step{{flex:1;text-align:center;padding:14px 8px;background:#fff;border:1px solid #e2e8f0;border-radius:12px}}
-.step-num{{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:#16a34a;color:#fff;border-radius:50%;font-size:0.8rem;font-weight:700;margin-bottom:6px}}
-.step-title{{font-size:0.78rem;font-weight:600;color:#0f172a}}
-.step-sub{{font-size:0.7rem;color:#94a3b8;margin-top:2px}}
+/* --- Hero --- */
+.hero{{text-align:center;padding:28px 0 20px}}
+.hero h2{{font-size:2rem;font-weight:800;color:#0f172a;line-height:1.15;letter-spacing:-0.03em;margin-bottom:12px}}
+.hero h2 span{{color:#16a34a}}
+.hero p{{font-size:1rem;color:#64748b;max-width:460px;margin:0 auto;line-height:1.65}}
+.trust-pills{{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:18px}}
+.trust-pill{{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:24px;font-size:0.78rem;font-weight:600;color:#475569}}
+.trust-pill svg{{width:14px;height:14px;color:#16a34a}}
 
-/* Cards */
-.card{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}}
-.card-title{{font-size:0.9rem;font-weight:700;color:#0f172a;margin-bottom:14px}}
-label{{display:block;font-size:0.78rem;color:#64748b;margin-bottom:4px;font-weight:500}}
-input,select{{width:100%;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;color:#1e293b;font-size:0.9rem;margin-bottom:12px;font-family:inherit;transition:border-color .2s}}
-input:focus{{outline:none;border-color:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,0.1)}}
+/* --- Steps --- */
+.steps-section{{padding:8px 0 24px}}
+.steps-section h3{{text-align:center;font-size:0.82rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px}}
+.steps{{display:flex;gap:12px}}
+.step{{flex:1;text-align:center;padding:20px 12px 18px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.02);transition:transform .2s,box-shadow .2s;cursor:default}}
+.step:hover{{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,0.08)}}
+.step-icon{{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;background:#ecfdf5;border-radius:12px;margin-bottom:10px;color:#16a34a}}
+.step-icon svg{{width:22px;height:22px}}
+.step-title{{font-size:0.85rem;font-weight:700;color:#0f172a;margin-bottom:2px}}
+.step-sub{{font-size:0.75rem;color:#94a3b8;line-height:1.4}}
 
-/* Upload */
-.drop-zone{{border:2px dashed #cbd5e1;border-radius:14px;padding:32px 20px;text-align:center;cursor:pointer;transition:all .2s;background:#fafbfc}}
-.drop-zone:hover,.drop-zone.drag-over{{border-color:#16a34a;background:#f0fdf4}}
-.drop-icon{{font-size:2rem;margin-bottom:8px}}
-.drop-label{{font-size:0.95rem;font-weight:600;color:#0f172a}}
-.drop-sub{{font-size:0.78rem;color:#94a3b8;margin-top:4px}}
-.previews{{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}}
-.preview-thumb{{width:72px;height:72px;border-radius:10px;object-fit:cover;border:2px solid #e2e8f0}}
+/* --- Cards --- */
+.card{{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.02)}}
+.card-title{{font-size:0.92rem;font-weight:700;color:#0f172a;margin-bottom:16px}}
+label{{display:block;font-size:0.8rem;color:#64748b;margin-bottom:5px;font-weight:500}}
+input[type="text"],input[type="email"],input[type="tel"]{{width:100%;padding:12px 16px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;color:#1e293b;font-size:0.95rem;margin-bottom:14px;font-family:inherit;transition:border-color .2s,box-shadow .2s}}
+input:focus{{outline:none;border-color:#16a34a;box-shadow:0 0 0 4px rgba(22,163,74,0.08)}}
+input::placeholder{{color:#94a3b8}}
 
-/* Buttons */
-.btn{{display:block;width:100%;padding:14px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;transition:background .2s;text-align:center;text-decoration:none}}
-.btn:hover{{background:#15803d}}
-.btn:disabled{{opacity:0.5;cursor:not-allowed}}
-.btn-outline{{background:transparent;border:2px solid #16a34a;color:#16a34a;margin-top:10px}}
-.btn-outline:hover{{background:#f0fdf4}}
+/* --- Upload Zone --- */
+.drop-zone{{border:2px dashed #cbd5e1;border-radius:16px;padding:40px 20px;text-align:center;cursor:pointer;transition:all .25s;background:#fafbfc;position:relative;overflow:hidden}}
+.drop-zone::before{{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(22,163,74,0.04) 0%,transparent 70%);opacity:0;transition:opacity .3s}}
+.drop-zone:hover,.drop-zone.drag-over{{border-color:#16a34a;border-style:solid;background:#f0fdf4}}
+.drop-zone:hover::before,.drop-zone.drag-over::before{{opacity:1}}
+.drop-zone-icon{{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;background:#ecfdf5;border-radius:16px;margin-bottom:12px;color:#16a34a}}
+.drop-zone-icon svg{{width:28px;height:28px}}
+.drop-label{{font-size:1rem;font-weight:700;color:#0f172a}}
+.drop-sub{{font-size:0.8rem;color:#94a3b8;margin-top:5px}}
+.previews{{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}}
+.preview-wrap{{position:relative;width:80px;height:80px}}
+.preview-thumb{{width:80px;height:80px;border-radius:12px;object-fit:cover;border:2px solid #e2e8f0;transition:border-color .2s}}
+.preview-wrap:hover .preview-thumb{{border-color:#16a34a}}
+.preview-remove{{position:absolute;top:-6px;right:-6px;width:22px;height:22px;background:#ef4444;color:#fff;border:2px solid #fff;border-radius:50%;font-size:0.7rem;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1;font-weight:700;box-shadow:0 2px 4px rgba(0,0,0,0.15);opacity:0;transition:opacity .15s}}
+.preview-wrap:hover .preview-remove{{opacity:1}}
+.photo-count{{font-size:0.78rem;color:#64748b;margin-top:8px;text-align:center}}
 
-/* Loading */
-.loading{{text-align:center;padding:48px 20px;display:none}}
-.spinner{{display:inline-block;width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#16a34a;border-radius:50%;animation:spin .8s linear infinite}}
-@keyframes spin{{to{{transform:rotate(360deg)}}}}
-.loading-text{{font-size:0.9rem;color:#64748b;margin-top:14px}}
+/* --- Buttons --- */
+.btn{{display:block;width:100%;padding:16px;background:#16a34a;color:#fff;border:none;border-radius:14px;font-size:1.05rem;font-weight:700;cursor:pointer;font-family:inherit;transition:background .2s,transform .1s;text-align:center;text-decoration:none;box-shadow:0 2px 8px rgba(22,163,74,0.25)}}
+.btn:hover{{background:#15803d;transform:translateY(-1px)}}
+.btn:active{{transform:translateY(0)}}
+.btn:disabled{{opacity:0.4;cursor:not-allowed;transform:none;box-shadow:none}}
+.btn-outline{{background:transparent;border:2px solid #16a34a;color:#16a34a;margin-top:12px;box-shadow:none}}
+.btn-outline:hover{{background:#f0fdf4;transform:translateY(-1px)}}
+.btn-call{{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:16px 32px;width:auto;font-size:1.1rem}}
+.btn-call svg{{width:20px;height:20px}}
 
-/* Results */
+/* --- Loading --- */
+.loading{{text-align:center;padding:60px 20px;display:none}}
+.loading-dots{{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:20px}}
+.loading-dots span{{width:12px;height:12px;background:#16a34a;border-radius:50%;animation:dotPulse 1.2s ease-in-out infinite}}
+.loading-dots span:nth-child(2){{animation-delay:0.15s}}
+.loading-dots span:nth-child(3){{animation-delay:0.3s}}
+@keyframes dotPulse{{0%,80%,100%{{opacity:0.3;transform:scale(0.8)}}40%{{opacity:1;transform:scale(1.1)}}}}
+.loading-text{{font-size:0.95rem;color:#475569;font-weight:500}}
+.loading-sub{{font-size:0.8rem;color:#94a3b8;margin-top:6px}}
+.loading-steps{{display:flex;justify-content:center;gap:20px;margin-top:20px}}
+.loading-step{{display:flex;align-items:center;gap:6px;font-size:0.78rem;color:#94a3b8;font-weight:500}}
+.loading-step.active{{color:#16a34a}}
+.loading-step svg{{width:16px;height:16px}}
+
+/* --- Results --- */
 .results{{display:none}}
-.price-card{{text-align:center;padding:24px 20px}}
-.price-range{{font-size:2.2rem;font-weight:800;color:#16a34a;letter-spacing:-1px}}
-.price-note{{font-size:0.78rem;color:#94a3b8;margin-top:4px}}
-.min-charge-note{{font-size:0.8rem;color:#d97706;font-weight:500;margin-top:6px}}
-.badge{{display:inline-block;padding:3px 12px;border-radius:20px;font-size:0.75rem;font-weight:600;margin-bottom:8px}}
+.results.show{{display:block;animation:fadeUp .4s ease-out}}
+@keyframes fadeUp{{from{{opacity:0;transform:translateY(12px)}}to{{opacity:1;transform:translateY(0)}}}}
+.price-card{{text-align:center;padding:32px 20px;background:linear-gradient(135deg,#f0fdf4 0%,#ecfdf5 100%);border:1px solid #bbf7d0}}
+.price-label{{font-size:0.82rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px}}
+.price-range{{font-size:2.6rem;font-weight:800;color:#16a34a;letter-spacing:-0.03em;line-height:1.1}}
+.price-note{{font-size:0.8rem;color:#94a3b8;margin-top:8px}}
+.min-charge-note{{display:none;font-size:0.82rem;color:#d97706;font-weight:600;margin-top:8px;padding:6px 14px;background:#fffbeb;border-radius:8px;border:1px solid #fde68a}}
+.badge{{display:inline-block;padding:4px 14px;border-radius:24px;font-size:0.75rem;font-weight:700;margin-bottom:10px;letter-spacing:0.02em}}
 .badge-standard{{background:#dcfce7;color:#16a34a}}
 .badge-premium{{background:#fef3c7;color:#d97706}}
 .badge-hoarder{{background:#fee2e2;color:#ef4444}}
-.item-row{{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9;font-size:0.85rem}}
+.badge-truck_load{{background:#e0f2fe;color:#0369a1}}
+.cy-display{{font-size:0.85rem;color:#64748b;margin-top:8px}}
+.item-row{{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:0.88rem}}
 .item-row:last-child{{border-bottom:none}}
 .item-name{{flex:1;font-weight:500;color:#1e293b}}
-.item-cy{{color:#94a3b8;font-size:0.78rem}}
-.item-qty{{color:#94a3b8;font-size:0.78rem;min-width:30px;text-align:right}}
-.special-note{{margin-top:14px;padding:14px;border-radius:12px;background:#fffbeb;border:1px solid #fde68a;font-size:0.8rem;color:#92400e}}
-.dupe-note{{margin-top:14px;padding:14px;border-radius:12px;background:#fefce8;border:1px solid #fde68a;font-size:0.8rem;color:#854d0e}}
+.item-cy{{color:#94a3b8;font-size:0.78rem;font-weight:500}}
+.item-qty{{color:#64748b;font-size:0.8rem;min-width:32px;text-align:right;font-weight:600}}
+.special-note{{margin-top:16px;padding:16px;border-radius:14px;background:#fffbeb;border:1px solid #fde68a;font-size:0.82rem;color:#92400e;line-height:1.6}}
+.dupe-note{{margin-top:12px;padding:16px;border-radius:14px;background:#fefce8;border:1px solid #fde68a;font-size:0.82rem;color:#854d0e;line-height:1.6}}
 
-/* CTA */
-.cta-section{{text-align:center;padding:24px 20px;margin-top:8px}}
-.cta-section .subtext{{font-size:0.85rem;color:#64748b;margin-bottom:12px}}
+/* --- CTA --- */
+.cta-section{{text-align:center;padding:28px 20px;margin-top:8px}}
+.cta-section .subtext{{font-size:0.9rem;color:#475569;margin-bottom:14px;font-weight:500}}
 
-/* FAQ */
-.faq-section{{margin-top:20px}}
-.faq-section h2{{font-size:1.1rem;font-weight:700;color:#0f172a;margin-bottom:14px}}
-details{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:8px;overflow:hidden}}
-summary{{padding:14px 18px;font-size:0.88rem;font-weight:600;cursor:pointer;color:#0f172a;list-style:none;display:flex;align-items:center;justify-content:space-between}}
-summary::after{{content:"+";font-size:1.2rem;color:#94a3b8;font-weight:400;transition:transform .2s}}
-details[open] summary::after{{content:"−"}}
-details p{{padding:0 18px 14px;font-size:0.84rem;color:#64748b;line-height:1.6}}
+/* --- Divider --- */
+.section-divider{{border:none;border-top:1px solid #f1f5f9;margin:28px 0}}
 
-/* Content */
-.content-section{{margin-top:20px;padding:22px;background:#fff;border:1px solid #e2e8f0;border-radius:14px}}
-.content-section h2{{font-size:1.05rem;font-weight:700;color:#0f172a;margin-bottom:10px}}
-.content-section p{{font-size:0.85rem;color:#475569;line-height:1.75;margin-bottom:12px}}
-.content-section p:last-child{{margin-bottom:0}}
-
-/* Quick Facts */
-.quick-facts{{margin-top:20px;padding:22px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px}}
-.quick-facts h2{{font-size:1.05rem;font-weight:700;color:#0f172a;margin-bottom:14px}}
-.quick-facts dl{{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:0.85rem}}
+/* --- Quick Facts --- */
+.quick-facts{{margin-top:28px;padding:24px;background:#ecfdf5;border:1px solid #bbf7d0;border-radius:16px}}
+.quick-facts h2{{font-size:1.05rem;font-weight:700;color:#0f172a;margin-bottom:16px;display:flex;align-items:center;gap:8px}}
+.quick-facts h2 svg{{width:20px;height:20px;color:#16a34a}}
+.quick-facts dl{{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:0.88rem}}
 .quick-facts dt{{color:#64748b;font-weight:500}}
 .quick-facts dd{{color:#1e293b;font-weight:600;margin:0}}
 
-.footer{{text-align:center;padding:24px 0;font-size:0.72rem;color:#94a3b8}}
-.footer a{{color:#94a3b8;text-decoration:none}}
-.error{{color:#ef4444;font-size:0.85rem;text-align:center;padding:12px;display:none;background:#fef2f2;border-radius:10px;border:1px solid #fecaca}}
+/* --- Content Sections --- */
+.content-section{{margin-top:24px;padding:24px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}}
+.content-section h2{{font-size:1.1rem;font-weight:700;color:#0f172a;margin-bottom:12px;letter-spacing:-0.01em}}
+.content-section p{{font-size:0.88rem;color:#475569;line-height:1.75;margin-bottom:14px}}
+.content-section p:last-child{{margin-bottom:0}}
+
+/* --- FAQ --- */
+.faq-section{{margin-top:28px}}
+.faq-section h2{{font-size:1.15rem;font-weight:700;color:#0f172a;margin-bottom:16px;letter-spacing:-0.01em}}
+details{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;margin-bottom:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.03);transition:box-shadow .2s}}
+details:hover{{box-shadow:0 2px 8px rgba(0,0,0,0.06)}}
+details[open]{{border-color:#bbf7d0;box-shadow:0 2px 8px rgba(22,163,74,0.08)}}
+details[open]>summary{{border-bottom:1px solid #f0fdf4}}
+summary{{padding:16px 20px;font-size:0.9rem;font-weight:600;cursor:pointer;color:#0f172a;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;line-height:1.4}}
+summary::-webkit-details-marker{{display:none}}
+summary::after{{content:'';width:20px;height:20px;flex-shrink:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-size:contain;background-repeat:no-repeat;transition:transform .25s ease}}
+details[open] summary::after{{transform:rotate(180deg)}}
+details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;line-height:1.7}}
+
+/* --- Footer --- */
+.footer{{text-align:center;padding:32px 0 20px}}
+.footer-company{{font-size:0.85rem;font-weight:600;color:#475569}}
+.footer-location{{font-size:0.78rem;color:#94a3b8;margin-top:2px}}
+.footer-powered{{font-size:0.72rem;color:#cbd5e1;margin-top:12px}}
+.footer-powered a{{color:#cbd5e1;text-decoration:none}}
+.footer-powered a:hover{{color:#94a3b8}}
+
+/* --- Error --- */
+.error{{color:#ef4444;font-size:0.88rem;text-align:center;padding:14px;display:none;background:#fef2f2;border-radius:12px;border:1px solid #fecaca;margin-bottom:12px}}
+
+/* --- Responsive --- */
+@media(max-width:480px){{
+  .hero h2{{font-size:1.6rem}}
+  .steps{{flex-direction:column;gap:10px}}
+  .price-range{{font-size:2.2rem}}
+  .trust-pills{{gap:6px}}
+}}
 </style>
 </head>
 <body>
@@ -975,42 +1037,63 @@ details p{{padding:0 18px 14px;font-size:0.84rem;color:#64748b;line-height:1.6}}
   <header class="site-header">
     {logo_html}
     <h1>{name}</h1>
-    {f'<span class="location-badge">{location}</span>' if location else ''}
-    {phone_header}
+    {f"""<span class="location-badge"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1118 0z"/><circle cx="12" cy="10" r="3"/></svg>{location}</span>""" if location else ''}
+    {f"""<div class="header-phone"><a href="tel:{phone}"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>{phone}</a></div>""" if phone else ''}
   </header>
 
   <section class="hero">
-    <h2>Get Your Free Estimate in 60 Seconds</h2>
-    <p>Upload photos of the items you need removed and get an instant price quote — no obligation, no waiting.</p>
+    <h2>Get Your <span>Free Estimate</span> in 60 Seconds</h2>
+    <p>Upload photos of the items you need removed and get an instant, AI-powered price quote. No obligation, no waiting.</p>
+    <div class="trust-pills">
+      <span class="trust-pill"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>Free Estimate</span>
+      <span class="trust-pill"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>60-Second Results</span>
+      <span class="trust-pill"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>No Obligation</span>
+    </div>
   </section>
 
-  <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-title">Upload</div><div class="step-sub">Snap photos</div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-title">Analyze</div><div class="step-sub">AI identifies items</div></div>
-    <div class="step"><div class="step-num">3</div><div class="step-title">Quote</div><div class="step-sub">Get your price</div></div>
-  </div>
+  <section class="steps-section">
+    <h3>How It Works</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+        <div class="step-title">Upload Photos</div>
+        <div class="step-sub">Snap a few photos of items to remove</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+        <div class="step-title">AI Analysis</div>
+        <div class="step-sub">Every item identified and measured</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div>
+        <div class="step-title">Get Your Price</div>
+        <div class="step-sub">Accurate quote in under 60 seconds</div>
+      </div>
+    </div>
+  </section>
 
   <!-- Upload Section -->
   <div id="upload-section">
     <div class="card">
-      <div class="card-title">Your Contact Info (Optional)</div>
-      <label>Name</label>
-      <input type="text" id="cust-name" placeholder="Your name">
-      <label>Email</label>
-      <input type="email" id="cust-email" placeholder="your@email.com">
-      <label>Phone</label>
-      <input type="tel" id="cust-phone" placeholder="(555) 123-4567">
+      <div class="card-title">Your Contact Info <span style="font-weight:400;color:#94a3b8;font-size:0.82rem">(optional)</span></div>
+      <label for="cust-name">Name</label>
+      <input type="text" id="cust-name" placeholder="Your name" autocomplete="name">
+      <label for="cust-email">Email</label>
+      <input type="email" id="cust-email" placeholder="your@email.com" autocomplete="email">
+      <label for="cust-phone">Phone</label>
+      <input type="tel" id="cust-phone" placeholder="(555) 123-4567" autocomplete="tel">
     </div>
 
     <div class="card">
       <div class="card-title">Upload Photos of Items for Removal</div>
       <div class="drop-zone" id="drop-zone">
-        <div class="drop-icon">📷</div>
-        <div class="drop-label">Tap to upload photos</div>
+        <div class="drop-zone-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+        <div class="drop-label">Tap to upload or drag photos here</div>
         <div class="drop-sub">Up to 10 photos — JPG, PNG, WEBP</div>
       </div>
       <input type="file" id="file-input" accept="image/*" multiple style="display:none">
       <div class="previews" id="previews"></div>
+      <div class="photo-count" id="photo-count" style="display:none"></div>
     </div>
 
     <div class="error" id="error-msg"></div>
@@ -1019,18 +1102,25 @@ details p{{padding:0 18px 14px;font-size:0.84rem;color:#64748b;line-height:1.6}}
 
   <!-- Loading -->
   <div class="loading" id="loading">
-    <div class="spinner"></div>
+    <div class="loading-dots"><span></span><span></span><span></span></div>
     <div class="loading-text" id="loading-text">Analyzing your photos...</div>
+    <div class="loading-sub">This usually takes 30-60 seconds</div>
+    <div class="loading-steps">
+      <span class="loading-step active" id="ls-upload"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload</span>
+      <span class="loading-step" id="ls-analyze"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Analyze</span>
+      <span class="loading-step" id="ls-price"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Price</span>
+    </div>
   </div>
 
   <!-- Results -->
   <div class="results" id="results">
     <div class="card price-card">
       <span class="badge" id="res-badge"></span>
+      <div class="price-label">Your Estimated Price</div>
       <div class="price-range" id="res-price"></div>
-      <div id="min-charge-msg" class="min-charge-note" style="display:none"></div>
-      <div class="price-note">Estimated price range based on photo analysis</div>
-      <div style="font-size:0.85rem;color:#94a3b8;margin-top:6px" id="res-cy"></div>
+      <div id="min-charge-msg" class="min-charge-note"></div>
+      <div class="price-note">Based on AI photo analysis of your items</div>
+      <div class="cy-display" id="res-cy"></div>
     </div>
 
     <div class="card">
@@ -1043,18 +1133,20 @@ details p{{padding:0 18px 14px;font-size:0.84rem;color:#64748b;line-height:1.6}}
 
     <div class="card" id="res-notes-card" style="display:none">
       <div class="card-title">Notes</div>
-      <div id="res-notes" style="font-size:0.85rem;color:#64748b"></div>
+      <div id="res-notes" style="font-size:0.88rem;color:#475569;line-height:1.6"></div>
     </div>
 
     <div class="cta-section" id="cta-section">
       <div class="subtext">Ready to schedule your pickup?</div>
-      {phone_cta}
+      {f"""<a href="tel:{phone}" class="btn btn-call"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>Call {phone}</a>""" if phone else ''}
     </div>
   </div>
 
+  <hr class="section-divider">
+
   <!-- Quick Facts (LLM-optimized structured data for quick answers) -->
   <section class="quick-facts" aria-label="Quick Facts">
-    <h2>Quick Facts — {name}</h2>
+    <h2><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>Quick Facts — {name}</h2>
     <dl>
       <dt>Business</dt><dd>{name}</dd>
       {f'<dt>Location</dt><dd>{location}</dd>' if location else ''}
@@ -1104,8 +1196,9 @@ details p{{padding:0 18px 14px;font-size:0.84rem;color:#64748b;line-height:1.6}}
   </section>
 
   <footer class="footer">
-    &copy; {name} {f"&middot; {location}" if location else ""}<br>
-    Powered by <a href="https://whatshouldicharge.app">WhatShouldICharge</a>
+    <div class="footer-company">{name}</div>
+    {f'<div class="footer-location">{location}</div>' if location else ''}
+    <div class="footer-powered">Powered by <a href="https://whatshouldicharge.app">WhatShouldICharge</a></div>
   </footer>
 </div>
 
@@ -1124,16 +1217,41 @@ dropZone.addEventListener('dragleave',function(){{dropZone.classList.remove('dra
 dropZone.addEventListener('drop',function(e){{e.preventDefault();dropZone.classList.remove('drag-over');addFiles(Array.from(e.dataTransfer.files))}});
 fileInput.addEventListener('change',function(e){{addFiles(Array.from(e.target.files))}});
 
+function updatePhotoCount(){{
+  var ct=document.getElementById('photo-count');
+  if(photos.length>0){{ct.textContent=photos.length+' of 10 photos selected';ct.style.display='block'}}
+  else{{ct.style.display='none'}}
+}}
+
 function addFiles(files){{
   var remaining=10-photos.length;
-  files.filter(function(f){{return f.type.startsWith('image/')}}).slice(0,remaining).forEach(function(f){{
+  files.filter(function(f){{return f.type.startsWith('image/')}}).slice(0,remaining).forEach(function(f,idx){{
     photos.push(f);
-    var img=document.createElement('img');
-    img.className='preview-thumb';
-    img.src=URL.createObjectURL(f);
-    document.getElementById('previews').appendChild(img);
+    var wrap=document.createElement('div');wrap.className='preview-wrap';
+    var img=document.createElement('img');img.className='preview-thumb';img.src=URL.createObjectURL(f);
+    var rm=document.createElement('span');rm.className='preview-remove';rm.textContent='X';
+    rm.setAttribute('role','button');rm.setAttribute('aria-label','Remove photo');rm.setAttribute('tabindex','0');
+    var photoIdx=photos.length-1;
+    rm.addEventListener('click',function(e){{e.stopPropagation();removePhoto(photoIdx,wrap)}});
+    wrap.appendChild(img);wrap.appendChild(rm);
+    document.getElementById('previews').appendChild(wrap);
   }});
   document.getElementById('submit-btn').disabled=photos.length===0;
+  updatePhotoCount();
+}}
+
+function removePhoto(idx,wrap){{
+  photos.splice(idx,1);wrap.remove();
+  document.getElementById('submit-btn').disabled=photos.length===0;
+  updatePhotoCount();
+  // Re-index remaining remove buttons
+  var wraps=document.getElementById('previews').querySelectorAll('.preview-wrap');
+  wraps.forEach(function(w,i){{
+    var btn=w.querySelector('.preview-remove');
+    var newBtn=btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn,btn);
+    newBtn.addEventListener('click',function(e){{e.stopPropagation();removePhoto(i,w)}});
+  }});
 }}
 
 document.getElementById('submit-btn').addEventListener('click',async function(){{
@@ -1151,6 +1269,7 @@ document.getElementById('submit-btn').addEventListener('click',async function(){
     var data=await resp.json();
     document.getElementById('upload-section').style.display='none';
     document.getElementById('loading').style.display='block';
+    document.getElementById('ls-upload').classList.add('active');
     pollStatus(data.job_id);
   }}catch(e){{
     document.getElementById('error-msg').textContent=e.message;
@@ -1163,10 +1282,12 @@ async function pollStatus(jobId){{
   var lt=document.getElementById('loading-text');var attempts=0;
   var iv=setInterval(async function(){{
     attempts++;
+    // Animate loading steps
+    if(attempts===3){{document.getElementById('ls-analyze').classList.add('active');lt.textContent='Identifying items...'}}
+    if(attempts===8){{document.getElementById('ls-price').classList.add('active');lt.textContent='Calculating price...'}}
     try{{
       var resp=await fetch('/api/public/estimate/status/'+jobId);
       var data=await resp.json();
-      lt.textContent=data.message||'Analyzing...';
       if(data.status==='complete'&&data.result){{clearInterval(iv);document.getElementById('loading').style.display='none';showResults(data.result)}}
       else if(data.status==='error'){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent=data.message||'An error occurred. Please try again.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Get My Free Estimate'}}
     }}catch(e){{}}
@@ -1175,27 +1296,31 @@ async function pollStatus(jobId){{
 }}
 
 function showResults(r){{
-  document.getElementById('results').style.display='block';
+  var el=document.getElementById('results');
+  el.style.display='block';
+  el.classList.add('show');
   var pL=r.price_low||0,pH=r.price_high||0;
   document.getElementById('res-price').textContent='$'+pL.toLocaleString()+' — $'+pH.toLocaleString();
   if(r.min_charge_applied){{var m=document.getElementById('min-charge-msg');m.textContent='Minimum charge applied';m.style.display='block'}}
   document.getElementById('res-cy').textContent=(r.cy_estimate||0)+' cubic yards estimated';
-  var bl={{standard:'Standard',premium:'Premium',hoarder:'Hoarder',truck_load:'Truck Load'}};
+  var bl={{standard:'Standard Load',premium:'Premium Items',hoarder:'Heavy Cleanout',truck_load:'Full Truck'}};
   var jt=r.job_type||'standard';
   document.getElementById('res-badge').textContent=bl[jt]||jt;
   document.getElementById('res-badge').className='badge badge-'+jt;
-  var el=document.getElementById('res-items');el.innerHTML='';
+  var items=document.getElementById('res-items');items.innerHTML='';
   (r.items||[]).forEach(function(item){{
     var row=document.createElement('div');row.className='item-row';
-    row.innerHTML='<div class="item-name">'+esc(item.name||'Item')+'</div><div class="item-cy">'+(item.cubic_yards||0)+' CY</div><div class="item-qty">x'+(item.quantity||1)+'</div>';
-    el.appendChild(row);
+    row.innerHTML='<div class="item-name">'+esc(item.name||'Item')+'</div><div class="item-cy">'+(item.cubic_yards||0)+' CY</div><div class="item-qty">&times;'+(item.quantity||1)+'</div>';
+    items.appendChild(row);
   }});
   var sp=r.special_items||[];
-  if(sp.length>0){{var sh='<strong>Recycling/Disposal Fee Items:</strong><br>';sp.forEach(function(s){{sh+=esc(s.name)+' x'+(s.quantity||1)+'<br>'}});sh+='<em style="font-size:0.75rem">Fees confirmed on arrival.</em>';document.getElementById('res-special').innerHTML=sh;document.getElementById('res-special').style.display='block'}}
+  if(sp.length>0){{var sh='<strong>Recycling/Disposal Fee Items:</strong><br>';sp.forEach(function(s){{sh+=esc(s.name)+' &times;'+(s.quantity||1)+'<br>'}});sh+='<em style="font-size:0.75rem;opacity:0.8">Fees confirmed on arrival.</em>';document.getElementById('res-special').innerHTML=sh;document.getElementById('res-special').style.display='block'}}
   var dp=r.potential_duplicates||[];
   if(dp.length>0){{var dh='<strong>Items to verify (may be duplicates):</strong><br>';dp.forEach(function(d){{dh+=esc(d.item_a)+' vs '+esc(d.item_b)+'<br>'}});document.getElementById('res-dupes').innerHTML=dh;document.getElementById('res-dupes').style.display='block'}}
   if(r.notes){{document.getElementById('res-notes').textContent=r.notes;document.getElementById('res-notes-card').style.display='block'}}
   if(!companyPhone){{document.getElementById('cta-section').style.display='none'}}
+  // Scroll to results
+  el.scrollIntoView({{behavior:'smooth',block:'start'}});
 }}
 
 if(window.parent!==window){{

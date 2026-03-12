@@ -52,6 +52,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         if "text/html" in ct:
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
             response.headers["Pragma"] = "no-cache"
+        elif "application/json" in ct:
+            response.headers["Cache-Control"] = "no-store"
         return response
 
 

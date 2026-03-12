@@ -1014,7 +1014,7 @@ document.getElementById('nav-logout').addEventListener('click', async () => {
     msg.style.display = 'none';
     modal.style.display = 'flex';
     try {
-      var resp = await fetch('/api/settings');
+      var resp = await fetch('/api/settings?_t=' + Date.now());
       if (resp.ok) {
         var s = await resp.json();
         document.getElementById('set-company-name').value = s.company_name || '';

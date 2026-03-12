@@ -426,6 +426,8 @@ document.querySelectorAll('.tab').forEach(function(tab) {
     tab.classList.add('active');
     tab.setAttribute('aria-selected', 'true');
     document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+    // Reload settings when My Settings tab is clicked
+    if (tab.dataset.panel === 'my-settings') { loadMySettings(); }
   });
 });
 
@@ -643,9 +645,12 @@ async function loadEstimates(page) {
 // My Settings
 async function loadMySettings() {
   try {
-    var resp = await fetch('/api/settings');
-    if (!resp.ok) return;
+    console.log('[WSIC] loadMySettings called');
+    var resp = await fetch('/api/settings?_t=' + Date.now());
+    console.log('[WSIC] /api/settings response status:', resp.status);
+    if (!resp.ok) { console.error('[WSIC] /api/settings failed:', resp.status); return; }
     var d = await resp.json();
+    console.log('[WSIC] Settings loaded:', JSON.stringify(d));
     document.getElementById('ms-company-name').value = d.company_name || '';
     document.getElementById('ms-phone').value = d.company_phone || '';
     document.getElementById('ms-city').value = d.company_city || '';
@@ -658,7 +663,8 @@ async function loadMySettings() {
     document.getElementById('ms-truck').value = d.truck_capacity_cy;
     document.getElementById('ms-slug').value = d.company_slug || '';
     updateMsSlugPreview();
-  } catch(e) {}
+    console.log('[WSIC] Settings form populated successfully');
+  } catch(e) { console.error('[WSIC] loadMySettings ERROR:', e); }
 }
 
 function updateMsSlugPreview() {

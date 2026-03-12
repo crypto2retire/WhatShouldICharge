@@ -728,13 +728,400 @@ async def payment_success_page():
 
 @app.get("/estimate/{slug}", response_class=HTMLResponse)
 async def customer_estimate_page(slug: str):
-    """Public customer-facing estimate page branded for a specific company."""
+    """Public customer-facing estimate page — server-side rendered for SEO."""
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.company_slug == slug.lower().strip()))
-        company_user = result.scalar_one_or_none()
-    if not company_user:
+        u = result.scalar_one_or_none()
+    if not u:
         raise HTTPException(status_code=404, detail="Company not found")
-    return FileResponse("static/customer-estimate.html")
+
+    import html as html_mod
+    name = html_mod.escape(u.company_name or "Junk Removal")
+    city = html_mod.escape(u.company_city or "")
+    state = html_mod.escape(u.company_state or "")
+    phone = html_mod.escape(u.company_phone or "")
+    logo = html_mod.escape(u.company_logo_url or "")
+    safe_slug = html_mod.escape(u.company_slug or slug)
+    location = f"{city}, {state}" if city and state else city or state or ""
+
+    title = f"{name} - Free Junk Removal Estimate"
+    if location:
+        title += f" | {location}"
+    meta_desc = f"Get a free instant junk removal estimate from {name}"
+    if location:
+        meta_desc += f" in {location}"
+    meta_desc += ". Upload photos of your items and receive an AI-powered price quote in under 60 seconds. No obligation."
+
+    canonical = f"https://whatshouldicharge.app/estimate/{safe_slug}"
+
+    # FAQ content unique per company
+    faq_items = [
+        (
+            f"How does {name}'s instant estimate work?",
+            f"Simply upload photos of the items you need removed. Our AI analyzes the images to identify each item, calculate the volume, and provide an accurate price range — all in under 60 seconds."
+        ),
+        (
+            "What items can you remove?",
+            f"{name} handles furniture, appliances, electronics, yard waste, construction debris, mattresses, and more. Upload a photo and we'll identify everything for you."
+        ),
+        (
+            f"How accurate is the photo estimate?",
+            f"Our AI uses advanced image analysis calibrated against thousands of items. The estimate gives you a reliable price range. Final pricing is confirmed on-site when our crew arrives."
+        ),
+        (
+            f"Is there a minimum charge?",
+            f"Yes, most junk removal jobs have a minimum charge to cover basic truck and labor costs. Your estimate will reflect this if applicable."
+        ),
+        (
+            f"How do I schedule a pickup{' in ' + location if location else ''}?",
+            f"After getting your estimate, {'call us at ' + phone + ' to' if phone else 'contact us to'} schedule a pickup at a time that works for you. We offer flexible scheduling to fit your needs."
+        ),
+    ]
+
+    faq_schema = json.dumps([
+        {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}}
+        for q, a in faq_items
+    ])
+
+    jsonld_local = json.dumps({
+        "@context": "https://schema.org",
+        "@type": "LocalBusiness",
+        "name": u.company_name or "Junk Removal",
+        "description": f"Professional junk removal services{' in ' + location if location else ''}. Get a free instant estimate.",
+        **({"telephone": u.company_phone} if u.company_phone else {}),
+        **({"image": u.company_logo_url} if u.company_logo_url else {}),
+        **({"areaServed": {"@type": "City", "name": u.company_city, "addressRegion": u.company_state}} if u.company_city else {}),
+        "url": canonical,
+    })
+
+    logo_html = f'<img src="{logo}" alt="{name}" class="logo">' if logo else ""
+    phone_header = f'<div class="phone"><a href="tel:{phone}">{phone}</a></div>' if phone else ""
+    phone_cta = f'<a href="tel:{phone}" class="btn btn-outline">{phone} — Call Now</a>' if phone else ""
+
+    faq_html = ""
+    for q, a in faq_items:
+        faq_html += f'<details><summary>{html_mod.escape(q)}</summary><p>{html_mod.escape(a)}</p></details>\n'
+
+    page_html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{title}</title>
+<meta name="description" content="{html_mod.escape(meta_desc)}">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="{canonical}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{title}">
+<meta property="og:description" content="{html_mod.escape(meta_desc)}">
+<meta property="og:url" content="{canonical}">
+{f'<meta property="og:image" content="{logo}">' if logo else ''}
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="{title}">
+<meta name="twitter:description" content="{html_mod.escape(meta_desc)}">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script type="application/ld+json">{jsonld_local}</script>
+<script type="application/ld+json">{{
+  "@context":"https://schema.org",
+  "@type":"FAQPage",
+  "mainEntity":{faq_schema}
+}}</script>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:'Inter',system-ui,sans-serif;background:#f8fafc;color:#1e293b;min-height:100vh;-webkit-font-smoothing:antialiased}}
+.page-wrap{{max-width:640px;margin:0 auto;padding:16px}}
+
+/* Header */
+.site-header{{text-align:center;padding:28px 0 20px}}
+.logo{{max-height:56px;margin-bottom:12px;border-radius:8px}}
+.site-header h1{{font-size:1.4rem;font-weight:800;color:#0f172a;line-height:1.25}}
+.location-badge{{display:inline-block;margin-top:6px;padding:3px 12px;background:#e0f2fe;color:#0369a1;border-radius:20px;font-size:0.78rem;font-weight:600}}
+.phone{{margin-top:8px;font-size:0.9rem}}
+.phone a{{color:#16a34a;text-decoration:none;font-weight:600}}
+
+/* Hero */
+.hero{{text-align:center;padding:20px 0 8px}}
+.hero h2{{font-size:1.6rem;font-weight:800;color:#0f172a;line-height:1.2;margin-bottom:8px}}
+.hero p{{font-size:0.92rem;color:#64748b;max-width:420px;margin:0 auto}}
+
+/* Steps */
+.steps{{display:flex;gap:12px;margin:20px 0;padding:0 4px}}
+.step{{flex:1;text-align:center;padding:14px 8px;background:#fff;border:1px solid #e2e8f0;border-radius:12px}}
+.step-num{{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:#16a34a;color:#fff;border-radius:50%;font-size:0.8rem;font-weight:700;margin-bottom:6px}}
+.step-title{{font-size:0.78rem;font-weight:600;color:#0f172a}}
+.step-sub{{font-size:0.7rem;color:#94a3b8;margin-top:2px}}
+
+/* Cards */
+.card{{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}}
+.card-title{{font-size:0.9rem;font-weight:700;color:#0f172a;margin-bottom:14px}}
+label{{display:block;font-size:0.78rem;color:#64748b;margin-bottom:4px;font-weight:500}}
+input,select{{width:100%;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;color:#1e293b;font-size:0.9rem;margin-bottom:12px;font-family:inherit;transition:border-color .2s}}
+input:focus{{outline:none;border-color:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,0.1)}}
+
+/* Upload */
+.drop-zone{{border:2px dashed #cbd5e1;border-radius:14px;padding:32px 20px;text-align:center;cursor:pointer;transition:all .2s;background:#fafbfc}}
+.drop-zone:hover,.drop-zone.drag-over{{border-color:#16a34a;background:#f0fdf4}}
+.drop-icon{{font-size:2rem;margin-bottom:8px}}
+.drop-label{{font-size:0.95rem;font-weight:600;color:#0f172a}}
+.drop-sub{{font-size:0.78rem;color:#94a3b8;margin-top:4px}}
+.previews{{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}}
+.preview-thumb{{width:72px;height:72px;border-radius:10px;object-fit:cover;border:2px solid #e2e8f0}}
+
+/* Buttons */
+.btn{{display:block;width:100%;padding:14px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;transition:background .2s;text-align:center;text-decoration:none}}
+.btn:hover{{background:#15803d}}
+.btn:disabled{{opacity:0.5;cursor:not-allowed}}
+.btn-outline{{background:transparent;border:2px solid #16a34a;color:#16a34a;margin-top:10px}}
+.btn-outline:hover{{background:#f0fdf4}}
+
+/* Loading */
+.loading{{text-align:center;padding:48px 20px;display:none}}
+.spinner{{display:inline-block;width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#16a34a;border-radius:50%;animation:spin .8s linear infinite}}
+@keyframes spin{{to{{transform:rotate(360deg)}}}}
+.loading-text{{font-size:0.9rem;color:#64748b;margin-top:14px}}
+
+/* Results */
+.results{{display:none}}
+.price-card{{text-align:center;padding:24px 20px}}
+.price-range{{font-size:2.2rem;font-weight:800;color:#16a34a;letter-spacing:-1px}}
+.price-note{{font-size:0.78rem;color:#94a3b8;margin-top:4px}}
+.min-charge-note{{font-size:0.8rem;color:#d97706;font-weight:500;margin-top:6px}}
+.badge{{display:inline-block;padding:3px 12px;border-radius:20px;font-size:0.75rem;font-weight:600;margin-bottom:8px}}
+.badge-standard{{background:#dcfce7;color:#16a34a}}
+.badge-premium{{background:#fef3c7;color:#d97706}}
+.badge-hoarder{{background:#fee2e2;color:#ef4444}}
+.item-row{{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9;font-size:0.85rem}}
+.item-row:last-child{{border-bottom:none}}
+.item-name{{flex:1;font-weight:500;color:#1e293b}}
+.item-cy{{color:#94a3b8;font-size:0.78rem}}
+.item-qty{{color:#94a3b8;font-size:0.78rem;min-width:30px;text-align:right}}
+.special-note{{margin-top:14px;padding:14px;border-radius:12px;background:#fffbeb;border:1px solid #fde68a;font-size:0.8rem;color:#92400e}}
+.dupe-note{{margin-top:14px;padding:14px;border-radius:12px;background:#fefce8;border:1px solid #fde68a;font-size:0.8rem;color:#854d0e}}
+
+/* CTA */
+.cta-section{{text-align:center;padding:24px 20px;margin-top:8px}}
+.cta-section .subtext{{font-size:0.85rem;color:#64748b;margin-bottom:12px}}
+
+/* FAQ */
+.faq-section{{margin-top:20px}}
+.faq-section h2{{font-size:1.1rem;font-weight:700;color:#0f172a;margin-bottom:14px}}
+details{{background:#fff;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:8px;overflow:hidden}}
+summary{{padding:14px 18px;font-size:0.88rem;font-weight:600;cursor:pointer;color:#0f172a;list-style:none;display:flex;align-items:center;justify-content:space-between}}
+summary::after{{content:"+";font-size:1.2rem;color:#94a3b8;font-weight:400;transition:transform .2s}}
+details[open] summary::after{{content:"−"}}
+details p{{padding:0 18px 14px;font-size:0.84rem;color:#64748b;line-height:1.6}}
+
+/* Content */
+.content-section{{margin-top:24px;padding:20px;background:#fff;border:1px solid #e2e8f0;border-radius:14px}}
+.content-section h2{{font-size:1rem;font-weight:700;color:#0f172a;margin-bottom:10px}}
+.content-section p{{font-size:0.85rem;color:#64748b;line-height:1.7;margin-bottom:10px}}
+
+.footer{{text-align:center;padding:24px 0;font-size:0.72rem;color:#94a3b8}}
+.footer a{{color:#94a3b8;text-decoration:none}}
+.error{{color:#ef4444;font-size:0.85rem;text-align:center;padding:12px;display:none;background:#fef2f2;border-radius:10px;border:1px solid #fecaca}}
+</style>
+</head>
+<body>
+
+<div class="page-wrap">
+  <header class="site-header">
+    {logo_html}
+    <h1>{name}</h1>
+    {f'<span class="location-badge">{location}</span>' if location else ''}
+    {phone_header}
+  </header>
+
+  <section class="hero">
+    <h2>Get Your Free Estimate in 60 Seconds</h2>
+    <p>Upload photos of the items you need removed and get an instant price quote — no obligation, no waiting.</p>
+  </section>
+
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-title">Upload</div><div class="step-sub">Snap photos</div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-title">Analyze</div><div class="step-sub">AI identifies items</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-title">Quote</div><div class="step-sub">Get your price</div></div>
+  </div>
+
+  <!-- Upload Section -->
+  <div id="upload-section">
+    <div class="card">
+      <div class="card-title">Your Contact Info (Optional)</div>
+      <label>Name</label>
+      <input type="text" id="cust-name" placeholder="Your name">
+      <label>Email</label>
+      <input type="email" id="cust-email" placeholder="your@email.com">
+      <label>Phone</label>
+      <input type="tel" id="cust-phone" placeholder="(555) 123-4567">
+    </div>
+
+    <div class="card">
+      <div class="card-title">Upload Photos of Items for Removal</div>
+      <div class="drop-zone" id="drop-zone">
+        <div class="drop-icon">📷</div>
+        <div class="drop-label">Tap to upload photos</div>
+        <div class="drop-sub">Up to 10 photos — JPG, PNG, WEBP</div>
+      </div>
+      <input type="file" id="file-input" accept="image/*" multiple style="display:none">
+      <div class="previews" id="previews"></div>
+    </div>
+
+    <div class="error" id="error-msg"></div>
+    <button class="btn" id="submit-btn" disabled>Get My Free Estimate</button>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loading-text">Analyzing your photos...</div>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+    <div class="card price-card">
+      <span class="badge" id="res-badge"></span>
+      <div class="price-range" id="res-price"></div>
+      <div id="min-charge-msg" class="min-charge-note" style="display:none"></div>
+      <div class="price-note">Estimated price range based on photo analysis</div>
+      <div style="font-size:0.85rem;color:#94a3b8;margin-top:6px" id="res-cy"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Items Detected</div>
+      <div id="res-items"></div>
+    </div>
+
+    <div id="res-special" class="special-note" style="display:none"></div>
+    <div id="res-dupes" class="dupe-note" style="display:none"></div>
+
+    <div class="card" id="res-notes-card" style="display:none">
+      <div class="card-title">Notes</div>
+      <div id="res-notes" style="font-size:0.85rem;color:#64748b"></div>
+    </div>
+
+    <div class="cta-section" id="cta-section">
+      <div class="subtext">Ready to schedule your pickup?</div>
+      {phone_cta}
+    </div>
+  </div>
+
+  <!-- SEO Content Section -->
+  <section class="content-section">
+    <h2>Professional Junk Removal{' in ' + location if location else ''}</h2>
+    <p>{name} provides fast, affordable junk removal services{' for homes and businesses in ' + location if location else ''}. Whether you're clearing out a garage, renovating a room, or cleaning up after a move, we handle the heavy lifting so you don't have to.</p>
+    <p>We remove furniture, appliances, electronics, mattresses, yard waste, construction debris, and more. Our photo-based estimating tool gives you an accurate price range before we arrive — no surprises, no hidden fees.</p>
+  </section>
+
+  <!-- FAQ Section -->
+  <section class="faq-section">
+    <h2>Frequently Asked Questions</h2>
+    {faq_html}
+  </section>
+
+  <footer class="footer">
+    &copy; {name} {f"&middot; {location}" if location else ""}<br>
+    Powered by <a href="https://whatshouldicharge.app">WhatShouldICharge</a>
+  </footer>
+</div>
+
+<script>
+var slug="{safe_slug}";
+var companyPhone="{phone}";
+var photos=[];
+
+function esc(s){{var d=document.createElement('div');d.textContent=s;return d.innerHTML}}
+
+var dropZone=document.getElementById('drop-zone');
+var fileInput=document.getElementById('file-input');
+dropZone.addEventListener('click',function(){{fileInput.click()}});
+dropZone.addEventListener('dragover',function(e){{e.preventDefault();dropZone.classList.add('drag-over')}});
+dropZone.addEventListener('dragleave',function(){{dropZone.classList.remove('drag-over')}});
+dropZone.addEventListener('drop',function(e){{e.preventDefault();dropZone.classList.remove('drag-over');addFiles(Array.from(e.dataTransfer.files))}});
+fileInput.addEventListener('change',function(e){{addFiles(Array.from(e.target.files))}});
+
+function addFiles(files){{
+  var remaining=10-photos.length;
+  files.filter(function(f){{return f.type.startsWith('image/')}}).slice(0,remaining).forEach(function(f){{
+    photos.push(f);
+    var img=document.createElement('img');
+    img.className='preview-thumb';
+    img.src=URL.createObjectURL(f);
+    document.getElementById('previews').appendChild(img);
+  }});
+  document.getElementById('submit-btn').disabled=photos.length===0;
+}}
+
+document.getElementById('submit-btn').addEventListener('click',async function(){{
+  var btn=this;btn.disabled=true;btn.textContent='Submitting...';
+  document.getElementById('error-msg').style.display='none';
+  var fd=new FormData();
+  photos.forEach(function(f){{fd.append('files',f)}});
+  fd.append('customer_name',document.getElementById('cust-name').value.trim());
+  fd.append('customer_email',document.getElementById('cust-email').value.trim());
+  fd.append('customer_phone',document.getElementById('cust-phone').value.trim());
+  fd.append('rooms',JSON.stringify(photos.map(function(){{return 'Main'}})));
+  try{{
+    var resp=await fetch('/api/public/estimate/'+encodeURIComponent(slug),{{method:'POST',body:fd}});
+    if(!resp.ok){{var err=await resp.json();throw new Error(err.detail||'Failed to submit')}}
+    var data=await resp.json();
+    document.getElementById('upload-section').style.display='none';
+    document.getElementById('loading').style.display='block';
+    pollStatus(data.job_id);
+  }}catch(e){{
+    document.getElementById('error-msg').textContent=e.message;
+    document.getElementById('error-msg').style.display='block';
+    btn.disabled=false;btn.textContent='Get My Free Estimate';
+  }}
+}});
+
+async function pollStatus(jobId){{
+  var lt=document.getElementById('loading-text');var attempts=0;
+  var iv=setInterval(async function(){{
+    attempts++;
+    try{{
+      var resp=await fetch('/api/public/estimate/status/'+jobId);
+      var data=await resp.json();
+      lt.textContent=data.message||'Analyzing...';
+      if(data.status==='complete'&&data.result){{clearInterval(iv);document.getElementById('loading').style.display='none';showResults(data.result)}}
+      else if(data.status==='error'){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent=data.message||'An error occurred. Please try again.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Get My Free Estimate'}}
+    }}catch(e){{}}
+    if(attempts>90){{clearInterval(iv);lt.textContent='Taking longer than expected...'}}
+  }},2000);
+}}
+
+function showResults(r){{
+  document.getElementById('results').style.display='block';
+  var pL=r.price_low||0,pH=r.price_high||0;
+  document.getElementById('res-price').textContent='$'+pL.toLocaleString()+' — $'+pH.toLocaleString();
+  if(r.min_charge_applied){{var m=document.getElementById('min-charge-msg');m.textContent='Minimum charge applied';m.style.display='block'}}
+  document.getElementById('res-cy').textContent=(r.cy_estimate||0)+' cubic yards estimated';
+  var bl={{standard:'Standard',premium:'Premium',hoarder:'Hoarder',truck_load:'Truck Load'}};
+  var jt=r.job_type||'standard';
+  document.getElementById('res-badge').textContent=bl[jt]||jt;
+  document.getElementById('res-badge').className='badge badge-'+jt;
+  var el=document.getElementById('res-items');el.innerHTML='';
+  (r.items||[]).forEach(function(item){{
+    var row=document.createElement('div');row.className='item-row';
+    row.innerHTML='<div class="item-name">'+esc(item.name||'Item')+'</div><div class="item-cy">'+(item.cubic_yards||0)+' CY</div><div class="item-qty">x'+(item.quantity||1)+'</div>';
+    el.appendChild(row);
+  }});
+  var sp=r.special_items||[];
+  if(sp.length>0){{var sh='<strong>Recycling/Disposal Fee Items:</strong><br>';sp.forEach(function(s){{sh+=esc(s.name)+' x'+(s.quantity||1)+'<br>'}});sh+='<em style="font-size:0.75rem">Fees confirmed on arrival.</em>';document.getElementById('res-special').innerHTML=sh;document.getElementById('res-special').style.display='block'}}
+  var dp=r.potential_duplicates||[];
+  if(dp.length>0){{var dh='<strong>Items to verify (may be duplicates):</strong><br>';dp.forEach(function(d){{dh+=esc(d.item_a)+' vs '+esc(d.item_b)+'<br>'}});document.getElementById('res-dupes').innerHTML=dh;document.getElementById('res-dupes').style.display='block'}}
+  if(r.notes){{document.getElementById('res-notes').textContent=r.notes;document.getElementById('res-notes-card').style.display='block'}}
+  if(!companyPhone){{document.getElementById('cta-section').style.display='none'}}
+}}
+
+if(window.parent!==window){{
+  function postHeight(){{window.parent.postMessage({{type:'wsic-resize',height:document.body.scrollHeight+40}},'*')}}
+  new MutationObserver(postHeight).observe(document.body,{{childList:true,subtree:true,attributes:true}});
+  setInterval(postHeight,1000);postHeight();
+}}
+</script>
+
+</body>
+</html>'''
+    return HTMLResponse(content=page_html)
 
 
 @app.get("/api/public/company/{slug}")

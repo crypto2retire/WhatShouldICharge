@@ -810,6 +810,8 @@
       <div class="items-grid" id="res-items"></div>
     </div>
 
+    <div id="res-potential-dupes" style="display:none;margin-top:14px;padding:14px 16px;border-radius:10px;background:rgba(234,179,8,0.10);border:1px solid rgba(234,179,8,0.3);"></div>
+
     <div id="res-special-items" style="display:none;margin-top:14px;padding:14px 16px;border-radius:10px;background:rgba(120,53,15,0.15);border:1px solid rgba(245,158,11,0.3);"></div>
 
     <div id="res-lookups" style="display:none;margin-top:8px;padding:10px 14px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);font-size:0.83rem;color:#818cf8;font-weight:500;"></div>
@@ -1483,13 +1485,14 @@ function showResults(data) {
     const cyText = item.cubic_yards ? `${item.cubic_yards} CY` : '';
     const specialTag = item.is_special ? `<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:4px;background:rgba(245,158,11,0.15);color:#f59e0b;font-size:0.68rem;font-weight:600;vertical-align:middle;">♻️ SPECIAL</span>` : '';
     const lookedUp = item.looked_up ? '<span class="item-looked-up" title="Dimensions found via web search">🔍</span>' : '';
+    const photoSrcs = (item.photo_sources && item.photo_sources.length > 0) ? `<span style="color:var(--muted);font-size:0.68rem;margin-left:4px;" title="${esc(item.dedup_note || '')}">📷${item.photo_sources.join(',')}</span>` : '';
     const row = document.createElement('div');
     row.className = 'item-row';
     row.style.cursor = 'pointer';
     row.innerHTML = `
       <input type="checkbox" checked data-item-idx="${idx}" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
       <div class="item-icon cat-${esc(cat)}">${catMap[cat] || '📦'}</div>
-      <div class="item-name">${esc(item.name || 'Unknown item')}${specialTag}${lookedUp}${cyText ? ' <span style="color:var(--muted);font-size:0.78rem;font-weight:400">(' + esc(cyText) + ')</span>' : ''}</div>
+      <div class="item-name">${esc(item.name || 'Unknown item')}${specialTag}${lookedUp}${photoSrcs}${cyText ? ' <span style="color:var(--muted);font-size:0.78rem;font-weight:400">(' + esc(cyText) + ')</span>' : ''}</div>
       <div class="item-qty">×${parseInt(item.quantity) || 1}</div>
     `;
     const cb = row.querySelector('input[type="checkbox"]');
@@ -1526,6 +1529,23 @@ function showResults(data) {
     specialEl.style.display = 'block';
   } else {
     specialEl.style.display = 'none';
+  }
+
+  const dupeEl = document.getElementById('res-potential-dupes');
+  var dupes = data.potential_duplicates || [];
+  if (dupes.length > 0) {
+    let dhtml = '<div style="font-weight:600;color:#eab308;margin-bottom:10px;font-size:0.85rem;">&#9888; Potential Duplicate Items — Please Review</div>';
+    dhtml += '<div style="font-size:0.78rem;color:#ca8a04;margin-bottom:10px;">The AI found items that may be the same item seen from different angles. Uncheck duplicates in the item list above to exclude them.</div>';
+    dupes.forEach(function(d) {
+      dhtml += '<div style="padding:8px 0;border-top:1px solid rgba(234,179,8,0.15);">';
+      dhtml += '<div style="font-size:0.82rem;color:#fde68a;font-weight:500;">' + esc(d.item_a) + ' vs ' + esc(d.item_b) + '</div>';
+      dhtml += '<div style="font-size:0.75rem;color:#a16207;margin-top:3px;">' + esc(d.reason) + '</div>';
+      dhtml += '</div>';
+    });
+    dupeEl.innerHTML = dhtml;
+    dupeEl.style.display = 'block';
+  } else {
+    dupeEl.style.display = 'none';
   }
 
   const lookupEl = document.getElementById('res-lookups');

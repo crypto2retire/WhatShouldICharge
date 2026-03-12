@@ -1251,10 +1251,11 @@ REQUIRED JSON FORMAT:
 {
   "reference_points": [
     {
-      "name": "item or fixture used as reference (e.g. 'standard interior door', 'electrical outlet', 'couch')",
-      "known_dimensions": "80in x 32in (or 3ft x 2ft x 3ft for items)",
+      "name": "item or fixture used as reference",
+      "known_dimensions": "80in x 32in",
       "cubic_yards": 0.0,
-      "location_in_photo": "left foreground"
+      "location_in_photo": "left foreground",
+      "photo_number": 1
     }
   ],
   "items": [
@@ -1263,7 +1264,16 @@ REQUIRED JSON FORMAT:
       "quantity": 1,
       "category": "furniture|appliance|electronics|debris|hazardous|other",
       "cubic_yards": 0.5,
-      "is_special": false
+      "is_special": false,
+      "photo_sources": [1],
+      "dedup_note": ""
+    }
+  ],
+  "potential_duplicates": [
+    {
+      "item_a": "item name (photo X, location description)",
+      "item_b": "item name (photo Y, location description)",
+      "reason": "why these might be the same item"
     }
   ],
   "totals": {
@@ -1347,14 +1357,38 @@ List your reference points in the "reference_points" array. For variable items, 
 
 If fewer than 3 calibration anchors are visible (fixed items + architectural fixtures), note this in "notes" and lower confidence. Without anchors, variable item measurements are unreliable.
 
-MULTI-PHOTO DEDUPLICATION (CRITICAL):
-- Multiple photos may show the SAME room from different angles
-- Photos labeled with the same room name are different views of ONE space
-- If the same item is visible in multiple photos of the same room, count it ONLY ONCE
-- Use visual cues (position, color, size, surroundings) to identify duplicate items across angles
-- When uncertain if an item in two photos is the same, assume it IS the same item and count once
-- Only count an item multiple times if it is clearly a DIFFERENT item (e.g., two distinct chairs in different positions)
-- Use reference points from multiple angles to improve spatial accuracy — seeing the same reference item from two angles gives better depth calibration
+MULTI-PHOTO DEDUPLICATION (CRITICAL — follow this 3-step process):
+
+All photos submitted together are from the SAME JOB. Photos labeled with the same room name show DIFFERENT ANGLES of ONE space. You must NOT count the same item twice.
+
+For EVERY item, set "photo_sources" to the list of photo numbers where that item is visible.
+
+DEDUP STEP 1 — BUILD A CANDIDATE LIST:
+After identifying all items across all photos, scan for potential duplicates:
+- Same item type appearing in multiple photos of the same room
+- Similar-sized items in overlapping areas between photos
+- Items at the same relative position in the room (e.g., "against the left wall") seen from different angles
+
+DEDUP STEP 2 — COMPARE VISUAL FEATURES:
+For each candidate pair, compare:
+- Color and material (same wood finish? same fabric color?)
+- Size relative to nearby anchors (same approximate dimensions?)
+- Position relative to fixed landmarks (same wall, same corner, same distance from door?)
+- Distinguishing details (handles, damage, labels, items on top of it)
+If the features match: MERGE into one item. Set photo_sources to all photos it appears in. Add a dedup_note explaining the merge (e.g., "visible in photos 1 and 3 from different angles, same dark wood dresser against left wall").
+
+DEDUP STEP 3 — FLAG UNCERTAIN CASES:
+If you CANNOT confidently determine whether two items are the same or different:
+- Count the item ONCE in the items list (do not double-count)
+- Add an entry to the "potential_duplicates" array with item_a, item_b, and reason
+- The user will review flagged duplicates and confirm
+- Example: two similar dressers could be the same dresser from two angles, or two separate dressers side by side — flag it rather than guessing
+
+DEDUP RULES:
+- When in doubt, count ONCE and flag — better to undercount than overcount
+- Use reference points from multiple angles to improve spatial accuracy
+- Items in DIFFERENT rooms are never duplicates (a chair in the kitchen is not the same as a chair in the bedroom)
+- Identical bulk items (e.g., "trash bags") in the same room CAN be separate items — count distinct piles/groups separately but note the total quantity
 
 ITEM IDENTIFICATION RULES:
 - Identify every visible item for removal individually, do not group unless identical (but if circled/marked items were detected, only list the marked items — see CIRCLED OR MARKED ITEMS section)

@@ -1297,23 +1297,24 @@ SPATIAL REASONING METHOD (THIS IS HOW YOU ESTIMATE — FOLLOW EXACTLY):
 Step 1 — FIND FIXED REFERENCE ITEMS AND ARCHITECTURAL FIXTURES:
 Scan the photo for fixed reference items from the library AND architectural fixtures. These are your calibration anchors. You need at least 2-3 anchors spread across the photo at different depths.
 
-ARCHITECTURAL FIXTURES — built-in calibration rulers:
+ARCHITECTURAL FIXTURES — built-in calibration rulers visible in almost every room:
 
-HARD STANDARDS (reliable — code-mandated, virtually universal):
-- Electrical outlet cover plate: 4.5"H × 2.75"W
-- Light switch cover plate: 4.5"H × 2.75"W
+PRIMARY ANCHORS (present in nearly every indoor photo — look for these FIRST):
+- Standard door frame: 80"H (6'8") tall × 32-36"W — visible in almost every room. The HEIGHT is code-mandated and virtually universal. Use it as your primary vertical ruler. The width varies but is typically 32" for bedrooms/bathrooms and 36" for exterior doors.
+- Ceiling height: 96" (8') is the most common residential standard. 108" (9') is common in newer construction. 120" (10') exists but is rare. If you can see both the floor and ceiling, you have a full-height vertical ruler for the entire room.
+- Electrical outlet cover plate: 4.5"H × 2.75"W — small but precise. Standard outlet height from floor is 12-16".
+- Light switch cover plate: 4.5"H × 2.75"W — standard height from floor is 48".
+
+These four fixtures give you calibration in virtually every indoor photo. A door frame + ceiling gives you two vertical rulers at known heights. Outlet and switch plates give you precise small-scale references.
+
+SECONDARY ANCHORS (common, reliable):
 - Wall stud spacing (visible in unfinished garages/basements): 16" on center
-- Standard interior door HEIGHT: 80" (6'8") — width varies (28-36") but height is consistent
-
-COMMON STANDARDS (very common but can vary — strong estimates):
-- Interior door width: typically 30-32"
 - Exterior door: 80"H × 36"W typical
 - Sliding patio door: 80"H × 72"W typical
 - Garage door single: 84"H × 108"W (7' × 9') typical
 - Garage door double: 84"H × 192"W (7' × 16') typical
 - Standard stair riser height: 7-8"
 - Standard stair tread depth: 10-11"
-- Ceiling height: 96" (8') most common residential
 
 APPROXIMATE (use only when no better reference available):
 - Double-hung window: 36"H × 24"W varies widely

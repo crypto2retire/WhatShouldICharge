@@ -99,12 +99,33 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
-DATABASE_URL = "sqlite+aiosqlite:///./estimates.db"
+def _get_database_url() -> str:
+    """Resolve database URL for Railway PostgreSQL or local SQLite fallback."""
+    for key in ("DATABASE_PRIVATE_URL", "DATABASE_PUBLIC_URL", "DATABASE_URL"):
+        url = os.environ.get(key, "")
+        if url:
+            # Normalize to async driver
+            if url.startswith("postgres://"):
+                url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+            elif url.startswith("postgresql://"):
+                url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            return url
+    # Local dev fallback to SQLite
+    return "sqlite+aiosqlite:///./estimates.db"
+
+
+DATABASE_URL = _get_database_url()
+_is_postgres = "asyncpg" in DATABASE_URL
+
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
-    pool_recycle=3600,
+    **({
+        "pool_size": 10,
+        "max_overflow": 5,
+        "pool_recycle": 3600,
+    } if _is_postgres else {})
 )
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
@@ -229,9 +250,37 @@ class ItemReferenceLibrary(Base):
 
 
 async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    async with engine.begin() as conn:
+    """Create tables with retry logic for Railway PostgreSQL startup race."""
+    import logging
+    logger = logging.getLogger("wsic")
+
+    for attempt in range(5):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info(f"Database tables created (attempt {attempt + 1})")
+            break
+        except Exception as e:
+            if attempt < 4:
+                wait = (attempt + 1) * 2
+                logger.warning(f"DB init attempt {attempt + 1} failed: {e}. Retrying in {wait}s...")
+                await asyncio.sleep(wait)
+            else:
+                logger.error(f"DB init failed after 5 attempts: {e}")
+                raise
+
+    # Run migrations — use IF NOT EXISTS for PostgreSQL, try/except for SQLite
+    if _is_postgres:
+        alter_statements = [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS team_member_id INTEGER DEFAULT 0",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS customer_name TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS customer_email TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS customer_phone TEXT DEFAULT ''",
+            "ALTER TABLE item_reference_library ADD COLUMN IF NOT EXISTS dimensions TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS estimate_name TEXT DEFAULT ''",
+        ]
+    else:
         alter_statements = [
             "ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0",
             "ALTER TABLE estimates ADD COLUMN team_member_id INTEGER",
@@ -241,6 +290,8 @@ async def init_db():
             "ALTER TABLE item_reference_library ADD COLUMN dimensions TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN estimate_name TEXT DEFAULT ''",
         ]
+
+    async with engine.begin() as conn:
         for stmt in alter_statements:
             try:
                 await conn.execute(text(stmt))

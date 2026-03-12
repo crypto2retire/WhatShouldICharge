@@ -8,3 +8,14 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Environment and secrets
+.env
+.env.*
+
+# SQLite database (not used on Railway)
+estimates.db
+
+# IDE
+.cursor/
+.claude/

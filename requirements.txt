@@ -1,0 +1,13 @@
+fastapi>=0.135.1
+uvicorn>=0.41.0
+sqlalchemy>=2.0.48
+asyncpg>=0.30.0
+anthropic>=0.84.0
+bcrypt>=5.0.0
+httpx>=0.28.1
+pillow>=12.1.1
+python-multipart>=0.0.22
+reportlab>=4.4.10
+sendgrid>=6.12.5
+stripe>=14.4.1
+aiosqlite>=0.22.1

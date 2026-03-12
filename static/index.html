@@ -932,6 +932,33 @@
         <input type="number" id="set-truck-capacity" step="0.1" min="1" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;">
       </div>
 
+      <hr style="border-color:var(--border);margin:18px 0;">
+      <div style="font-size:0.85rem;color:var(--text);font-weight:600;margin-bottom:12px;">Customer Estimate Page</div>
+      <div style="font-size:0.75rem;color:var(--muted);margin-bottom:12px;">Let your customers submit photos for estimates directly. Set a slug to enable your public page.</div>
+
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">Company Slug (URL)</label>
+        <div style="display:flex;align-items:center;gap:0;">
+          <span style="padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-right:none;border-radius:6px 0 0 6px;color:var(--muted);font-size:0.8rem;white-space:nowrap;">/estimate/</span>
+          <input type="text" id="set-slug" placeholder="your-company-name" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:0 6px 6px 0;color:var(--text);font-size:0.9rem;" maxlength="60">
+        </div>
+        <div id="slug-preview" style="font-size:0.72rem;color:var(--muted);margin-top:4px;"></div>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">Company Phone (shown to customers)</label>
+        <input type="tel" id="set-phone" placeholder="(555) 123-4567" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;">
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">Company Logo URL (optional)</label>
+        <input type="url" id="set-logo" placeholder="https://example.com/logo.png" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;">
+      </div>
+
+      <div id="embed-code-section" style="display:none;margin-bottom:14px;">
+        <label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">Embed Code (paste into your website)</label>
+        <textarea id="embed-code" readonly rows="3" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--accent);font-size:0.75rem;font-family:monospace;resize:none;"></textarea>
+        <button id="copy-embed" style="margin-top:6px;padding:6px 14px;background:var(--border);color:var(--text);border:none;border-radius:6px;font-size:0.78rem;cursor:pointer;">Copy</button>
+      </div>
+
       <button id="settings-save" style="width:100%;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-weight:700;font-size:0.9rem;cursor:pointer;">Save Settings</button>
       <div id="settings-msg" style="text-align:center;font-size:0.8rem;margin-top:8px;color:var(--accent);display:none;"></div>
     </div>
@@ -992,11 +1019,39 @@ document.getElementById('nav-logout').addEventListener('click', async () => {
     document.getElementById('set-rate-premium').value = currentUser.price_per_cy_premium || 55;
     document.getElementById('set-min-charge').value = currentUser.min_charge || 75;
     document.getElementById('set-truck-capacity').value = currentUser.truck_capacity_cy || 16;
+    document.getElementById('set-slug').value = currentUser.company_slug || '';
+    document.getElementById('set-phone').value = currentUser.company_phone || '';
+    document.getElementById('set-logo').value = currentUser.company_logo_url || '';
+    updateSlugPreview();
     msg.style.display = 'none';
     modal.style.display = 'flex';
   }
 
   function closeSettings() { modal.style.display = 'none'; }
+
+  function updateSlugPreview() {
+    var slug = document.getElementById('set-slug').value.trim();
+    var preview = document.getElementById('slug-preview');
+    var embedSection = document.getElementById('embed-code-section');
+    if (slug) {
+      preview.innerHTML = 'Public page: <a href="/estimate/' + slug + '" target="_blank" style="color:var(--accent);">whatshouldicharge.app/estimate/' + slug + '</a>';
+      var embedCode = '<script src="https://whatshouldicharge.app/static/widget.js" data-slug="' + slug + '"></' + 'script>';
+      document.getElementById('embed-code').value = embedCode;
+      embedSection.style.display = 'block';
+    } else {
+      preview.textContent = 'Set a slug to enable your public estimate page.';
+      embedSection.style.display = 'none';
+    }
+  }
+
+  document.getElementById('set-slug').addEventListener('input', updateSlugPreview);
+  document.getElementById('copy-embed').addEventListener('click', function() {
+    var ta = document.getElementById('embed-code');
+    ta.select();
+    document.execCommand('copy');
+    this.textContent = 'Copied!';
+    setTimeout(function() { document.getElementById('copy-embed').textContent = 'Copy'; }, 1500);
+  });
 
   openBtn.addEventListener('click', openSettings);
   closeBtn.addEventListener('click', closeSettings);
@@ -1015,6 +1070,9 @@ document.getElementById('nav-logout').addEventListener('click', async () => {
         price_per_cy_premium: parseFloat(document.getElementById('set-rate-premium').value) || 55,
         min_charge: parseFloat(document.getElementById('set-min-charge').value) || 75,
         truck_capacity_cy: parseFloat(document.getElementById('set-truck-capacity').value) || 16,
+        company_slug: document.getElementById('set-slug').value.trim(),
+        company_phone: document.getElementById('set-phone').value.trim(),
+        company_logo_url: document.getElementById('set-logo').value.trim(),
       };
       var resp = await fetch('/api/settings', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
       var result = await resp.json();
@@ -1412,9 +1470,9 @@ function showResults(data) {
 
   var priceLow = data.price_low || 0;
   var priceHigh = data.price_high || 0;
+  var minNote = data.min_charge_applied ? `<div style="font-size:0.75rem;color:#f59e0b;font-weight:500;margin-top:4px;">Minimum charge applied: $${data.min_charge || 75}</div>` : `<div style="font-size:0.75rem;color:var(--muted);font-weight:400;margin-top:4px;">Based on volume only</div>`;
   document.getElementById('res-price').innerHTML =
-    `$${priceLow.toLocaleString()} <span>–</span> $${priceHigh.toLocaleString()}`
-    + `<div style="font-size:0.75rem;color:var(--muted);font-weight:400;margin-top:4px;">Based on volume only</div>`;
+    `$${priceLow.toLocaleString()} <span>–</span> $${priceHigh.toLocaleString()}` + minNote;
 
   document.getElementById('res-cy').textContent = data.cy_estimate + ' CY';
   document.getElementById('res-photos').textContent = photos.length;
@@ -1633,15 +1691,19 @@ function recalcEstimate() {
     priceHigh = cyHigh * rateHigh;
   }
 
+  var rawLow = priceLow, rawHigh = priceHigh;
   priceLow = Math.max(priceLow, minCharge);
   priceHigh = Math.max(priceHigh, minCharge);
+  var recalcMinApplied = rawLow < minCharge || rawHigh < minCharge;
   priceLow = Math.round(priceLow * 100) / 100;
   priceHigh = Math.round(priceHigh * 100) / 100;
   totalCy = Math.round(totalCy * 10) / 10;
 
+  var recalcNote = 'Adjusted — ' + excludedItems.size + ' item' + (excludedItems.size > 1 ? 's' : '') + ' excluded';
+  if (recalcMinApplied) recalcNote += ' | Minimum charge applied: $' + minCharge;
   document.getElementById('res-price').innerHTML =
     '$' + priceLow.toLocaleString() + ' <span>–</span> $' + priceHigh.toLocaleString()
-    + '<div style="font-size:0.75rem;color:var(--muted);font-weight:400;margin-top:4px;">Adjusted — ' + excludedItems.size + ' item' + (excludedItems.size > 1 ? 's' : '') + ' excluded</div>';
+    + '<div style="font-size:0.75rem;color:' + (recalcMinApplied ? '#f59e0b' : 'var(--muted)') + ';font-weight:400;margin-top:4px;">' + recalcNote + '</div>';
   document.getElementById('res-cy').textContent = totalCy + ' CY';
 
   var specialItems = includedItems.filter(i => i.is_special);

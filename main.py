@@ -44,6 +44,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "img-src 'self' data: blob: https:; "
             "connect-src 'self' https://api.stripe.com; "
             "frame-src https://js.stripe.com; "
+            "frame-ancestors 'self' *; "
             "base-uri 'self'; "
             "form-action 'self'"
         )
@@ -160,6 +161,9 @@ class User(Base):
     min_charge = Column(Float, default=75.0)
     truck_capacity_cy = Column(Float, default=16.0)
     is_admin = Column(Boolean, default=False)
+    company_slug = Column(String, default="", index=True)
+    company_phone = Column(String, default="")
+    company_logo_url = Column(String, default="")
 
 
 class TeamMember(Base):
@@ -279,6 +283,9 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS customer_phone TEXT DEFAULT ''",
             "ALTER TABLE item_reference_library ADD COLUMN IF NOT EXISTS dimensions TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS estimate_name TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS company_slug TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS company_phone TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS company_logo_url TEXT DEFAULT ''",
         ]
     else:
         alter_statements = [
@@ -289,6 +296,9 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN customer_phone TEXT DEFAULT ''",
             "ALTER TABLE item_reference_library ADD COLUMN dimensions TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN estimate_name TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN company_slug TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN company_phone TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN company_logo_url TEXT DEFAULT ''",
         ]
 
     async with engine.begin() as conn:
@@ -716,6 +726,157 @@ async def payment_success_page():
     return FileResponse("static/payment-success.html")
 
 
+@app.get("/estimate/{slug}", response_class=HTMLResponse)
+async def customer_estimate_page(slug: str):
+    """Public customer-facing estimate page branded for a specific company."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.company_slug == slug.lower().strip()))
+        company_user = result.scalar_one_or_none()
+    if not company_user:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return FileResponse("static/customer-estimate.html")
+
+
+@app.get("/api/public/company/{slug}")
+async def public_company_info(slug: str):
+    """Public endpoint — returns company branding info, no auth required."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.company_slug == slug.lower().strip()))
+        u = result.scalar_one_or_none()
+    if not u:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return {
+        "company_name": u.company_name or "Junk Removal",
+        "company_phone": u.company_phone or "",
+        "company_logo_url": u.company_logo_url or "",
+        "company_city": u.company_city or "",
+        "company_state": u.company_state or "",
+        "slug": u.company_slug,
+    }
+
+
+@app.post("/api/public/estimate/{slug}")
+async def public_create_estimate(
+    slug: str,
+    files: list[UploadFile] = File(...),
+    rooms: str = Form(default="[]"),
+    customer_name: str = Form(default=""),
+    customer_email: str = Form(default=""),
+    customer_phone: str = Form(default=""),
+):
+    """Public estimate endpoint — customer submits photos, charges against company's estimate count."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.company_slug == slug.lower().strip()))
+        company_user = result.scalar_one_or_none()
+    if not company_user:
+        raise HTTPException(status_code=404, detail="Company not found")
+    if company_user.estimates_used >= company_user.estimates_limit:
+        raise HTTPException(status_code=403, detail="This company has reached their estimate limit. Please contact them directly.")
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="AI service unavailable")
+
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one photo is required.")
+    if len(files) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 photos for customer estimates.")
+
+    try:
+        rooms_list = json.loads(rooms)
+    except Exception:
+        rooms_list = []
+
+    ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"}
+    MAX_FILE_SIZE = 20 * 1024 * 1024
+    photo_data = []
+    for i, file in enumerate(files):
+        if file.content_type and file.content_type.lower() not in ALLOWED_CONTENT_TYPES:
+            raise HTTPException(status_code=400, detail=f"Photo {i+1}: unsupported file type.")
+        raw = await file.read()
+        if len(raw) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail=f"Photo {i+1} exceeds 20MB limit.")
+        compressed = compress_image(raw)
+        b64 = base64.standard_b64encode(compressed).decode("utf-8")
+        room_label = rooms_list[i] if i < len(rooms_list) else "Main"
+        photo_data.append({"b64": b64, "room": room_label, "index": i + 1})
+
+    room_groups = {}
+    for pd in photo_data:
+        room = pd["room"]
+        if room not in room_groups:
+            room_groups[room] = []
+        room_groups[room].append(pd)
+
+    image_content = []
+    for room, group_photos in room_groups.items():
+        if len(group_photos) > 1:
+            image_content.append({
+                "type": "text",
+                "text": f"\n--- ROOM: {room} ({len(group_photos)} photos — SAME space, different angles. Do NOT double-count.) ---"
+            })
+        for pd in group_photos:
+            label = f"Photo {pd['index']} (Room: {room})"
+            image_content.append({"type": "text", "text": f"{label}:"})
+            image_content.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": "image/jpeg", "data": pd["b64"]}
+            })
+
+    job_id = secrets.token_hex(8)
+    estimate_jobs[job_id] = {
+        "status": "analyzing",
+        "message": "Analyzing photos...",
+        "result": None,
+        "user_id": company_user.id,
+        "estimate_name": f"Customer: {customer_name or 'Walk-in'}",
+        "customer_name": customer_name,
+        "customer_email": customer_email,
+        "customer_phone": customer_phone,
+        "created_at": datetime.utcnow(),
+    }
+
+    asyncio.create_task(run_estimate(
+        job_id=job_id,
+        user=company_user,
+        image_content=image_content,
+        api_key=api_key,
+        num_photos=len(files),
+    ))
+
+    return {"job_id": job_id}
+
+
+@app.get("/api/public/estimate/status/{job_id}")
+async def public_estimate_status(job_id: str):
+    """Public status check — no auth, but limited response."""
+    job = estimate_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found or expired")
+
+    if job["status"] == "complete" and job.get("result"):
+        r = job["result"]
+        return {
+            "status": "complete",
+            "message": job["message"],
+            "result": {
+                "id": r.get("id"),
+                "price_low": r.get("price_low"),
+                "price_high": r.get("price_high"),
+                "cy_estimate": r.get("cy_estimate"),
+                "items": r.get("items", []),
+                "job_type": r.get("job_type"),
+                "conditions": r.get("conditions", []),
+                "notes": r.get("notes", ""),
+                "confidence": r.get("confidence"),
+                "special_items": r.get("special_items", []),
+                "min_charge_applied": r.get("min_charge_applied", False),
+                "potential_duplicates": r.get("potential_duplicates", []),
+            }
+        }
+    return {"status": job["status"], "message": job["message"], "result": None}
+
+
 @app.post("/api/auth/signup")
 async def auth_signup(request: Request):
     client_ip = get_client_ip(request)
@@ -908,6 +1069,9 @@ async def auth_me(request: Request):
         "min_charge": user.min_charge,
         "truck_capacity_cy": user.truck_capacity_cy,
         "is_admin": bool(user.is_admin),
+        "company_slug": user.company_slug or "",
+        "company_phone": user.company_phone or "",
+        "company_logo_url": user.company_logo_url or "",
     }
 
 
@@ -925,6 +1089,9 @@ async def update_settings(request: Request):
         "price_per_cy_premium": float,
         "min_charge": float,
         "truck_capacity_cy": float,
+        "company_slug": str,
+        "company_phone": str,
+        "company_logo_url": str,
     }
 
     async with AsyncSessionLocal() as db:
@@ -932,6 +1099,18 @@ async def update_settings(request: Request):
         u = result.scalar_one_or_none()
         if not u:
             raise HTTPException(status_code=404, detail="User not found")
+
+        # Validate and sanitize slug if provided
+        if "company_slug" in body:
+            slug = re.sub(r'[^a-z0-9-]', '', str(body["company_slug"]).lower().strip().replace(" ", "-"))
+            slug = re.sub(r'-+', '-', slug).strip('-')[:60]
+            if slug:
+                existing_slug = await db.execute(
+                    select(User).where(User.company_slug == slug, User.id != user.id)
+                )
+                if existing_slug.scalar_one_or_none():
+                    raise HTTPException(status_code=400, detail=f"Slug '{slug}' is already taken")
+            body["company_slug"] = slug
 
         updated = []
         for field, typ in allowed_fields.items():
@@ -959,6 +1138,9 @@ async def update_settings(request: Request):
             "price_per_cy_premium": u.price_per_cy_premium,
             "min_charge": u.min_charge,
             "truck_capacity_cy": u.truck_capacity_cy,
+            "company_slug": u.company_slug or "",
+            "company_phone": u.company_phone or "",
+            "company_logo_url": u.company_logo_url or "",
         }
 
 
@@ -1151,6 +1333,7 @@ def calculate_price(result_data: dict, rate_low=35.0, rate_high=40.0, rate_premi
     price_low = cy_low * r_low
     price_high = cy_high * r_high
 
+    min_charge_applied = price_low < min_charge or price_high < min_charge
     price_low = max(price_low, min_charge)
     price_high = max(price_high, min_charge)
 
@@ -1159,7 +1342,7 @@ def calculate_price(result_data: dict, rate_low=35.0, rate_high=40.0, rate_premi
         for item in items if item.get("is_special")
     ]
 
-    return round(price_low, 2), round(price_high, 2), round(cy_mid, 1), special_items
+    return round(price_low, 2), round(price_high, 2), round(cy_mid, 1), special_items, min_charge_applied
 
 
 def compress_image(image_bytes: bytes, max_size_kb: int = 1000) -> bytes:
@@ -1904,7 +2087,7 @@ async def run_estimate(
         except Exception:
             pass
 
-        price_low, price_high, cy_mid, special_items = calculate_price(
+        price_low, price_high, cy_mid, special_items, min_charge_applied = calculate_price(
             result_data,
             rate_low=user.price_per_cy_low or 35.0,
             rate_high=user.price_per_cy_high or 40.0,
@@ -1969,6 +2152,8 @@ async def run_estimate(
             "rate_high": user.price_per_cy_high or 40.0,
             "rate_premium": user.price_per_cy_premium or 55.0,
             "min_charge": user.min_charge or 75.0,
+            "min_charge_applied": min_charge_applied,
+            "potential_duplicates": result_data.get("potential_duplicates", []),
         }
 
         if market_context:

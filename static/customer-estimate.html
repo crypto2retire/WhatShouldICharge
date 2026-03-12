@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Get a Free Estimate</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root { --bg: #0f1117; --card: #1a1d28; --border: #2a2d3a; --text: #e2e8f0; --muted: #8892a8; --accent: #16a34a; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+.container { max-width: 600px; margin: 0 auto; padding: 20px; }
+.header { text-align: center; padding: 24px 0 20px; }
+.header img { max-height: 60px; margin-bottom: 12px; }
+.header h1 { font-size: 1.3rem; font-weight: 700; }
+.header .phone { font-size: 0.9rem; color: var(--accent); margin-top: 6px; }
+.header .phone a { color: var(--accent); text-decoration: none; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+.card-title { font-size: 0.95rem; font-weight: 600; margin-bottom: 14px; }
+label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 4px; }
+input, select { width: 100%; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.9rem; margin-bottom: 12px; }
+.drop-zone { border: 2px dashed var(--border); border-radius: 12px; padding: 30px 20px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
+.drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); }
+.drop-zone-label { font-size: 0.95rem; font-weight: 500; }
+.drop-zone-sub { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
+.previews { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.preview-thumb { width: 72px; height: 72px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); }
+.btn { width: 100%; padding: 12px; background: var(--accent); color: #fff; border: none; border-radius: 10px; font-size: 1rem; font-weight: 700; cursor: pointer; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.loading { text-align: center; padding: 40px 20px; }
+.loading-spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 0.9rem; color: var(--muted); margin-top: 12px; }
+.results { display: none; }
+.price-range { font-size: 2rem; font-weight: 800; color: var(--accent); text-align: center; padding: 16px 0; }
+.price-note { text-align: center; font-size: 0.78rem; color: var(--muted); margin-bottom: 16px; }
+.item-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+.item-name { flex: 1; }
+.item-cy { color: var(--muted); font-size: 0.78rem; }
+.item-qty { color: var(--muted); font-size: 0.78rem; min-width: 30px; text-align: right; }
+.cta-card { text-align: center; padding: 20px; }
+.cta-card a { color: var(--accent); font-weight: 600; text-decoration: none; font-size: 1.1rem; }
+.error { color: #ef4444; font-size: 0.85rem; text-align: center; padding: 12px; display: none; }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; }
+.badge-standard { background: rgba(22,163,74,0.15); color: #16a34a; }
+.badge-premium { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.badge-hoarder { background: rgba(239,68,68,0.15); color: #ef4444; }
+.special-note { margin-top: 14px; padding: 12px; border-radius: 8px; background: rgba(120,53,15,0.15); border: 1px solid rgba(245,158,11,0.3); font-size: 0.8rem; color: #fde68a; }
+.dupe-note { margin-top: 14px; padding: 12px; border-radius: 8px; background: rgba(234,179,8,0.10); border: 1px solid rgba(234,179,8,0.3); font-size: 0.8rem; color: #eab308; }
+.min-charge-note { text-align: center; font-size: 0.8rem; color: #f59e0b; font-weight: 500; margin-bottom: 12px; }
+.powered { text-align: center; font-size: 0.7rem; color: var(--muted); padding: 20px 0; }
+.powered a { color: var(--muted); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header" id="header">
+    <div id="company-logo"></div>
+    <h1 id="company-name">Get a Free Estimate</h1>
+    <div class="phone" id="company-phone"></div>
+  </div>
+
+  <!-- Upload Section -->
+  <div id="upload-section">
+    <div class="card">
+      <div class="card-title">Your Contact Info</div>
+      <label>Name</label>
+      <input type="text" id="cust-name" placeholder="Your name">
+      <label>Email</label>
+      <input type="email" id="cust-email" placeholder="your@email.com">
+      <label>Phone</label>
+      <input type="tel" id="cust-phone" placeholder="(555) 123-4567">
+    </div>
+
+    <div class="card">
+      <div class="card-title">Upload Photos of Items for Removal</div>
+      <div class="drop-zone" id="drop-zone">
+        <div class="drop-zone-label">Tap to upload photos</div>
+        <div class="drop-zone-sub">Up to 10 photos - JPG, PNG, WEBP</div>
+      </div>
+      <input type="file" id="file-input" accept="image/*" multiple style="display:none;">
+      <div class="previews" id="previews"></div>
+    </div>
+
+    <div class="error" id="error-msg"></div>
+    <button class="btn" id="submit-btn" disabled>Get Estimate</button>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" id="loading" style="display:none;">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="loading-text">Analyzing your photos...</div>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+    <div class="card">
+      <div style="text-align:center;margin-bottom:8px;">
+        <span class="badge" id="res-badge"></span>
+      </div>
+      <div class="price-range" id="res-price"></div>
+      <div id="min-charge-msg" class="min-charge-note" style="display:none;"></div>
+      <div class="price-note">Estimated price range based on photo analysis</div>
+      <div style="text-align:center;font-size:0.85rem;color:var(--muted);" id="res-cy"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Items Detected</div>
+      <div id="res-items"></div>
+    </div>
+
+    <div id="res-special" class="special-note" style="display:none;"></div>
+    <div id="res-dupes" class="dupe-note" style="display:none;"></div>
+
+    <div class="card" id="res-notes-card" style="display:none;">
+      <div class="card-title">Notes</div>
+      <div id="res-notes" style="font-size:0.85rem;color:var(--muted);"></div>
+    </div>
+
+    <div class="card cta-card" id="cta-card">
+      <div style="font-size:0.9rem;color:var(--muted);margin-bottom:10px;">Ready to schedule?</div>
+      <a id="cta-phone-link" href="tel:">Call Now</a>
+    </div>
+  </div>
+
+  <div class="powered">Powered by <a href="https://whatshouldicharge.app">WhatShouldICharge</a></div>
+</div>
+
+<script>
+var slug = window.location.pathname.split('/estimate/')[1] || '';
+var photos = [];
+var companyData = null;
+
+function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// Load company info
+(async function() {
+  try {
+    var resp = await fetch('/api/public/company/' + encodeURIComponent(slug));
+    if (!resp.ok) { document.getElementById('error-msg').textContent = 'Company not found.'; document.getElementById('error-msg').style.display = 'block'; return; }
+    companyData = await resp.json();
+    document.getElementById('company-name').textContent = companyData.company_name || 'Get a Free Estimate';
+    if (companyData.company_phone) {
+      document.getElementById('company-phone').innerHTML = '<a href="tel:' + esc(companyData.company_phone) + '">' + esc(companyData.company_phone) + '</a>';
+      document.getElementById('cta-phone-link').href = 'tel:' + companyData.company_phone;
+      document.getElementById('cta-phone-link').textContent = 'Call ' + companyData.company_phone;
+    } else {
+      document.getElementById('cta-card').style.display = 'none';
+    }
+    if (companyData.company_logo_url) {
+      document.getElementById('company-logo').innerHTML = '<img src="' + esc(companyData.company_logo_url) + '" alt="' + esc(companyData.company_name) + '">';
+    }
+    document.title = (companyData.company_name || 'Junk Removal') + ' - Free Estimate';
+  } catch(e) {}
+})();
+
+// Photo handling
+var dropZone = document.getElementById('drop-zone');
+var fileInput = document.getElementById('file-input');
+dropZone.addEventListener('click', function() { fileInput.click(); });
+dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('drag-over'); });
+dropZone.addEventListener('drop', function(e) { e.preventDefault(); dropZone.classList.remove('drag-over'); addFiles(Array.from(e.dataTransfer.files)); });
+fileInput.addEventListener('change', function(e) { addFiles(Array.from(e.target.files)); });
+
+function addFiles(files) {
+  var remaining = 10 - photos.length;
+  files.filter(function(f) { return f.type.startsWith('image/'); }).slice(0, remaining).forEach(function(f) {
+    photos.push(f);
+    var img = document.createElement('img');
+    img.className = 'preview-thumb';
+    img.src = URL.createObjectURL(f);
+    document.getElementById('previews').appendChild(img);
+  });
+  document.getElementById('submit-btn').disabled = photos.length === 0;
+}
+
+// Submit
+document.getElementById('submit-btn').addEventListener('click', async function() {
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+  document.getElementById('error-msg').style.display = 'none';
+
+  var fd = new FormData();
+  photos.forEach(function(f) { fd.append('files', f); });
+  fd.append('customer_name', document.getElementById('cust-name').value.trim());
+  fd.append('customer_email', document.getElementById('cust-email').value.trim());
+  fd.append('customer_phone', document.getElementById('cust-phone').value.trim());
+  fd.append('rooms', JSON.stringify(photos.map(function() { return 'Main'; })));
+
+  try {
+    var resp = await fetch('/api/public/estimate/' + encodeURIComponent(slug), { method: 'POST', body: fd });
+    if (!resp.ok) {
+      var err = await resp.json();
+      throw new Error(err.detail || 'Failed to submit');
+    }
+    var data = await resp.json();
+    document.getElementById('upload-section').style.display = 'none';
+    document.getElementById('loading').style.display = 'block';
+    pollStatus(data.job_id);
+  } catch(e) {
+    document.getElementById('error-msg').textContent = e.message;
+    document.getElementById('error-msg').style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Get Estimate';
+  }
+});
+
+async function pollStatus(jobId) {
+  var loadingText = document.getElementById('loading-text');
+  var attempts = 0;
+  var interval = setInterval(async function() {
+    attempts++;
+    try {
+      var resp = await fetch('/api/public/estimate/status/' + jobId);
+      var data = await resp.json();
+      loadingText.textContent = data.message || 'Analyzing...';
+
+      if (data.status === 'complete' && data.result) {
+        clearInterval(interval);
+        document.getElementById('loading').style.display = 'none';
+        showResults(data.result);
+      } else if (data.status === 'error') {
+        clearInterval(interval);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('upload-section').style.display = 'block';
+        document.getElementById('error-msg').textContent = data.message || 'An error occurred. Please try again.';
+        document.getElementById('error-msg').style.display = 'block';
+        document.getElementById('submit-btn').disabled = false;
+        document.getElementById('submit-btn').textContent = 'Get Estimate';
+      }
+    } catch(e) {}
+    if (attempts > 90) { clearInterval(interval); loadingText.textContent = 'Taking longer than expected...'; }
+  }, 2000);
+}
+
+function showResults(r) {
+  document.getElementById('results').style.display = 'block';
+
+  var priceLow = r.price_low || 0;
+  var priceHigh = r.price_high || 0;
+  document.getElementById('res-price').textContent = '$' + priceLow.toLocaleString() + ' - $' + priceHigh.toLocaleString();
+
+  if (r.min_charge_applied) {
+    var mcMsg = document.getElementById('min-charge-msg');
+    mcMsg.textContent = 'Minimum charge applied';
+    mcMsg.style.display = 'block';
+  }
+
+  document.getElementById('res-cy').textContent = (r.cy_estimate || 0) + ' cubic yards estimated';
+
+  var badgeLabels = { standard: 'Standard', premium: 'Premium', hoarder: 'Hoarder', truck_load: 'Truck Load' };
+  var jt = r.job_type || 'standard';
+  document.getElementById('res-badge').textContent = badgeLabels[jt] || jt;
+  document.getElementById('res-badge').className = 'badge badge-' + jt;
+
+  var itemsEl = document.getElementById('res-items');
+  itemsEl.innerHTML = '';
+  (r.items || []).forEach(function(item) {
+    var row = document.createElement('div');
+    row.className = 'item-row';
+    row.innerHTML = '<div class="item-name">' + esc(item.name || 'Item') + '</div>' +
+      '<div class="item-cy">' + (item.cubic_yards || 0) + ' CY</div>' +
+      '<div class="item-qty">x' + (item.quantity || 1) + '</div>';
+    itemsEl.appendChild(row);
+  });
+
+  var specials = r.special_items || [];
+  if (specials.length > 0) {
+    var shtml = '<strong>Recycling/Disposal Fee Items:</strong><br>';
+    specials.forEach(function(s) { shtml += esc(s.name) + ' x' + (s.quantity || 1) + '<br>'; });
+    shtml += '<em style="font-size:0.75rem;">Fees confirmed on arrival.</em>';
+    document.getElementById('res-special').innerHTML = shtml;
+    document.getElementById('res-special').style.display = 'block';
+  }
+
+  var dupes = r.potential_duplicates || [];
+  if (dupes.length > 0) {
+    var dhtml = '<strong>Items to verify (may be duplicates):</strong><br>';
+    dupes.forEach(function(d) { dhtml += esc(d.item_a) + ' vs ' + esc(d.item_b) + '<br>'; });
+    document.getElementById('res-dupes').innerHTML = dhtml;
+    document.getElementById('res-dupes').style.display = 'block';
+  }
+
+  if (r.notes) {
+    document.getElementById('res-notes').textContent = r.notes;
+    document.getElementById('res-notes-card').style.display = 'block';
+  }
+}
+
+// Notify parent iframe of height changes for widget auto-resize
+if (window.parent !== window) {
+  function postHeight() {
+    window.parent.postMessage({ type: 'wsic-resize', height: document.body.scrollHeight + 40 }, '*');
+  }
+  new MutationObserver(postHeight).observe(document.body, { childList: true, subtree: true, attributes: true });
+  setInterval(postHeight, 1000);
+  postHeight();
+}
+</script>
+
+</body>
+</html>

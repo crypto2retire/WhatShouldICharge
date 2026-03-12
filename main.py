@@ -1277,56 +1277,74 @@ REQUIRED JSON FORMAT:
   "notes": "Brief job description for the crew"
 }
 
+TWO TYPES OF ITEMS — UNDERSTAND THIS DISTINCTION:
+
+FIXED REFERENCE ITEMS (marked [FIXED] in the library below):
+- Items with known, standardized dimensions — manufactured to exact specs
+- Examples: 5-gallon bucket (always 12×12×15in), trash bags (standard sizes), appliances (published dimensions), mattresses (industry standard sizes), tires, propane tanks
+- These are your CALIBRATION ANCHORS. When you spot one in a photo, you know its exact real-world size. Use it to establish scale for everything around it.
+- Use the cubic yards value from the library for these items — it is pre-verified.
+
+VARIABLE ITEMS (marked [VARIABLE] in the library below):
+- Items that come in many different sizes — no single "standard" dimension
+- Examples: dressers, couches, tables, bookshelves, desks, outdoor furniture
+- DO NOT use a default cubic yardage for these. The library CY is only a rough average.
+- Instead, you MUST measure the variable item's actual dimensions from the photo using nearby fixed reference items or architectural fixtures as calibration rulers.
+- Calculate cubic yards from the measured dimensions: (L × W × H) / 46,656 = CY, then apply a packing factor (60-80% for most furniture).
+
 SPATIAL REASONING METHOD (THIS IS HOW YOU ESTIMATE — FOLLOW EXACTLY):
 
-Step 1 — FIND REFERENCE POINTS: Scan the photo for 5-10 items you recognize from the KNOWN ITEM REFERENCE LIBRARY below. These are your spatial anchors. Pick items spread across the photo — foreground, middle, background, left, right — to establish scale from multiple vantage points.
+Step 1 — FIND FIXED REFERENCE ITEMS AND ARCHITECTURAL FIXTURES:
+Scan the photo for fixed reference items from the library AND architectural fixtures. These are your calibration anchors. You need at least 2-3 anchors spread across the photo at different depths.
 
-ALSO USE ARCHITECTURAL FIXTURES AS REFERENCE POINTS — many have standardized or near-standard sizes:
+ARCHITECTURAL FIXTURES — built-in calibration rulers:
 
-HARD STANDARDS (reliable rulers — dimensions are code-mandated and virtually universal):
+HARD STANDARDS (reliable — code-mandated, virtually universal):
 - Electrical outlet cover plate: 4.5"H × 2.75"W
 - Light switch cover plate: 4.5"H × 2.75"W
 - Wall stud spacing (visible in unfinished garages/basements): 16" on center
 - Standard interior door HEIGHT: 80" (6'8") — width varies (28-36") but height is consistent
 
-COMMON STANDARDS (very common dimensions, but can vary — treat as strong estimates):
+COMMON STANDARDS (very common but can vary — strong estimates):
 - Interior door width: typically 30-32"
 - Exterior door: 80"H × 36"W typical
-- Sliding patio door: 80"H × 72"W typical (6'8" × 6'0")
+- Sliding patio door: 80"H × 72"W typical
 - Garage door single: 84"H × 108"W (7' × 9') typical
 - Garage door double: 84"H × 192"W (7' × 16') typical
-- Standard stair riser height: 7-8" (code range)
-- Standard stair tread depth: 10-11" (code range)
-- Ceiling height: 96" (8') most common in residential, but 9' and 10' exist
+- Standard stair riser height: 7-8"
+- Standard stair tread depth: 10-11"
+- Ceiling height: 96" (8') most common residential
 
-APPROXIMATE (use only when no better reference is available):
+APPROXIMATE (use only when no better reference available):
 - Double-hung window: 36"H × 24"W varies widely
-- Basement hopper window: 16"H × 32"W varies widely
 - Baseboard trim height: 3-5" varies
-- Door frame casing width: 2.25-3.5" varies
 
-Outlet plates and stud spacing are your most reliable architectural rulers. A visible outlet immediately tells you the scale of everything around it. Studs at 16" spacing give you a built-in ruler across the entire wall. Door height (80") is a strong vertical reference. Use as many of these as you can find in addition to junk items from the reference library. When using "common" or "approximate" fixtures, note the uncertainty in your confidence score.
-
-Step 2 — ESTABLISH SCALE AND DEPTH WITH PERSPECTIVE CORRECTION:
-Use the known real-world dimensions of those 5-10 reference items AND any architectural fixtures to calibrate the photo's perspective. A couch you know is 7ft long tells you how big everything near it is. A refrigerator in the background tells you the scale of that area. A visible door frame gives you an 80-inch vertical ruler. Wall studs at 16-inch spacing give you a horizontal ruler across the wall. An outlet plate tells you the scale of nearby items. By triangulating between multiple known objects and fixtures at different depths, you can determine the true 3D volume of the entire scene.
+Step 2 — APPLY PERSPECTIVE CORRECTION TO EACH ANCHOR:
+Before using any reference item as a calibration ruler, you MUST account for perspective distortion.
 
 PERSPECTIVE CORRECTION (CRITICAL — DO NOT SKIP):
-- Objects CLOSER to the camera appear LARGER than their real size. Objects FARTHER from the camera appear SMALLER.
-- A trash bag in the foreground (3 feet from camera) may look twice as large as an identical bag in the background (10 feet from camera). They are the SAME SIZE — do not count the near bag as bigger.
-- To correct for perspective: compare each item to the nearest reference point at a SIMILAR DEPTH in the photo, not to reference points at different depths.
-- Foreground items: compare to foreground references. Background items: compare to background references.
-- If a reference point (like a door frame) is 10 feet behind an item, the item will appear proportionally larger relative to that reference — mentally adjust.
-- Floor lines, wall edges, and ceiling lines that converge toward a vanishing point give you the depth gradient. Use these converging lines to estimate how much objects shrink with distance.
-- When items are at the same depth (same distance from camera), their apparent sizes directly reflect their real size ratios.
-- COMMON MISTAKE: Items piled in the foreground near the camera look enormous. A pile of bags at 3 feet looks like it fills half the frame but may only be 2-3 cubic yards. Always calibrate against a reference at the same depth.
+- Objects CLOSER to the camera appear LARGER. Objects FARTHER appear SMALLER.
+- A trash bag in the foreground (3ft from camera) looks twice as large as an identical bag in the background (10ft away). They are the SAME SIZE.
+- To correct: compare each item to the nearest reference anchor at a SIMILAR DEPTH in the photo.
+- Foreground items: calibrate against foreground anchors. Background items: calibrate against background anchors.
+- Floor lines, wall edges, and ceiling lines converging toward a vanishing point reveal the depth gradient. Use converging lines to estimate how much objects shrink with distance.
+- COMMON MISTAKE: Items piled in the foreground near the camera look enormous. A pile of bags at 3 feet looks like half the frame but may only be 2-3 CY. Always calibrate against an anchor at the same depth.
 
-Step 3 — MEASURE UNKNOWN ITEMS: Now that you understand the photo's scale, depth, and perspective distortion, estimate the cubic yards of every other item by comparing its apparent size to reference points AT THE SAME DEPTH. An unknown box sitting next to a known chair can be sized accurately because they are at the same distance from the camera and you know how big the chair really is. For items at different depths, apply perspective correction before comparing.
+Step 3 — MEASURE VARIABLE ITEMS USING NEARBY ANCHORS:
+For each variable item (dresser, couch, table, etc.):
+a) Find the nearest fixed reference item or architectural fixture at the SAME DEPTH in the photo
+b) Apply perspective correction if the anchor is at a different depth
+c) Use the anchor's known dimensions to estimate the variable item's actual L × W × H in inches
+d) Calculate cubic yards: (L × W × H) / 46,656, then apply packing factor (60-80%)
+e) If NO reference anchor is visible near a variable item, flag it as lower confidence in the item entry
 
-Step 4 — CALCULATE TOTALS: Sum all items for total cubic yards. Use reference-calibrated measurements, not guesses.
+For fixed reference items: use the pre-verified CY value from the library. No measurement needed.
 
-List your reference points in the "reference_points" array so the estimate is explainable and auditable.
+Step 4 — CALCULATE TOTALS: Sum all items (fixed CY values + measured variable CY values) for totals. Every variable item's CY must be derived from photo measurement, not from a default.
 
-If fewer than 5 reference items are visible (counting both junk items AND architectural fixtures like outlets, doors, studs), note this in "notes" and lower your confidence score. The fewer reference points, the less accurate the spatial calibration.
+List your reference points in the "reference_points" array. For variable items, include which anchor you used to measure them in the item's notes.
+
+If fewer than 3 calibration anchors are visible (fixed items + architectural fixtures), note this in "notes" and lower confidence. Without anchors, variable item measurements are unreliable.
 
 MULTI-PHOTO DEDUPLICATION (CRITICAL):
 - Multiple photos may show the SAME room from different angles
@@ -1424,6 +1442,31 @@ CONFIDENCE SCORE:
 Always err toward the higher end of CY when visibility is limited. Better to quote slightly high and come down than to under-quote."""
 
 
+# Items with standardized/manufactured dimensions — reliable calibration anchors.
+# Variable items (furniture, tables, etc.) are measured from the photo instead.
+FIXED_REFERENCE_ITEMS = {
+    # Trash bags — exact standard sizes
+    "contractor trash bag full", "standard trash bag full 33 gal", "small trash bag full",
+    # Boxes & containers — standard moving/storage sizes
+    "large cardboard box", "medium cardboard box", "small cardboard box",
+    "large plastic tote with lid", "small plastic tote",
+    # Appliances — manufactured to published specs
+    "refrigerator large", "refrigerator small", "washing machine", "dryer",
+    "dishwasher", "stove", "microwave large", "microwave small",
+    "air conditioner window unit", "dehumidifier", "water heater",
+    # Mattresses — industry standard sizes
+    "king mattress", "queen mattress", "full mattress", "twin mattress", "box spring",
+    # Electronics — manufactured sizes
+    "large flat screen tv 55+", "medium flat screen tv 32-54", "small flat screen tv under 32",
+    "crt television", "desktop computer tower", "monitor", "printer large",
+    # Hazardous — standard sizes
+    "propane tank large", "propane tank small", "car battery",
+    "tire car", "tire truck", "paint cans box",
+    # Office — standard sizes
+    "4 drawer file cabinet", "2 drawer file cabinet", "lateral file cabinet",
+}
+
+
 async def get_library_context() -> str:
     async with AsyncSessionLocal() as db:
         result = await db.execute(
@@ -1434,21 +1477,40 @@ async def get_library_context() -> str:
         items = result.scalars().all()
     if not items:
         return ""
-    lines = [
-        "\nKNOWN ITEM REFERENCE LIBRARY — USE THESE AS SPATIAL REFERENCE POINTS:",
-        "Find 5-10 of these items in the photo to establish scale and depth.",
-        "Each item includes its real-world L×W×H dimensions. Use these physical",
-        "measurements PLUS architectural fixtures (outlets, doors, studs, windows)",
-        "to calibrate the scale of the photo. Even 1-2 recognized items or",
-        "fixtures with known dimensions gives you a reliable ruler for the scene.",
-        "",
-    ]
+
+    fixed_lines = []
+    variable_lines = []
+
     for item in items:
         dims_str = f" [{item.dimensions}]" if item.dimensions else ""
-        line = f"- {item.item_name}: {item.cubic_yards} CY{dims_str}"
+        is_fixed = item.item_name in FIXED_REFERENCE_ITEMS
+        tag = "[FIXED]" if is_fixed else "[VARIABLE]"
+        line = f"- {item.item_name}: {item.cubic_yards} CY{dims_str} {tag}"
         if item.is_special:
             line += " [SPECIAL ITEM - flag for recycling/disposal]"
-        lines.append(line)
+        if is_fixed:
+            fixed_lines.append(line)
+        else:
+            variable_lines.append(line)
+
+    lines = [
+        "\nITEM REFERENCE LIBRARY:",
+        "",
+        "=== FIXED REFERENCE ITEMS (use as calibration anchors — dimensions are exact) ===",
+        "These items have standardized sizes. When you spot one in a photo, you know its",
+        "exact real-world dimensions. Use the CY value directly and use the dimensions",
+        "to calibrate the scale of nearby items.",
+        "",
+    ]
+    lines.extend(fixed_lines)
+    lines.append("")
+    lines.append("=== VARIABLE ITEMS (measure from photo — sizes vary widely) ===")
+    lines.append("These items come in many sizes. The CY listed is only a rough average.")
+    lines.append("Do NOT use the default CY. Instead, measure actual dimensions from the")
+    lines.append("photo using nearby fixed anchors, then calculate CY from those measurements.")
+    lines.append("")
+    lines.extend(variable_lines)
+
     return "\n".join(lines)
 
 

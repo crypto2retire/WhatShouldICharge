@@ -44,7 +44,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "img-src 'self' data: blob: https:; "
             "connect-src 'self' https://api.stripe.com; "
             "frame-src https://js.stripe.com; "
-            "frame-ancestors 'self' *; "
+            "frame-ancestors 'self' whatshouldicharge.app *.whatshouldicharge.app; "
             "base-uri 'self'; "
             "form-action 'self'"
         )
@@ -85,6 +85,8 @@ class RateLimiter:
 
 auth_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
 forgot_password_rate_limiter = RateLimiter(max_requests=5, window_seconds=300)
+public_estimate_rate_limiter = RateLimiter(max_requests=10, window_seconds=3600)
+public_status_rate_limiter = RateLimiter(max_requests=50, window_seconds=3600)
 
 
 def get_client_ip(request: Request) -> str:
@@ -376,17 +378,17 @@ SEED_ITEMS = [
     ("desk large", "furniture", 1.25, False, 0, "60×30×30 in"),
     ("desk small", "furniture", 0.75, False, 0, "42×24×30 in"),
     # Appliances
-    ("refrigerator large", "appliance", 2.00, False, 0, "36×30×70 in"),
-    ("refrigerator small", "appliance", 1.25, False, 0, "28×28×60 in"),
-    ("washing machine", "appliance", 1.00, False, 0, "27×27×38 in"),
+    ("refrigerator large", "appliance", 2.00, True, 25.0, "36×30×70 in"),
+    ("refrigerator small", "appliance", 1.25, True, 25.0, "28×28×60 in"),
+    ("washing machine", "appliance", 1.00, True, 25.0, "27×27×38 in"),
     ("dryer", "appliance", 1.00, False, 0, "27×29×38 in"),
     ("dishwasher", "appliance", 0.75, False, 0, "24×24×35 in"),
     ("stove", "appliance", 1.00, False, 0, "30×26×36 in"),
     ("microwave large", "appliance", 0.25, False, 0, "24×18×14 in"),
     ("microwave small", "appliance", 0.15, False, 0, "18×14×11 in"),
-    ("air conditioner window unit", "appliance", 0.35, False, 0, "24×20×16 in"),
+    ("air conditioner window unit", "appliance", 0.35, True, 25.0, "24×20×16 in"),
     ("dehumidifier", "appliance", 0.25, False, 0, "16×12×24 in"),
-    ("water heater", "appliance", 0.75, False, 0, "22×22×54 in"),
+    ("water heater", "appliance", 0.75, True, 25.0, "22×22×54 in"),
     # Electronics
     ("large flat screen tv 55+", "electronics", 0.50, True, 25.0, "49×4×29 in"),
     ("medium flat screen tv 32-54", "electronics", 0.35, True, 25.0, "37×3×22 in"),
@@ -1374,8 +1376,25 @@ async def public_company_info(slug: str):
     }
 
 
+MAGIC_BYTES = {
+    "image/jpeg": [b"\xff\xd8\xff"],
+    "image/png": [b"\x89\x50\x4e\x47"],
+    "image/webp": [b"RIFF"],
+    "image/gif": [b"GIF87a", b"GIF89a"],
+}
+
+
+def validate_magic_bytes(raw: bytes, content_type: str) -> bool:
+    """Check actual file header bytes match declared MIME type."""
+    signatures = MAGIC_BYTES.get(content_type)
+    if not signatures:
+        return True  # HEIC/HEIF — no simple magic byte check, allow through
+    return any(raw[:len(sig)] == sig for sig in signatures)
+
+
 @app.post("/api/public/estimate/{slug}")
 async def public_create_estimate(
+    request: Request,
     slug: str,
     files: list[UploadFile] = File(...),
     rooms: str = Form(default="[]"),
@@ -1384,6 +1403,12 @@ async def public_create_estimate(
     customer_phone: str = Form(default=""),
 ):
     """Public estimate endpoint — customer submits photos, charges against company's estimate count."""
+    client_ip = get_client_ip(request)
+    if public_estimate_rate_limiter.is_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
+    cleanup_expired_jobs()
+
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.company_slug == slug.lower().strip()))
         company_user = result.scalar_one_or_none()
@@ -1415,6 +1440,9 @@ async def public_create_estimate(
         raw = await file.read()
         if len(raw) > MAX_FILE_SIZE:
             raise HTTPException(status_code=400, detail=f"Photo {i+1} exceeds 20MB limit.")
+        ct = (file.content_type or "").lower()
+        if not validate_magic_bytes(raw, ct):
+            raise HTTPException(status_code=400, detail=f"Photo {i+1}: file contents don't match declared type.")
         compressed = compress_image(raw)
         b64 = base64.standard_b64encode(compressed).decode("utf-8")
         room_label = rooms_list[i] if i < len(rooms_list) else "Main"
@@ -1467,8 +1495,12 @@ async def public_create_estimate(
 
 
 @app.get("/api/public/estimate/status/{job_id}")
-async def public_estimate_status(job_id: str):
+async def public_estimate_status(request: Request, job_id: str):
     """Public status check — no auth, but limited response."""
+    client_ip = get_client_ip(request)
+    if public_status_rate_limiter.is_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
     job = estimate_jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found or expired")
@@ -1759,6 +1791,16 @@ async def update_settings(request: Request):
                 if existing_slug.scalar_one_or_none():
                     raise HTTPException(status_code=400, detail=f"Slug '{slug}' is already taken")
             body["company_slug"] = slug
+
+        # Validate logo URL if provided
+        if "company_logo_url" in body:
+            logo_url = str(body["company_logo_url"]).strip()
+            if logo_url:
+                if logo_url.lower().startswith(("javascript:", "data:", "vbscript:")):
+                    raise HTTPException(status_code=400, detail="Invalid logo URL scheme")
+                if not logo_url.lower().startswith("https://"):
+                    raise HTTPException(status_code=400, detail="Logo URL must use https://")
+            body["company_logo_url"] = logo_url
 
         # Build raw SQL UPDATE to bypass ORM column-tracking issues
         set_clauses = []
@@ -2295,8 +2337,10 @@ SPECIAL ITEM FLAGGING — set is_special: true for ANY of these (do NOT calculat
 - Propane tank (any size)
 - Car battery
 - Paint cans or chemicals
-- Refrigerator with freon
-- Air conditioner (contains freon)
+- Refrigerator (any size — contains freon, recycling fee)
+- Air conditioner (any type — contains freon, recycling fee)
+- Water heater (recycling fee)
+- Washing machine (recycling fee)
 - Fluorescent light tubes
 - Electronics with circuit boards
 
@@ -2447,7 +2491,7 @@ async def lookup_item_dimensions(item_name: str, api_key: str) -> dict:
             data = response.json()
             content = " ".join([r.get("content", "") for r in data.get("results", [])])
 
-        client = anthropic.Anthropic(api_key=api_key)
+        client = anthropic.Anthropic(api_key=api_key, timeout=60.0)
 
         def run_lookup_call():
             return client.messages.create(
@@ -2595,6 +2639,9 @@ async def create_estimate(
         raw = await file.read()
         if len(raw) > MAX_FILE_SIZE:
             raise HTTPException(status_code=400, detail=f"Photo {i+1} exceeds 20MB limit.")
+        ct = (file.content_type or "").lower()
+        if not validate_magic_bytes(raw, ct):
+            raise HTTPException(status_code=400, detail=f"Photo {i+1}: file contents don't match declared type.")
         compressed = compress_image(raw)
         b64 = base64.standard_b64encode(compressed).decode("utf-8")
         room_label = rooms_list[i] if i < len(rooms_list) else "Unknown"
@@ -2677,7 +2724,10 @@ async def run_estimate(
         job["status"] = "analyzing"
         job["message"] = "Analyzing photos..."
 
-        client = anthropic.Anthropic(api_key=api_key)
+        import logging
+        logger = logging.getLogger("wsic.estimate")
+
+        client = anthropic.Anthropic(api_key=api_key, timeout=60.0)
 
         def run_pass1():
             return client.messages.create(
@@ -2693,7 +2743,14 @@ async def run_estimate(
                 }]
             )
 
-        message = await asyncio.to_thread(run_pass1)
+        try:
+            message = await asyncio.to_thread(run_pass1)
+        except Exception as api_err:
+            logger.error(f"[run_estimate] Anthropic API error for job {job_id}, user {user.id}: {type(api_err).__name__}: {api_err}")
+            job["status"] = "error"
+            job["message"] = "Our AI service is temporarily unavailable. Please try again in a few minutes."
+            job["result"] = None
+            return
 
         pass1_result = parse_ai_json(message.content[0].text)
         pass1_json_str = json.dumps(pass1_result)
@@ -2832,6 +2889,8 @@ async def run_estimate(
         job["result"] = resp
 
     except Exception as e:
+        import logging
+        logging.getLogger("wsic.estimate").error(f"[run_estimate] Unhandled error for job {job_id}: {type(e).__name__}: {e}")
         job["status"] = "error"
         job["message"] = "An error occurred while processing your estimate. Please try again."
         job["result"] = None
@@ -3437,6 +3496,9 @@ async def team_create_estimate(
         raw = await file.read()
         if len(raw) > MAX_FILE_SIZE:
             raise HTTPException(status_code=400, detail=f"Photo {i+1} exceeds 20MB limit.")
+        ct = (file.content_type or "").lower()
+        if not validate_magic_bytes(raw, ct):
+            raise HTTPException(status_code=400, detail=f"Photo {i+1}: file contents don't match declared type.")
         compressed = compress_image(raw)
         b64 = base64.standard_b64encode(compressed).decode("utf-8")
         room_label = rooms_list[i] if i < len(rooms_list) else "Unknown"

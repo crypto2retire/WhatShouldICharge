@@ -1694,53 +1694,18 @@ async def auth_me(request: Request):
     }
 
 
-@app.get("/api/settings/debug")
-async def debug_settings(request: Request):
-    """Debug endpoint — shows raw DB values and ORM values side by side."""
-    user = await require_user(request)
-    async with AsyncSessionLocal() as db:
-        # Raw SQL
-        raw = await db.execute(
-            text("SELECT id, email, company_name, company_phone, company_slug, company_logo_url, min_charge, price_per_cy_low, price_per_cy_high, price_per_cy_premium, truck_capacity_cy, company_city, company_state FROM users WHERE id = :uid"),
-            {"uid": user.id}
-        )
-        row = raw.mappings().first()
-        # ORM
-        orm_result = await db.execute(select(User).where(User.id == user.id))
-        orm_user = orm_result.scalar_one_or_none()
-    return {
-        "user_id": user.id,
-        "email": user.email,
-        "raw_sql": dict(row) if row else None,
-        "orm": {
-            "company_phone": orm_user.company_phone if orm_user else None,
-            "company_slug": orm_user.company_slug if orm_user else None,
-            "min_charge": orm_user.min_charge if orm_user else None,
-            "price_per_cy_low": orm_user.price_per_cy_low if orm_user else None,
-            "company_logo_url": orm_user.company_logo_url if orm_user else None,
-        } if orm_user else None,
-        "columns_exist": list(row.keys()) if row else [],
-    }
-
-
 @app.get("/api/settings")
 async def get_settings(request: Request):
     """Return all user settings from the database."""
-    import logging
-    logger = logging.getLogger("wsic.settings")
     user = await require_user(request)
-    logger.info(f"[GET /api/settings] user.id={user.id} email={user.email}")
     async with AsyncSessionLocal() as db:
-        # Use raw SQL to bypass ORM caching and verify actual DB values
         raw = await db.execute(
             text("SELECT id, company_name, company_city, company_state, company_phone, company_slug, company_logo_url, price_per_cy_low, price_per_cy_high, price_per_cy_premium, min_charge, truck_capacity_cy FROM users WHERE id = :uid"),
             {"uid": user.id}
         )
         row = raw.mappings().first()
     if not row:
-        logger.error(f"[GET /api/settings] No user found for id={user.id}")
         raise HTTPException(status_code=404, detail="User not found")
-    logger.info(f"[GET /api/settings] RAW DB row for user {row['id']}: phone={row['company_phone']!r} slug={row['company_slug']!r} min_charge={row['min_charge']!r} low={row['price_per_cy_low']!r} high={row['price_per_cy_high']!r}")
     return {
         "company_name": row["company_name"] or "",
         "company_city": row["company_city"] or "",
@@ -1762,8 +1727,6 @@ async def update_settings(request: Request):
     logger = logging.getLogger("wsic.settings")
     user = await require_user(request)
     body = await request.json()
-    logger.info(f"[PUT /api/settings] user.id={user.id} email={user.email} body_keys={list(body.keys())}")
-    logger.info(f"[PUT /api/settings] body values: phone={body.get('company_phone')!r} slug={body.get('company_slug')!r} min_charge={body.get('min_charge')!r}")
 
     allowed_fields = {
         "company_name": str,
@@ -1785,8 +1748,6 @@ async def update_settings(request: Request):
         if not u:
             raise HTTPException(status_code=404, detail="User not found")
 
-        logger.info(f"[PUT /api/settings] BEFORE save: phone={u.company_phone!r} slug={u.company_slug!r} min_charge={u.min_charge!r}")
-
         # Validate and sanitize slug if provided
         if "company_slug" in body:
             slug = re.sub(r'[^a-z0-9-]', '', str(body["company_slug"]).lower().strip().replace(" ", "-"))
@@ -1799,6 +1760,9 @@ async def update_settings(request: Request):
                     raise HTTPException(status_code=400, detail=f"Slug '{slug}' is already taken")
             body["company_slug"] = slug
 
+        # Build raw SQL UPDATE to bypass ORM column-tracking issues
+        set_clauses = []
+        params = {"uid": user.id}
         updated = []
         for field, typ in allowed_fields.items():
             if field in body:
@@ -1807,43 +1771,44 @@ async def update_settings(request: Request):
                     val = float(val) if val not in (None, "") else None
                 elif typ == str:
                     val = str(val).strip()
-                setattr(u, field, val)
+                set_clauses.append(f"{field} = :{field}")
+                params[field] = val
                 updated.append(field)
 
-        logger.info(f"[PUT /api/settings] AFTER setattr: phone={u.company_phone!r} slug={u.company_slug!r} min_charge={u.min_charge!r} updated={updated}")
-
         if updated:
+            sql = f"UPDATE users SET {', '.join(set_clauses)} WHERE id = :uid"
+            logger.info(f"[PUT /api/settings] RAW SQL: {sql} params={params}")
             try:
+                await db.execute(text(sql), params)
                 await db.commit()
-                await db.refresh(u)
-                logger.info(f"[PUT /api/settings] AFTER commit+refresh: phone={u.company_phone!r} slug={u.company_slug!r} min_charge={u.min_charge!r}")
+                logger.info(f"[PUT /api/settings] Committed {len(updated)} fields via raw SQL")
             except Exception as commit_err:
                 logger.error(f"[PUT /api/settings] COMMIT FAILED: {commit_err}")
                 await db.rollback()
                 raise HTTPException(status_code=500, detail=f"Failed to save settings: {commit_err}")
 
-        # Verify with raw SQL that values are actually in the DB
+        # Read back the saved values via raw SQL
         verify = await db.execute(
-            text("SELECT company_phone, company_slug, min_charge, price_per_cy_low FROM users WHERE id = :uid"),
+            text("SELECT company_name, company_city, company_state, company_phone, company_slug, company_logo_url, price_per_cy_low, price_per_cy_high, price_per_cy_premium, min_charge, truck_capacity_cy FROM users WHERE id = :uid"),
             {"uid": user.id}
         )
-        verify_row = verify.mappings().first()
-        logger.info(f"[PUT /api/settings] VERIFY RAW SQL: phone={verify_row['company_phone']!r} slug={verify_row['company_slug']!r} min_charge={verify_row['min_charge']!r} low={verify_row['price_per_cy_low']!r}")
+        row = verify.mappings().first()
+        logger.info(f"[PUT /api/settings] VERIFY: phone={row['company_phone']!r} slug={row['company_slug']!r} min_charge={row['min_charge']!r}")
 
         return {
             "ok": True,
             "updated": updated,
-            "company_name": u.company_name,
-            "company_city": u.company_city,
-            "company_state": u.company_state,
-            "price_per_cy_low": u.price_per_cy_low,
-            "price_per_cy_high": u.price_per_cy_high,
-            "price_per_cy_premium": u.price_per_cy_premium,
-            "min_charge": u.min_charge,
-            "truck_capacity_cy": u.truck_capacity_cy,
-            "company_slug": u.company_slug or "",
-            "company_phone": u.company_phone or "",
-            "company_logo_url": u.company_logo_url or "",
+            "company_name": row["company_name"] or "",
+            "company_city": row["company_city"] or "",
+            "company_state": row["company_state"] or "",
+            "price_per_cy_low": row["price_per_cy_low"],
+            "price_per_cy_high": row["price_per_cy_high"],
+            "price_per_cy_premium": row["price_per_cy_premium"],
+            "min_charge": row["min_charge"],
+            "truck_capacity_cy": row["truck_capacity_cy"],
+            "company_slug": row["company_slug"] or "",
+            "company_phone": row["company_phone"] or "",
+            "company_logo_url": row["company_logo_url"] or "",
         }
 
 

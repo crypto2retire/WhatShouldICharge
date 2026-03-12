@@ -41,7 +41,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "script-src 'self' 'unsafe-inline' https://js.stripe.com; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
-            "img-src 'self' data: https:; "
+            "img-src 'self' data: blob: https:; "
             "connect-src 'self' https://api.stripe.com; "
             "frame-src https://js.stripe.com; "
             "base-uri 'self'; "

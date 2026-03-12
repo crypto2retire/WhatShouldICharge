@@ -386,6 +386,71 @@ SEED_ITEMS = [
     ("lumber pile large", "debris", 3.0, False, 0, "96×24×36 in"),
     ("drywall sheets", "debris", 0.5, False, 0, "96×48×0.5 in per sheet"),
     ("carpet room", "debris", 2.0, False, 0, "rolled: 12 ft × 18 in diameter"),
+    # --- Added items: common junk removal encounters ---
+    # Containers & buckets
+    ("5 gallon bucket", "debris", 0.05, False, 0, "12×12×15 in"),
+    ("5 gallon bucket stack", "debris", 0.15, False, 0, "12×12×36 in (stack of 3-4)"),
+    ("rubbermaid storage bin large", "debris", 0.30, False, 0, "36×20×18 in"),
+    ("rubbermaid storage bin medium", "debris", 0.20, False, 0, "28×16×14 in"),
+    # Furniture additions
+    ("futon", "furniture", 2.5, False, 0, "72×36×34 in"),
+    ("ottoman", "furniture", 0.5, False, 0, "24×24×18 in"),
+    ("tv stand", "furniture", 0.8, False, 0, "48×16×20 in"),
+    ("entertainment center", "furniture", 3.0, False, 0, "60×18×48 in"),
+    ("china cabinet", "furniture", 2.5, False, 0, "42×16×72 in"),
+    ("wardrobe armoire", "furniture", 3.0, False, 0, "40×22×72 in"),
+    ("folding table", "furniture", 0.5, False, 0, "72×30×2 in folded"),
+    ("folding chair", "furniture", 0.15, False, 0, "18×20×3 in folded"),
+    ("baby crib", "furniture", 1.5, False, 0, "54×30×36 in"),
+    ("changing table", "furniture", 1.0, False, 0, "36×20×38 in"),
+    ("high chair", "furniture", 0.4, False, 0, "24×22×38 in"),
+    ("bar stool", "furniture", 0.4, False, 0, "16×16×30 in"),
+    ("office chair", "furniture", 0.8, False, 0, "24×24×40 in"),
+    ("patio umbrella", "outdoor", 0.3, False, 0, "6 in diameter × 84 in tall"),
+    # Appliances additions
+    ("chest freezer", "appliance", 2.0, False, 0, "48×28×34 in"),
+    ("upright freezer", "appliance", 2.0, False, 0, "30×28×60 in"),
+    ("space heater", "appliance", 0.15, False, 0, "12×8×16 in"),
+    ("vacuum cleaner", "appliance", 0.3, False, 0, "14×12×44 in"),
+    ("shop vac", "appliance", 0.4, False, 0, "18×18×24 in"),
+    # Electronics additions
+    ("printer small", "electronics", 0.15, False, 0, "16×12×8 in"),
+    ("laptop", "electronics", 0.05, False, 0, "14×10×1 in"),
+    ("speakers large", "electronics", 0.3, False, 0, "12×12×36 in"),
+    ("speakers small", "electronics", 0.1, False, 0, "6×6×10 in"),
+    ("cable box or router", "electronics", 0.02, False, 0, "10×8×2 in"),
+    # Outdoor additions
+    ("wheelbarrow", "outdoor", 0.8, False, 0, "60×26×26 in"),
+    ("garden hose reel", "outdoor", 0.3, False, 0, "18×18×18 in"),
+    ("ladder 6ft", "outdoor", 0.5, False, 0, "72×20×4 in folded"),
+    ("ladder extension", "outdoor", 1.0, False, 0, "144×18×6 in"),
+    ("patio chair cushion", "outdoor", 0.1, False, 0, "20×20×4 in"),
+    ("kiddie pool", "outdoor", 0.5, False, 0, "48 in diameter × 10 in tall"),
+    ("bicycle adult", "outdoor", 1.5, False, 0, "68×24×40 in"),
+    ("bicycle child", "outdoor", 0.8, False, 0, "48×18×32 in"),
+    ("scooter", "outdoor", 0.3, False, 0, "36×14×40 in"),
+    # Debris & misc additions
+    ("concrete chunks pile", "debris", 2.0, False, 0, "36×24×18 in pile"),
+    ("brick pile", "debris", 1.0, False, 0, "24×18×12 in pile"),
+    ("roofing shingles bundle", "debris", 0.3, False, 0, "36×12×6 in per bundle"),
+    ("insulation roll", "debris", 0.5, False, 0, "24×15 in × 48 in long"),
+    ("window frame", "debris", 0.3, False, 0, "36×24×4 in"),
+    ("door slab", "debris", 0.4, False, 0, "80×32×1.75 in"),
+    ("toilet", "other", 1.0, False, 0, "28×18×28 in"),
+    ("bathroom vanity", "other", 1.0, False, 0, "36×21×34 in"),
+    ("kitchen cabinet section", "other", 0.8, False, 0, "36×24×30 in"),
+    ("shelving unit metal", "other", 1.0, False, 0, "48×18×72 in"),
+    ("plastic shelving unit", "other", 0.5, False, 0, "36×14×60 in"),
+    ("safe small", "other", 0.3, False, 0, "14×14×20 in"),
+    ("safe large", "other", 1.5, False, 0, "24×24×36 in"),
+    ("piano upright", "furniture", 6.0, False, 0, "58×24×48 in"),
+    ("piano grand", "furniture", 12.0, False, 0, "72×60×40 in"),
+    # Hazardous additions
+    ("fluorescent light tube 4ft", "hazardous", 0.05, True, 10.0, "48×1.5 in diameter"),
+    ("motor oil jugs", "hazardous", 0.1, True, 15.0, "8×4×10 in per jug"),
+    # Window screens (common false TV detections)
+    ("window screen", "debris", 0.1, False, 0, "36×24×1 in"),
+    ("storm window", "debris", 0.15, False, 0, "36×24×2 in"),
 ]
 
 
@@ -395,6 +460,7 @@ async def seed_reference_library():
         result = await db.execute(select(ItemReferenceLibrary).limit(1))
         existing = result.scalar_one_or_none()
         if existing:
+            # Update items with missing dimensions
             all_result = await db.execute(
                 select(ItemReferenceLibrary).where(
                     (ItemReferenceLibrary.dimensions == None) | (ItemReferenceLibrary.dimensions == "")
@@ -404,7 +470,28 @@ async def seed_reference_library():
             for item in empty_dims:
                 if item.item_name in dims_map:
                     item.dimensions = dims_map[item.item_name]
-            if empty_dims:
+
+            # Add any new SEED_ITEMS not yet in the database
+            name_result = await db.execute(
+                select(ItemReferenceLibrary.item_name)
+            )
+            existing_names = {row[0] for row in name_result.fetchall()}
+            added = 0
+            for name, cat, cy, special, fee, dims in SEED_ITEMS:
+                if name not in existing_names:
+                    db.add(ItemReferenceLibrary(
+                        item_name=name,
+                        item_category=cat,
+                        cubic_yards=cy,
+                        dimensions=dims,
+                        is_special=special,
+                        special_fee=fee,
+                        confidence=1.0,
+                        source="builtin",
+                        times_seen=0,
+                    ))
+                    added += 1
+            if empty_dims or added > 0:
                 await db.commit()
             return
         for name, cat, cy, special, fee, dims in SEED_ITEMS:

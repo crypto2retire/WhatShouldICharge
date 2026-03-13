@@ -162,12 +162,17 @@
 </div>
 
 <script>
+function getCsrfToken() {
+  var match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+  return match ? match[1] : '';
+}
+
 var allItems = [];
 var currentSort = 'times_seen';
 var editingId = null;
 
 document.getElementById('nav-logout').addEventListener('click', async function() {
-  await fetch('/api/auth/logout', { method: 'POST' });
+  await fetch('/api/auth/logout', { method: 'POST', headers: {'X-CSRF-Token': getCsrfToken()} });
   window.location.href = '/login';
 });
 
@@ -280,7 +285,7 @@ async function saveItem() {
   try {
     var resp = await fetch('/api/library/' + editingId, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
       body: JSON.stringify(body)
     });
     if (!resp.ok) throw new Error('Failed');

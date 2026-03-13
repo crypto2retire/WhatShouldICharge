@@ -967,6 +967,10 @@
 </main>
 
 <script>
+function getCsrfToken() {
+  var match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+  return match ? match[1] : '';
+}
 var currentUser = null;
 var currentEstimateId = null;
 
@@ -997,7 +1001,7 @@ var currentEstimateId = null;
 })();
 
 document.getElementById('nav-logout').addEventListener('click', async () => {
-  await fetch('/api/auth/logout', { method: 'POST' });
+  await fetch('/api/auth/logout', { method: 'POST', headers: {'X-CSRF-Token': getCsrfToken()} });
   window.location.href = '/login';
 });
 
@@ -1080,7 +1084,7 @@ document.getElementById('nav-logout').addEventListener('click', async () => {
         company_phone: document.getElementById('set-phone').value.trim(),
         company_logo_url: document.getElementById('set-logo').value.trim(),
       };
-      var resp = await fetch('/api/settings', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      var resp = await fetch('/api/settings', { method: 'PUT', headers: {'Content-Type':'application/json', 'X-CSRF-Token': getCsrfToken()}, body: JSON.stringify(body) });
       var result = await resp.json();
       if (result.ok) {
         // Update local user object
@@ -1351,7 +1355,7 @@ async function submitEstimate() {
   }
 
   try {
-    const resp = await fetch('/api/estimate', { method: 'POST', body: formData });
+    const resp = await fetch('/api/estimate', { method: 'POST', headers: {'X-CSRF-Token': getCsrfToken()}, body: formData });
     const data = await resp.json();
 
     if (!resp.ok) {
@@ -1755,7 +1759,7 @@ async function downloadPDF() {
   var btn = document.getElementById('pdf-btn');
   btn.textContent = '⏳ Generating...';
   try {
-    var resp = await fetch('/api/estimate/' + currentEstimateId + '/pdf', { method: 'POST' });
+    var resp = await fetch('/api/estimate/' + currentEstimateId + '/pdf', { method: 'POST', headers: {'X-CSRF-Token': getCsrfToken()} });
     if (!resp.ok) { btn.textContent = '❌ Failed'; setTimeout(function() { btn.textContent = '📄 Download PDF'; }, 2000); return; }
     var blob = await resp.blob();
     var url = URL.createObjectURL(blob);
@@ -1789,7 +1793,7 @@ async function sendEstimate() {
   if (!email || !currentEstimateId) return;
   try {
     var resp = await fetch('/api/estimate/' + currentEstimateId + '/send', {
-      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({email: email})
+      method: 'POST', headers: {'Content-Type':'application/json', 'X-CSRF-Token': getCsrfToken()}, body: JSON.stringify({email: email})
     });
     if (resp.ok) {
       closeSendModal();
@@ -1962,7 +1966,7 @@ document.addEventListener('keydown', function(e) {
 
 async function detailPDF(id) {
   try {
-    var resp = await fetch('/api/estimate/' + id + '/pdf', { method: 'POST' });
+    var resp = await fetch('/api/estimate/' + id + '/pdf', { method: 'POST', headers: {'X-CSRF-Token': getCsrfToken()} });
     if (!resp.ok) return;
     var blob = await resp.blob();
     var url = URL.createObjectURL(blob);

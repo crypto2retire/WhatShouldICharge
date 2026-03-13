@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 import anthropic
 import bcrypt
 import stripe
@@ -24,6 +25,29 @@ from sqlalchemy import Column, Integer, Float, DateTime, Text, String, Boolean, 
 import asyncio
 from PIL import Image
 import io
+from cryptography.fernet import Fernet, InvalidToken
+
+_encryption_key = os.environ.get("ENCRYPTION_KEY")
+_fernet = Fernet(_encryption_key.encode()) if _encryption_key else None
+
+
+def encrypt_pii(plaintext: str) -> str:
+    if not plaintext or not _fernet:
+        return plaintext or ""
+    return _fernet.encrypt(plaintext.encode("utf-8")).decode("utf-8")
+
+
+def decrypt_pii(ciphertext: str) -> str:
+    if not ciphertext or not _fernet:
+        return ciphertext or ""
+    # Graceful fallback for pre-encryption data
+    if not ciphertext.startswith("gAAAAA"):
+        return ciphertext
+    try:
+        return _fernet.decrypt(ciphertext.encode("utf-8")).decode("utf-8")
+    except (InvalidToken, Exception):
+        return ciphertext
+
 
 app = FastAPI(title="WhatShouldICharge")
 
@@ -57,7 +81,38 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+CSRF_EXEMPT_PATHS = {
+    "/api/auth/login", "/api/auth/signup", "/api/auth/forgot-password",
+    "/api/team/auth", "/api/stripe/webhook",
+}
+
+
+class CSRFMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.method in ("POST", "PUT", "DELETE"):
+            path = request.url.path
+            # Exempt public endpoints, auth endpoints, and webhook
+            if not path.startswith("/api/public/") and path not in CSRF_EXEMPT_PATHS:
+                cookie_token = request.cookies.get("csrf_token")
+                header_token = request.headers.get("x-csrf-token")
+                if not cookie_token or not header_token or cookie_token != header_token:
+                    return JSONResponse(status_code=403, content={"detail": "CSRF token missing or invalid"})
+
+        response = await call_next(request)
+
+        if "csrf_token" not in request.cookies:
+            csrf_token = secrets.token_hex(32)
+            response.set_cookie(
+                "csrf_token", csrf_token, httponly=False, samesite="lax",
+                secure=True, max_age=30 * 24 * 3600, path="/"
+            )
+
+        return response
+
+
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(CSRFMiddleware)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 class RateLimiter:
@@ -87,6 +142,26 @@ auth_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
 forgot_password_rate_limiter = RateLimiter(max_requests=5, window_seconds=300)
 public_estimate_rate_limiter = RateLimiter(max_requests=10, window_seconds=3600)
 public_status_rate_limiter = RateLimiter(max_requests=50, window_seconds=3600)
+
+
+_response_cache: dict[str, dict] = {}
+
+
+def cache_get(key: str):
+    entry = _response_cache.get(key)
+    if entry and entry["expires"] > time.time():
+        return entry["data"]
+    if entry:
+        del _response_cache[key]
+    return None
+
+
+def cache_set(key: str, data, ttl: int = 60):
+    _response_cache[key] = {"data": data, "expires": time.time() + ttl}
+
+
+def cache_invalidate(key: str):
+    _response_cache.pop(key, None)
 
 
 def get_client_ip(request: Request) -> str:
@@ -1408,6 +1483,7 @@ async def public_create_estimate(
         raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
 
     cleanup_expired_jobs()
+    check_concurrent_limit()
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.company_slug == slug.lower().strip()))
@@ -1547,8 +1623,8 @@ async def auth_signup(request: Request):
         raise HTTPException(status_code=400, detail="Invalid email format.")
     if len(email) > 254:
         raise HTTPException(status_code=400, detail="Email address is too long.")
-    if len(password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
     if len(password) > 128:
         raise HTTPException(status_code=400, detail="Password is too long.")
 
@@ -1730,6 +1806,10 @@ async def auth_me(request: Request):
 async def get_settings(request: Request):
     """Return all user settings from the database."""
     user = await require_user(request)
+    cache_key = f"settings:{user.id}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
     async with AsyncSessionLocal() as db:
         raw = await db.execute(
             text("SELECT id, company_name, company_city, company_state, company_phone, company_slug, company_logo_url, price_per_cy_low, price_per_cy_high, price_per_cy_premium, min_charge, truck_capacity_cy FROM users WHERE id = :uid"),
@@ -1738,7 +1818,7 @@ async def get_settings(request: Request):
         row = raw.mappings().first()
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
-    return {
+    data = {
         "company_name": row["company_name"] or "",
         "company_city": row["company_city"] or "",
         "company_state": row["company_state"] or "",
@@ -1751,6 +1831,8 @@ async def get_settings(request: Request):
         "company_phone": row["company_phone"] or "",
         "company_logo_url": row["company_logo_url"] or "",
     }
+    cache_set(cache_key, data, ttl=60)
+    return data
 
 
 @app.put("/api/settings")
@@ -1829,6 +1911,8 @@ async def update_settings(request: Request):
                 await db.rollback()
                 raise HTTPException(status_code=500, detail=f"Failed to save settings: {commit_err}")
 
+        cache_invalidate(f"settings:{user.id}")
+
         # Read back the saved values via raw SQL
         verify = await db.execute(
             text("SELECT company_name, company_city, company_state, company_phone, company_slug, company_logo_url, price_per_cy_low, price_per_cy_high, price_per_cy_premium, min_charge, truck_capacity_cy FROM users WHERE id = :uid"),
@@ -1854,15 +1938,87 @@ async def update_settings(request: Request):
         }
 
 
+@app.put("/api/settings/password")
+async def change_password(request: Request):
+    user = await require_user(request)
+    body = await request.json()
+    current_password = body.get("current_password", "")
+    new_password = body.get("new_password", "")
+    confirm_password = body.get("confirm_password", "")
+
+    if not current_password or not new_password:
+        raise HTTPException(status_code=400, detail="All password fields are required.")
+    if new_password != confirm_password:
+        raise HTTPException(status_code=400, detail="New passwords do not match.")
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters.")
+    if len(new_password) > 128:
+        raise HTTPException(status_code=400, detail="Password is too long.")
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == user.id))
+        u = result.scalar_one_or_none()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        valid = await asyncio.to_thread(
+            lambda: bcrypt.checkpw(current_password.encode("utf-8"), u.password_hash.encode("utf-8"))
+        )
+        if not valid:
+            raise HTTPException(status_code=403, detail="Current password is incorrect.")
+
+        new_hash = await asyncio.to_thread(
+            lambda: bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        )
+        await db.execute(
+            text("UPDATE users SET password_hash = :pw WHERE id = :uid"),
+            {"pw": new_hash, "uid": user.id}
+        )
+        await db.commit()
+
+    return {"ok": True}
+
+
+@app.post("/api/settings/logout-all")
+async def logout_all_devices(request: Request):
+    user = await require_user(request)
+    token = request.cookies.get("session_token")
+
+    async with AsyncSessionLocal() as db:
+        # Delete all sessions for this user
+        await db.execute(
+            text("DELETE FROM sessions WHERE user_id = :uid"),
+            {"uid": user.id}
+        )
+        # Create a fresh session so the current user stays logged in
+        new_token = secrets.token_hex(32)
+        db.add(Session(
+            user_id=user.id,
+            token=new_token,
+            expires_at=datetime.utcnow() + timedelta(days=30),
+        ))
+        await db.commit()
+
+    response = JSONResponse({"ok": True, "message": "All other sessions have been revoked."})
+    response.set_cookie(
+        "session_token", new_token, httponly=True, samesite="lax",
+        secure=True, max_age=30 * 24 * 3600, path="/"
+    )
+    return response
+
+
 @app.get("/api/library")
 async def get_library(request: Request):
     await require_user(request)
+    cached = cache_get("library")
+    if cached is not None:
+        return cached
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(ItemReferenceLibrary).order_by(ItemReferenceLibrary.times_seen.desc())
         )
         items = result.scalars().all()
-        return [
+        data = [
             {
                 "id": i.id,
                 "item_name": i.item_name,
@@ -1879,6 +2035,8 @@ async def get_library(request: Request):
             }
             for i in items
         ]
+        cache_set("library", data, ttl=60)
+        return data
 
 
 @app.get("/api/library/search")
@@ -1940,6 +2098,7 @@ async def add_library_item(request: Request):
         db.add(item)
         await db.commit()
         await db.refresh(item)
+        cache_invalidate("library")
         return {"id": item.id, "item_name": item.item_name, "cubic_yards": item.cubic_yards}
 
 
@@ -1966,6 +2125,7 @@ async def update_library_item(request: Request, item_id: int):
             item.dimensions = str(body["dimensions"])
         item.updated_at = datetime.utcnow()
         await db.commit()
+        cache_invalidate("library")
         return {"success": True}
 
 
@@ -2588,6 +2748,16 @@ async def update_library_from_estimate(items: list):
 
 estimate_jobs = {}
 JOB_TTL_SECONDS = 300
+MAX_CONCURRENT_JOBS = 10
+
+
+def count_active_jobs() -> int:
+    return sum(1 for j in estimate_jobs.values() if j.get("status") in ("analyzing", "looking_up"))
+
+
+def check_concurrent_limit():
+    if count_active_jobs() >= MAX_CONCURRENT_JOBS:
+        raise HTTPException(status_code=503, detail="Server is busy processing other estimates. Please try again in a minute.")
 
 
 def cleanup_expired_jobs():
@@ -2608,6 +2778,7 @@ async def create_estimate(
 ):
     user = await require_user(request)
     cleanup_expired_jobs()
+    check_concurrent_limit()
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.id == user.id))
@@ -2755,6 +2926,27 @@ async def run_estimate(
         pass1_result = parse_ai_json(message.content[0].text)
         pass1_json_str = json.dumps(pass1_result)
 
+        # H7: Validate AI response schema
+        if not isinstance(pass1_result.get("items"), list):
+            logger.error(f"[run_estimate] Malformed AI response for job {job_id}: missing/invalid 'items' field")
+            job["status"] = "error"
+            job["message"] = "We received an unexpected response from our AI. Please try again."
+            job["result"] = None
+            return
+        totals = pass1_result.get("totals")
+        if not isinstance(totals, dict) or "cubic_yards_mid" not in totals:
+            logger.error(f"[run_estimate] Malformed AI response for job {job_id}: missing/invalid 'totals' field")
+            job["status"] = "error"
+            job["message"] = "We received an unexpected response from our AI. Please try again."
+            job["result"] = None
+            return
+        if not isinstance(pass1_result.get("job_type"), str):
+            logger.error(f"[run_estimate] Malformed AI response for job {job_id}: missing/invalid 'job_type' field")
+            job["status"] = "error"
+            job["message"] = "We received an unexpected response from our AI. Please try again."
+            job["result"] = None
+            return
+
         result_data = pass1_result
 
         items_needing_lookup = result_data.get("items_needing_lookup", [])
@@ -2826,9 +3018,9 @@ async def run_estimate(
                 user_id=user.id,
                 team_member_id=job.get("team_member_id", 0),
                 estimate_name=job.get("estimate_name", ""),
-                customer_name=job.get("customer_name", ""),
-                customer_email=job.get("customer_email", ""),
-                customer_phone=job.get("customer_phone", ""),
+                customer_name=encrypt_pii(job.get("customer_name", "")),
+                customer_email=encrypt_pii(job.get("customer_email", "")),
+                customer_phone=encrypt_pii(job.get("customer_phone", "")),
                 photos_count=num_photos,
                 result_json=json.dumps(result_data),
                 price_low=price_low,
@@ -3055,8 +3247,8 @@ async def get_estimates(request: Request):
                 "price_high": e.price_high,
                 "cy_estimate": e.cy_estimate,
                 "estimate_name": e.estimate_name or "",
-                "customer_name": e.customer_name or "",
-                "customer_email": e.customer_email or "",
+                "customer_name": decrypt_pii(e.customer_name or ""),
+                "customer_email": decrypt_pii(e.customer_email or ""),
             }
             for e in estimates
         ]
@@ -3086,9 +3278,9 @@ async def get_estimate_detail(request: Request, estimate_id: int):
             "price_high": e.price_high,
             "cy_estimate": e.cy_estimate,
             "estimate_name": e.estimate_name or "",
-            "customer_name": e.customer_name or "",
-            "customer_email": e.customer_email or "",
-            "customer_phone": e.customer_phone or "",
+            "customer_name": decrypt_pii(e.customer_name or ""),
+            "customer_email": decrypt_pii(e.customer_email or ""),
+            "customer_phone": decrypt_pii(e.customer_phone or ""),
             "result": result_data,
         }
 
@@ -3465,6 +3657,8 @@ async def team_create_estimate(
     customer_phone: str = Form(default=""),
 ):
     member, owner = await require_team_member(request)
+    cleanup_expired_jobs()
+    check_concurrent_limit()
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.id == owner.id))
@@ -3590,7 +3784,7 @@ async def team_estimates(request: Request):
              "photos_count": e.photos_count, "price_low": e.price_low,
              "price_high": e.price_high, "cy_estimate": e.cy_estimate,
              "estimate_name": e.estimate_name or "",
-             "customer_name": e.customer_name}
+             "customer_name": decrypt_pii(e.customer_name or "")}
             for e in estimates
         ]
 
@@ -3649,7 +3843,7 @@ def generate_estimate_pdf(estimate, user, items, special_items):
     if estimate.estimate_name:
         info_data.append(["Job Name:", estimate.estimate_name, "", ""])
     if estimate.customer_name:
-        info_data.append(["Customer:", estimate.customer_name, "", ""])
+        info_data.append(["Customer:", decrypt_pii(estimate.customer_name), "", ""])
 
     info_table = Table(info_data, colWidths=[1.2*inch, 2.3*inch, 1.0*inch, 2.3*inch])
     info_table.setStyle(TableStyle([

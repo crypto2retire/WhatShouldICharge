@@ -449,6 +449,11 @@
 </div>
 
 <script>
+function getCsrfToken() {
+  var match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+  return match ? match[1] : '';
+}
+
 var photos = [];
 var selectedIdx = null;
 var currentEstimateId = null;
@@ -546,7 +551,7 @@ async function submitEstimate() {
   formData.append('customer_phone', document.getElementById('cust-phone').value);
 
   try {
-    var resp = await fetch('/api/team/estimate', { method: 'POST', body: formData });
+    var resp = await fetch('/api/team/estimate', { method: 'POST', headers: {'X-CSRF-Token': getCsrfToken()}, body: formData });
     var data = await resp.json();
     if (!resp.ok) {
       if (data.detail === 'estimate_limit_reached') { showError('Estimate limit reached. Contact your admin.'); }
@@ -728,7 +733,7 @@ async function downloadPDF() {
   var btn = document.getElementById('pdf-btn');
   btn.textContent = '⏳ Generating...';
   try {
-    var resp = await fetch('/api/estimate/' + currentEstimateId + '/pdf', { method: 'POST' });
+    var resp = await fetch('/api/estimate/' + currentEstimateId + '/pdf', { method: 'POST', headers: {'X-CSRF-Token': getCsrfToken()} });
     if (!resp.ok) { btn.textContent = '❌ Failed'; setTimeout(function() { btn.textContent = '📄 Download PDF'; }, 2000); return; }
     var blob = await resp.blob();
     var url = URL.createObjectURL(blob);
@@ -764,7 +769,7 @@ async function sendEstimate() {
   try {
     var resp = await fetch('/api/estimate/' + currentEstimateId + '/send', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken()},
       body: JSON.stringify({ email: email })
     });
     if (resp.ok) {
@@ -799,7 +804,7 @@ function newEstimate() {
 }
 
 async function logout() {
-  await fetch('/api/team/logout', { method: 'POST' });
+  await fetch('/api/team/logout', { method: 'POST', headers: {'X-CSRF-Token': getCsrfToken()} });
   window.location.href = '/team';
 }
 

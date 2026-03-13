@@ -401,6 +401,23 @@
 
     <button class="btn btn-green" id="ms-save" style="min-width:160px;">Save All Settings</button>
     <span id="ms-msg" style="margin-left:12px;font-size:0.83rem;color:var(--green);display:none;"></span>
+
+    <div class="card" style="margin-top:16px;">
+      <div class="card-title">Change Password</div>
+      <div style="max-width:400px;">
+        <div style="margin-bottom:12px;"><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Current Password</label><input type="password" id="pw-current"></div>
+        <div style="margin-bottom:12px;"><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">New Password</label><input type="password" id="pw-new" minlength="8"></div>
+        <div style="margin-bottom:12px;"><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Confirm New Password</label><input type="password" id="pw-confirm" minlength="8"></div>
+      </div>
+      <button class="btn btn-primary" id="pw-save" style="min-width:160px;">Save Password</button>
+      <span id="pw-msg" style="margin-left:12px;font-size:0.83rem;display:none;"></span>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div class="card-title">Security</div>
+      <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px;">Log out from all other browsers and devices where you're signed in.</p>
+      <button class="btn btn-red" id="logout-all" style="min-width:200px;">Log Out All Devices</button>
+    </div>
   </div>
 
 </div>
@@ -410,6 +427,15 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
+function getCsrfToken() {
+  var match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+  return match ? match[1] : '';
+}
+function csrfHeaders(extra) {
+  var h = {'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken()};
+  if (extra) Object.assign(h, extra);
+  return h;
+}
 function esc(s) { var d = document.createElement('div'); d.textContent = String(s || ''); return d.innerHTML; }
 
 function showToast(msg) {
@@ -539,7 +565,7 @@ async function savePlan(id, card) {
     else if (f === 'price_cents' || f === 'estimate_limit') data[f] = parseInt(el.value) || 0;
     else data[f] = el.value;
   });
-  await fetch('/api/admin/plans/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  await fetch('/api/admin/plans/' + id, { method: 'PUT', headers: csrfHeaders(), body: JSON.stringify(data) });
   showToast('Plan saved');
   loadPlans();
 }
@@ -569,7 +595,7 @@ async function addTeamMember() {
   var pin = document.getElementById('team-pin').value.trim();
   var role = document.getElementById('team-role').value;
   if (!name || !pin || pin.length < 4) { alert('Name and PIN (4+ digits) required.'); return; }
-  await fetch('/api/team/members', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name: name, pin: pin, role: role}) });
+  await fetch('/api/team/members', { method: 'POST', headers: csrfHeaders(), body: JSON.stringify({name: name, pin: pin, role: role}) });
   document.getElementById('team-name').value = '';
   document.getElementById('team-pin').value = '';
   showToast('Team member added');
@@ -577,7 +603,7 @@ async function addTeamMember() {
 }
 
 async function toggleMember(id, isActive) {
-  await fetch('/api/team/members/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({is_active: !isActive}) });
+  await fetch('/api/team/members/' + id, { method: 'PUT', headers: csrfHeaders(), body: JSON.stringify({is_active: !isActive}) });
   showToast(isActive ? 'Member deactivated' : 'Member activated');
   loadTeam();
 }
@@ -623,7 +649,7 @@ async function saveSiteConfig() {
   document.querySelectorAll('#config-form [data-key]').forEach(function(el) {
     data[el.dataset.key] = el.value;
   });
-  await fetch('/api/admin/site-config', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  await fetch('/api/admin/site-config', { method: 'PUT', headers: csrfHeaders(), body: JSON.stringify(data) });
   showToast('Site config saved');
 }
 
@@ -707,7 +733,7 @@ document.getElementById('ms-save').addEventListener('click', async function() {
       truck_capacity_cy: parseFloat(document.getElementById('ms-truck').value) || 16,
       company_slug: document.getElementById('ms-slug').value.trim(),
     };
-    var resp = await fetch('/api/settings', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    var resp = await fetch('/api/settings', { method: 'PUT', headers: csrfHeaders(), body: JSON.stringify(body) });
     var result = await resp.json();
     if (resp.ok && result.ok) {
       showToast('Settings saved');
@@ -728,6 +754,55 @@ document.getElementById('ms-save').addEventListener('click', async function() {
   }
   btn.disabled = false;
   btn.textContent = 'Save All Settings';
+});
+
+document.getElementById('pw-save').addEventListener('click', async function() {
+  var btn = this;
+  var msg = document.getElementById('pw-msg');
+  var current = document.getElementById('pw-current').value;
+  var newPw = document.getElementById('pw-new').value;
+  var confirm = document.getElementById('pw-confirm').value;
+  msg.style.display = 'none';
+
+  if (!current || !newPw || !confirm) {
+    msg.textContent = 'All fields are required.'; msg.style.color = 'var(--red)'; msg.style.display = 'inline'; return;
+  }
+  if (newPw.length < 8) {
+    msg.textContent = 'New password must be at least 8 characters.'; msg.style.color = 'var(--red)'; msg.style.display = 'inline'; return;
+  }
+  if (newPw !== confirm) {
+    msg.textContent = 'New passwords do not match.'; msg.style.color = 'var(--red)'; msg.style.display = 'inline'; return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    var resp = await fetch('/api/settings/password', { method: 'PUT', headers: csrfHeaders(), body: JSON.stringify({current_password: current, new_password: newPw, confirm_password: confirm}) });
+    var result = await resp.json();
+    if (resp.ok && result.ok) {
+      msg.textContent = 'Password changed!'; msg.style.color = 'var(--green)'; msg.style.display = 'inline';
+      document.getElementById('pw-current').value = '';
+      document.getElementById('pw-new').value = '';
+      document.getElementById('pw-confirm').value = '';
+    } else {
+      msg.textContent = result.detail || 'Error changing password.'; msg.style.color = 'var(--red)'; msg.style.display = 'inline';
+    }
+  } catch(e) {
+    msg.textContent = 'Error: ' + e.message; msg.style.color = 'var(--red)'; msg.style.display = 'inline';
+  }
+  btn.disabled = false; btn.textContent = 'Save Password';
+});
+
+document.getElementById('logout-all').addEventListener('click', async function() {
+  if (!window.confirm('This will log you out from all other devices. Continue?')) return;
+  try {
+    var resp = await fetch('/api/settings/logout-all', { method: 'POST', headers: csrfHeaders() });
+    var result = await resp.json();
+    if (resp.ok && result.ok) {
+      showToast('All other sessions revoked.');
+    } else {
+      showToast(result.detail || 'Error revoking sessions.');
+    }
+  } catch(e) { showToast('Error: ' + e.message); }
 });
 
 loadAnalytics();

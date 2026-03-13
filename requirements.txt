@@ -11,3 +11,4 @@ reportlab>=4.4.10
 sendgrid>=6.12.5
 stripe>=14.4.1
 aiosqlite>=0.22.1
+cryptography>=44.0.0

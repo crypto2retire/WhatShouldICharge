@@ -656,12 +656,13 @@
   .detail-actions button { flex: 1; padding: 10px; border-radius: 10px; border: none; font-size: 0.85rem; font-weight: 700; cursor: pointer; }
 
   @media (max-width: 600px) {
-    .nav-bar { height: 48px; padding: 0 12px; }
+    .nav-bar { height: 48px; padding: 0 10px; overflow: hidden; }
     .nav-brand { font-size: 0.88rem; }
-    .nav-right { gap: 8px; font-size: 0.78rem; }
+    .nav-right { gap: 6px; font-size: 0.78rem; }
     .nav-company { display: none; }
-    .nav-link, .nav-estimates { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; }
-    #nav-admin-link { padding: 4px 10px !important; font-size: 0.72rem !important; }
+    .nav-link { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; }
+    .nav-estimates { min-height: 44px; display: inline-flex; align-items: center; }
+    #nav-admin-link { padding: 4px 10px !important; font-size: 0.72rem !important; min-width: auto !important; }
 
     .main-wrap { padding: 16px 12px 60px; }
     .card { padding: 16px; }
@@ -700,20 +701,32 @@
     /* Prevent iOS zoom on inputs */
     input, select, textarea { font-size: 16px !important; }
   }
+
+  @media (max-width: 480px) {
+    .nav-bar { padding: 0 8px; }
+    .nav-brand { font-size: 0.82rem; }
+    .nav-right { gap: 4px; }
+    .nav-estimates { font-size: 0.72rem; }
+    #nav-logout .logout-text { display: none; }
+    #nav-logout .logout-icon { display: inline; font-size: 1.2rem; }
+    #nav-admin-link { padding: 4px 8px !important; font-size: 0.68rem !important; }
+  }
 </style>
 </head>
 <body>
 <a href="#upload-card" class="skip-link" style="position:absolute;left:-9999px;top:0;z-index:9999;background:var(--accent);color:#fff;padding:8px 16px;font-size:0.9rem;font-weight:600;border-radius:0 0 8px 0;transition:left 0.2s;" onfocus="this.style.left='0'" onblur="this.style.left='-9999px'">Skip to main content</a>
 <style>
-  .nav-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; }
-  .nav-left { display: flex; align-items: center; gap: 10px; }
-  .nav-dot { width: 8px; height: 8px; background: #16a34a; border-radius: 50%; box-shadow: 0 0 8px #16a34a; }
-  .nav-brand { font-size: 1rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text); text-decoration: none; }
-  .nav-right { display: flex; align-items: center; gap: 16px; font-size: 0.83rem; }
+  .nav-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; max-width: 100vw; overflow: hidden; }
+  .nav-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex-shrink: 1; }
+  .nav-dot { width: 8px; height: 8px; background: #16a34a; border-radius: 50%; box-shadow: 0 0 8px #16a34a; flex-shrink: 0; }
+  .nav-brand { font-size: 1rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nav-right { display: flex; align-items: center; gap: 16px; font-size: 0.83rem; flex-shrink: 0; }
   .nav-company { font-weight: 600; color: var(--text); }
-  .nav-estimates { color: #22c55e; font-weight: 600; }
+  .nav-estimates { color: #22c55e; font-weight: 600; white-space: nowrap; }
   .nav-link { color: var(--muted); text-decoration: none; cursor: pointer; transition: color 0.15s; }
   .nav-link:hover { color: var(--text); }
+  #nav-logout .logout-text { }
+  #nav-logout .logout-icon { display: none; }
   .market-info { background: rgba(22,163,74,0.08); border: 1px solid rgba(22,163,74,0.2); border-radius: 8px; padding: 10px 14px; font-size: 0.83rem; color: #22c55e; margin-top: 14px; display: none; }
   .market-info.visible { display: block; }
   .item-looked-up { color: #818cf8; font-size: 0.7rem; margin-left: 4px; }
@@ -728,7 +741,7 @@
     <span class="nav-company" id="nav-company-name"></span>
     <span class="nav-estimates" id="nav-estimates"></span>
     <a class="nav-link" id="nav-settings" role="button" tabindex="0" title="Settings" style="cursor:pointer;font-size:1.1rem;">&#9881;</a>
-    <a class="nav-link" id="nav-logout" role="button" tabindex="0">Logout</a>
+    <a class="nav-link" id="nav-logout" role="button" tabindex="0" title="Logout"><span class="logout-text">Logout</span><span class="logout-icon" aria-hidden="true">&#x2192;</span></a>
   </div>
 </nav>
 

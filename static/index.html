@@ -28,6 +28,7 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     min-height: 100vh;
     line-height: 1.5;
+    overflow-x: hidden;
   }
 
   header {
@@ -54,6 +55,7 @@
     max-width: 780px;
     margin: 0 auto;
     padding: 32px 20px 80px;
+    width: 100%;
   }
 
   .card {
@@ -653,11 +655,50 @@
   .detail-actions { display: flex; gap: 10px; margin-top: 18px; }
   .detail-actions button { flex: 1; padding: 10px; border-radius: 10px; border: none; font-size: 0.85rem; font-weight: 700; cursor: pointer; }
 
-  @media (max-width: 500px) {
+  @media (max-width: 600px) {
+    .nav-bar { height: 48px; padding: 0 12px; }
+    .nav-brand { font-size: 0.88rem; }
+    .nav-right { gap: 8px; font-size: 0.78rem; }
+    .nav-company { display: none; }
+    .nav-link, .nav-estimates { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; }
+    #nav-admin-link { padding: 4px 10px !important; font-size: 0.72rem !important; }
+
+    .main-wrap { padding: 16px 12px 60px; }
+    .card { padding: 16px; }
+    .price-banner { padding: 20px 14px; }
     .price-range { font-size: 2rem; }
-    .card { padding: 20px; }
+    .price-range span { font-size: 1.3rem; }
+    .price-meta { gap: 14px; }
+
+    #drop-zone { padding: 32px 12px; }
+
+    .room-btn { padding: 10px 14px; min-height: 44px; font-size: 0.85rem; }
     .truck-stats { flex-direction: column; }
-    .detail-panel { margin-top: 10px; padding: 20px; }
+
+    .detail-overlay { padding: 8px; }
+    .detail-panel { margin-top: 10px; padding: 16px; }
+    .detail-actions { flex-direction: column; }
+    .detail-actions button { min-height: 44px; }
+
+    .modal { padding: 20px; }
+
+    #new-estimate-btn { min-height: 44px; }
+    #submit-btn { min-height: 48px; }
+
+    .history-item { padding: 12px; }
+
+    .item-row { padding: 10px; gap: 8px; flex-wrap: wrap; }
+    .item-name { font-size: 0.83rem; min-width: 0; }
+
+    /* Stack settings modal side-by-side fields */
+    #settings-modal [style*="display:flex"][style*="gap:10px"] { flex-wrap: wrap; }
+    #settings-modal [style*="flex:1"] { min-width: 120px; }
+
+    .action-row { flex-direction: column; }
+    .action-row button { min-height: 44px; }
+
+    /* Prevent iOS zoom on inputs */
+    input, select, textarea { font-size: 16px !important; }
   }
 </style>
 </head>
@@ -680,7 +721,7 @@
 <nav class="nav-bar" aria-label="Main navigation">
   <div class="nav-left">
     <span class="nav-dot" aria-hidden="true"></span>
-    <a href="/" class="nav-brand">WhatShouldICharge</a>
+    <span class="nav-brand">WhatShouldICharge</span>
   </div>
   <div class="nav-right" id="nav-user" style="display:none">
     <a class="nav-link" id="nav-admin-link" href="/admin" style="display:none;background:#f59e0b;color:#000;padding:4px 14px;border-radius:6px;font-weight:700;font-size:0.8rem;text-decoration:none;">Admin Dashboard</a>
@@ -835,7 +876,7 @@
       </div>
     </div>
 
-    <div style="display:flex;gap:10px;margin-top:14px;">
+    <div class="action-row" style="display:flex;gap:10px;margin-top:14px;">
       <button id="pdf-btn" style="flex:1;padding:12px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:0.88rem;font-weight:700;cursor:pointer;" onclick="downloadPDF()">📄 Download PDF</button>
       <button id="send-btn" style="flex:1;padding:12px;border-radius:10px;border:none;background:var(--green,#16a34a);color:#fff;font-size:0.88rem;font-weight:700;cursor:pointer;" onclick="openSendModal()">📧 Email to Customer</button>
     </div>

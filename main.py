@@ -869,7 +869,7 @@ async def customer_estimate_page(slug: str):
     faq_items = [
         (
             f"How much does junk removal cost in {city or 'my area'}?",
-            f"Junk removal pricing{loc_phrase} typically ranges from $75 for a minimum load to $500 or more for a full truckload. The exact cost depends on the volume of items, the type of materials being removed, and whether any items require special handling such as appliances with refrigerants or electronics that need proper recycling. {name} uses an AI-powered photo estimate system that calculates your specific price based on the actual items in your photos — so you get a personalized quote, not a generic range. Most single-item pickups like a couch or mattress fall between $75 and $150, while full garage cleanouts or estate cleanouts can range from $300 to $600 depending on volume."
+            f"Junk removal pricing{loc_phrase} typically ranges from $75 for a minimum load to $500 or more for a full truckload. The exact cost depends on the volume of items, the type of materials being removed, and whether any items require special handling such as appliances with refrigerants or electronics that need proper recycling. {name} uses an AI-powered photo estimate system that calculates your specific price based on the actual items in your photos — so you get a personalized quote, not a generic range. Most single-item pickups like a couch or mattress fall between $75 and $150, while full garage cleanouts or estate cleanouts can range from $1,000 to $3,000+ depending on volume."
         ),
         (
             f"What is the cheapest way to get rid of junk in {city or 'my area'}?",

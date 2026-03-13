@@ -691,7 +691,16 @@
     .item-row { padding: 10px; gap: 8px; flex-wrap: wrap; }
     .item-name { font-size: 0.83rem; min-width: 0; }
 
-    /* Stack settings modal side-by-side fields */
+    /* Settings modal: full-screen on mobile */
+    .settings-inner {
+      width: 100% !important;
+      max-width: 100% !important;
+      height: 100vh !important;
+      max-height: 100vh !important;
+      border-radius: 0 !important;
+      padding: 20px 16px !important;
+      overflow-y: auto !important;
+    }
     #settings-modal [style*="display:flex"][style*="gap:10px"] { flex-wrap: wrap; }
     #settings-modal [style*="flex:1"] { min-width: 120px; }
 
@@ -934,8 +943,8 @@
   </div>
 
   <!-- Settings Modal -->
-  <div id="settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;">
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:420px;width:90%;max-height:80vh;overflow-y:auto;">
+  <div id="settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:1000;align-items:center;justify-content:center;">
+    <div class="settings-inner" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:420px;width:90%;max-height:80vh;overflow-y:auto;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
         <h3 style="margin:0;color:var(--text);font-size:1.1rem;">Settings</h3>
         <button id="settings-close" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;">&times;</button>
@@ -1138,18 +1147,42 @@ document.getElementById('nav-logout').addEventListener('click', async () => {
         company_phone: document.getElementById('set-phone').value.trim(),
         company_logo_url: document.getElementById('set-logo').value.trim(),
       };
-      var resp = await fetch('/api/settings', { method: 'PUT', headers: {'Content-Type':'application/json', 'X-CSRF-Token': getCsrfToken()}, body: JSON.stringify(body) });
+      var csrfToken = getCsrfToken();
+      if (!csrfToken) {
+        msg.textContent = 'Session error — please refresh the page and try again.';
+        msg.style.color = '#ef4444';
+        msg.style.display = 'block';
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Settings';
+        return;
+      }
+      var resp = await fetch('/api/settings', { method: 'PUT', headers: {'Content-Type':'application/json', 'X-CSRF-Token': csrfToken}, body: JSON.stringify(body) });
+      if (!resp.ok) {
+        var errData = await resp.json().catch(function() { return {}; });
+        msg.textContent = errData.detail || ('Save failed (HTTP ' + resp.status + ')');
+        msg.style.color = '#ef4444';
+        msg.style.display = 'block';
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Settings';
+        return;
+      }
       var result = await resp.json();
       if (result.ok) {
         // Update local user object
         Object.assign(currentUser, result);
         document.getElementById('nav-company-name').textContent = result.company_name || currentUser.email;
+        // Verify persistence by re-reading
+        var verify = await fetch('/api/settings?_t=' + Date.now());
+        if (verify.ok) {
+          var saved = await verify.json();
+          console.log('[Settings] Verified saved values:', saved);
+        }
         msg.textContent = 'Settings saved!';
         msg.style.color = 'var(--accent)';
         msg.style.display = 'block';
         setTimeout(function() { msg.style.display = 'none'; }, 2000);
       } else {
-        msg.textContent = 'Error saving settings';
+        msg.textContent = result.detail || 'Error saving settings';
         msg.style.color = '#ef4444';
         msg.style.display = 'block';
       }

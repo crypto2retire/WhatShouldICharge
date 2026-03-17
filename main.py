@@ -772,6 +772,16 @@ async def root():
     return FileResponse("static/landing.html")
 
 
+@app.get("/terms", response_class=HTMLResponse)
+async def terms_page():
+    return FileResponse("static/terms.html")
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy_page():
+    return FileResponse("static/privacy.html")
+
+
 @app.get("/estimate", response_class=HTMLResponse)
 async def estimator(request: Request):
     user = await get_current_user(request)
@@ -1431,6 +1441,72 @@ if(window.parent!==window){{
 </body>
 </html>'''
     return HTMLResponse(content=page_html)
+
+
+# ── Email Verification for Customer Estimates ──────────────────────────────
+# In-memory store for verification codes (keyed by email, TTL 10 minutes)
+_verify_codes: dict[str, dict] = {}
+
+
+@app.post("/api/public/verify/send")
+async def public_verify_send(request: Request):
+    """Send a 6-digit verification code to customer email."""
+    body = await request.json()
+    email = (body.get("email") or "").strip().lower()
+    slug_val = (body.get("slug") or "").strip()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Valid email required")
+
+    # Rate limit: max 3 codes per email per 10 minutes
+    existing = _verify_codes.get(email)
+    if existing and existing.get("count", 0) >= 3 and time.time() - existing.get("first_sent", 0) < 600:
+        raise HTTPException(status_code=429, detail="Too many requests. Try again in a few minutes.")
+
+    code = f"{secrets.randbelow(900000) + 100000}"
+    if not existing or time.time() - existing.get("first_sent", 0) >= 600:
+        _verify_codes[email] = {"code": code, "expires": time.time() + 600, "count": 1, "first_sent": time.time()}
+    else:
+        _verify_codes[email]["code"] = code
+        _verify_codes[email]["expires"] = time.time() + 600
+        _verify_codes[email]["count"] = existing.get("count", 0) + 1
+
+    send_email(
+        email,
+        "Your verification code",
+        f"""<div style="font-family:sans-serif;max-width:400px;margin:0 auto;padding:20px;">
+        <h2 style="color:#16a34a;margin-bottom:16px;">Verify Your Email</h2>
+        <p>Your verification code is:</p>
+        <div style="font-size:32px;font-weight:800;letter-spacing:8px;text-align:center;padding:20px;background:#f0fdf4;border-radius:8px;margin:16px 0;">{code}</div>
+        <p style="color:#666;font-size:14px;">This code expires in 10 minutes. If you didn't request this, you can ignore this email.</p>
+        </div>"""
+    )
+    return {"ok": True, "message": "Verification code sent"}
+
+
+@app.post("/api/public/verify/check")
+async def public_verify_check(request: Request):
+    """Verify the 6-digit code and return a verification token."""
+    body = await request.json()
+    email = (body.get("email") or "").strip().lower()
+    code = (body.get("code") or "").strip()
+    if not email or not code:
+        raise HTTPException(status_code=400, detail="Email and code required")
+
+    stored = _verify_codes.get(email)
+    if not stored:
+        raise HTTPException(status_code=400, detail="No verification code found. Please request a new one.")
+    if time.time() > stored.get("expires", 0):
+        del _verify_codes[email]
+        raise HTTPException(status_code=400, detail="Code expired. Please request a new one.")
+    if stored["code"] != code:
+        raise HTTPException(status_code=400, detail="Invalid code. Please try again.")
+
+    # Code is valid — generate a short-lived token
+    del _verify_codes[email]
+    token = secrets.token_urlsafe(32)
+    # Store token with 30-minute expiry
+    _verify_codes[f"token:{token}"] = {"email": email, "expires": time.time() + 1800}
+    return {"ok": True, "token": token}
 
 
 @app.get("/api/public/company/{slug}")

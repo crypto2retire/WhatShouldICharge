@@ -66,6 +66,12 @@
         <input type="text" id="company_state" placeholder="TX" maxlength="2">
       </div>
     </div>
+    <div class="form-group" style="margin-top:8px;">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;color:var(--text);font-weight:400;">
+        <input type="checkbox" id="tos-agree" style="width:auto;margin:3px 0 0;accent-color:var(--green);">
+        <span style="font-size:0.82rem;line-height:1.5;">I agree to the <a href="/terms" target="_blank" style="color:var(--green-light);">Terms of Service</a> and <a href="/privacy" target="_blank" style="color:var(--green-light);">Privacy Policy</a></span>
+      </label>
+    </div>
     <button type="submit" class="btn-submit" id="submit-btn">Create Account</button>
   </form>
   <div class="auth-footer">Already have an account? <a href="/login">Log in</a></div>
@@ -78,6 +84,11 @@ const submitBtn = document.getElementById('submit-btn');
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   errorMsg.classList.remove('visible');
+  if (!document.getElementById('tos-agree').checked) {
+    errorMsg.textContent = 'Please agree to the Terms of Service and Privacy Policy.';
+    errorMsg.classList.add('visible');
+    return;
+  }
   submitBtn.disabled = true;
   submitBtn.textContent = 'Creating account...';
 

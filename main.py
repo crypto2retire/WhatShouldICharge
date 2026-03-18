@@ -313,6 +313,7 @@ class Estimate(Base):
     pass1_json = Column(Text, default="")
     pass2_json = Column(Text, default="")
     lookups_json = Column(Text, default="")
+    photos_json = Column(Text, default="")
 
 
 class ItemReferenceLibrary(Base):
@@ -370,6 +371,7 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS price_per_cy_premium DOUBLE PRECISION DEFAULT 55.0",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS min_charge DOUBLE PRECISION DEFAULT 75.0",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS truck_capacity_cy DOUBLE PRECISION DEFAULT 16.0",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS photos_json TEXT DEFAULT ''",
         ]
     else:
         alter_statements = [
@@ -388,6 +390,7 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN price_per_cy_premium REAL DEFAULT 55.0",
             "ALTER TABLE users ADD COLUMN min_charge REAL DEFAULT 75.0",
             "ALTER TABLE users ADD COLUMN truck_capacity_cy REAL DEFAULT 16.0",
+            "ALTER TABLE estimates ADD COLUMN photos_json TEXT DEFAULT ''",
         ]
 
     async with engine.begin() as conn:
@@ -1180,18 +1183,33 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
     </div>
   </section>
 
-  <!-- Upload Section -->
-  <div id="upload-section">
+  <!-- Step 1: Contact Info + Email Verification -->
+  <div id="verify-section">
     <div class="card">
-      <div class="card-title">Your Contact Info <span style="font-weight:400;color:#94a3b8;font-size:0.82rem">(optional)</span></div>
+      <div class="card-title">Your Contact Info</div>
       <label for="cust-name">Name</label>
       <input type="text" id="cust-name" placeholder="Your name" autocomplete="name">
       <label for="cust-email">Email</label>
-      <input type="email" id="cust-email" placeholder="your@email.com" autocomplete="email">
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <input type="email" id="cust-email" placeholder="your@email.com" autocomplete="email" style="margin-bottom:0;flex:1">
+        <button class="btn" id="send-code-btn" onclick="sendVerifyCode()" style="width:auto;padding:12px 20px;font-size:0.85rem;white-space:nowrap;box-shadow:none">Verify</button>
+      </div>
+      <div id="code-section" style="display:none">
+        <label for="verify-code">Enter verification code</label>
+        <input type="text" id="verify-code" placeholder="------" maxlength="6" autocomplete="one-time-code" style="text-align:center;letter-spacing:6px;font-size:1.2rem;font-weight:700">
+        <div style="font-size:0.75rem;color:#94a3b8;text-align:center;margin-top:-10px;margin-bottom:14px">Check your email for a 6-digit code</div>
+      </div>
       <label for="cust-phone">Phone</label>
       <input type="tel" id="cust-phone" placeholder="(555) 123-4567" autocomplete="tel">
+      <div class="error" id="verify-error"></div>
+      <button class="btn" id="continue-btn" onclick="verifyAndContinue()">Continue to Estimate</button>
+      <div style="font-size:0.72rem;color:#94a3b8;text-align:center;margin-top:14px;line-height:1.6">By continuing, you agree to the <a href="/terms" target="_blank" style="color:#94a3b8;text-decoration:underline">Terms of Service</a> and <a href="/privacy" target="_blank" style="color:#94a3b8;text-decoration:underline">Privacy Policy</a>.<br>Estimates are AI-generated approximations and not binding quotes.</div>
     </div>
+    <div style="text-align:center;padding:12px;font-size:0.72rem;color:#cbd5e1;line-height:1.5;margin-top:4px">This tool is currently in <strong>beta</strong>. Estimates may contain errors. {name} is not liable for differences between estimated and actual pricing. Final pricing is confirmed on-site.</div>
+  </div>
 
+  <!-- Step 2: Upload Section (hidden until verified) -->
+  <div id="upload-section" style="display:none">
     <div class="card">
       <div class="card-title">Upload Photos of Items for Removal</div>
       <div class="drop-zone" id="drop-zone">
@@ -1205,7 +1223,7 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
     </div>
 
     <div class="error" id="error-msg"></div>
-    <button class="btn" id="submit-btn" disabled>Get My Free Estimate</button>
+    <button class="btn" id="submit-btn" disabled>Schedule an Appointment</button>
   </div>
 
   <!-- Loading -->
@@ -1246,8 +1264,9 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
 
     <div class="cta-section" id="cta-section">
       <div class="subtext">Ready to schedule your pickup?</div>
-      {f"""<a href="tel:{phone}" class="btn btn-call"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>Call {phone}</a>""" if phone else ''}
+      {f"""<a href="tel:{phone}" class="btn btn-call"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>Schedule an Appointment — {phone}</a>""" if phone else ''}
     </div>
+    <div style="font-size:0.75rem;color:#94a3b8;text-align:center;padding:12px;line-height:1.5;border-top:1px solid #f1f5f9;margin-top:8px">This estimate is AI-generated and approximate only. Actual pricing may vary based on item weight, accessibility, hazardous materials, and on-site conditions. This is not a binding quote. See <a href="/terms" target="_blank" style="color:#94a3b8;text-decoration:underline">Terms of Service</a> and <a href="/privacy" target="_blank" style="color:#94a3b8;text-decoration:underline">Privacy Policy</a>.</div>
   </div>
 
   <hr class="section-divider">
@@ -1306,7 +1325,7 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
   <footer class="footer">
     <div class="footer-company">{name}</div>
     {f'<div class="footer-location">{location}</div>' if location else ''}
-    <div class="footer-powered">Powered by <a href="https://whatshouldicharge.app">WhatShouldICharge</a></div>
+    <div class="footer-powered">Powered by <a href="https://whatshouldicharge.app">WhatShouldICharge</a> &middot; <a href="/terms">Terms</a> &middot; <a href="/privacy">Privacy</a></div>
   </footer>
 </div>
 
@@ -1314,8 +1333,49 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
 var slug="{safe_slug}";
 var companyPhone="{phone}";
 var photos=[];
+var verificationToken=null;
 
 function esc(s){{var d=document.createElement('div');d.textContent=s;return d.innerHTML}}
+
+// --- Email verification ---
+async function sendVerifyCode(){{
+  var email=document.getElementById('cust-email').value.trim();
+  var errEl=document.getElementById('verify-error');
+  errEl.style.display='none';
+  if(!email||!email.includes('@')){{errEl.textContent='Please enter a valid email address.';errEl.style.display='block';return}}
+  var btn=document.getElementById('send-code-btn');
+  btn.disabled=true;btn.textContent='Sending...';
+  try{{
+    var resp=await fetch('/api/public/verify/send',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{email:email,slug:slug}})}});
+    var data=await resp.json();
+    if(!resp.ok) throw new Error(data.detail||'Failed to send code');
+    document.getElementById('code-section').style.display='block';
+    btn.textContent='Resend';btn.disabled=false;
+  }}catch(e){{errEl.textContent=e.message;errEl.style.display='block';btn.textContent='Verify';btn.disabled=false}}
+}}
+
+async function verifyAndContinue(){{
+  var name=document.getElementById('cust-name').value.trim();
+  var email=document.getElementById('cust-email').value.trim();
+  var phone=document.getElementById('cust-phone').value.trim();
+  var code=document.getElementById('verify-code').value.trim();
+  var errEl=document.getElementById('verify-error');
+  errEl.style.display='none';
+  if(!name){{errEl.textContent='Please enter your name.';errEl.style.display='block';return}}
+  if(!email){{errEl.textContent='Please enter your email.';errEl.style.display='block';return}}
+  if(!phone){{errEl.textContent='Please enter your phone number.';errEl.style.display='block';return}}
+  if(!code||code.length<6){{errEl.textContent='Please enter the 6-digit verification code from your email.';errEl.style.display='block';return}}
+  var btn=document.getElementById('continue-btn');
+  btn.disabled=true;btn.textContent='Verifying...';
+  try{{
+    var resp=await fetch('/api/public/verify/check',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{email:email,code:code}})}});
+    var data=await resp.json();
+    if(!resp.ok) throw new Error(data.detail||'Verification failed');
+    verificationToken=data.token;
+    document.getElementById('verify-section').style.display='none';
+    document.getElementById('upload-section').style.display='block';
+  }}catch(e){{errEl.textContent=e.message;errEl.style.display='block';btn.disabled=false;btn.textContent='Continue to Estimate'}}
+}}
 
 var dropZone=document.getElementById('drop-zone');
 var fileInput=document.getElementById('file-input');
@@ -1371,6 +1431,7 @@ document.getElementById('submit-btn').addEventListener('click',async function(){
   fd.append('customer_email',document.getElementById('cust-email').value.trim());
   fd.append('customer_phone',document.getElementById('cust-phone').value.trim());
   fd.append('rooms',JSON.stringify(photos.map(function(){{return 'Main'}})));
+  if(verificationToken) fd.append('verification_token',verificationToken);
   try{{
     var resp=await fetch('/api/public/estimate/'+encodeURIComponent(slug),{{method:'POST',body:fd}});
     if(!resp.ok){{var err=await resp.json();throw new Error(err.detail||'Failed to submit')}}
@@ -1382,7 +1443,7 @@ document.getElementById('submit-btn').addEventListener('click',async function(){
   }}catch(e){{
     document.getElementById('error-msg').textContent=e.message;
     document.getElementById('error-msg').style.display='block';
-    btn.disabled=false;btn.textContent='Get My Free Estimate';
+    btn.disabled=false;btn.textContent='Schedule an Appointment';
   }}
 }});
 
@@ -1397,7 +1458,7 @@ async function pollStatus(jobId){{
       var resp=await fetch('/api/public/estimate/status/'+jobId);
       var data=await resp.json();
       if(data.status==='complete'&&data.result){{clearInterval(iv);document.getElementById('loading').style.display='none';showResults(data.result)}}
-      else if(data.status==='error'){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent=data.message||'An error occurred. Please try again.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Get My Free Estimate'}}
+      else if(data.status==='error'){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent=data.message||'An error occurred. Please try again.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Schedule an Appointment'}}
     }}catch(e){{}}
     if(attempts>90){{clearInterval(iv);lt.textContent='Taking longer than expected...'}}
   }},2000);
@@ -1622,6 +1683,11 @@ async def public_create_estimate(
                 "source": {"type": "base64", "media_type": "image/jpeg", "data": pd["b64"]}
             })
 
+    # Store compressed photos for persistence (thumbnails for DB storage)
+    stored_photos = []
+    for pd in photo_data:
+        stored_photos.append(pd["b64"])
+
     job_id = secrets.token_hex(8)
     estimate_jobs[job_id] = {
         "status": "analyzing",
@@ -1633,6 +1699,10 @@ async def public_create_estimate(
         "customer_email": customer_email,
         "customer_phone": customer_phone,
         "created_at": datetime.utcnow(),
+        "stored_photos": stored_photos,
+        "company_email": company_user.email,
+        "company_name": company_user.company_name or "Junk Removal Company",
+        "company_phone": company_user.company_phone or "",
     }
 
     asyncio.create_task(run_estimate(
@@ -3089,6 +3159,10 @@ async def run_estimate(
             market_rates=market_rates,
         )
 
+        # Serialize stored photos for DB persistence
+        stored_photos = job.get("stored_photos", [])
+        photos_json_str = json.dumps(stored_photos) if stored_photos else ""
+
         async with AsyncSessionLocal() as db:
             est = Estimate(
                 user_id=user.id,
@@ -3105,6 +3179,7 @@ async def run_estimate(
                 pass1_json=pass1_json_str,
                 pass2_json="",
                 lookups_json=lookups_json_str,
+                photos_json=photos_json_str,
             )
             db.add(est)
             await db.commit()
@@ -3123,6 +3198,77 @@ async def run_estimate(
             await update_library_from_estimate(result_data.get("items", []))
         except Exception:
             pass
+
+        # ── Send lead email to company with photos, customer info, and estimate ──
+        try:
+            company_email = job.get("company_email", "")
+            cust_name = job.get("customer_name", "Unknown")
+            cust_email = job.get("customer_email", "")
+            cust_phone = job.get("customer_phone", "")
+            company_name_val = job.get("company_name", "")
+
+            if company_email:
+                items_html = ""
+                for item in result_data.get("items", []):
+                    items_html += f"<tr><td style='padding:6px 12px;border-bottom:1px solid #eee'>{item.get('name','Item')}</td><td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center'>{item.get('quantity',1)}</td><td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:right'>{item.get('cubic_yards',0)} CY</td></tr>"
+
+                special_html = ""
+                if special_items:
+                    special_html = "<p style='color:#d97706;font-weight:600;margin-top:12px'>⚠️ Special disposal items detected:</p><ul>"
+                    for si in special_items:
+                        special_html += f"<li>{si.get('name','')} x{si.get('quantity',1)}</li>"
+                    special_html += "</ul>"
+
+                # Embed up to 5 photo thumbnails inline
+                photos_html = ""
+                for idx, photo_b64 in enumerate(stored_photos[:5]):
+                    photos_html += f'<img src="data:image/jpeg;base64,{photo_b64}" style="width:150px;height:150px;object-fit:cover;border-radius:8px;margin:4px;border:1px solid #ddd" alt="Photo {idx+1}">'
+
+                lead_html = f"""
+                <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+                  <div style="background:#16a34a;color:#fff;padding:20px;border-radius:12px 12px 0 0;text-align:center">
+                    <h1 style="margin:0;font-size:1.3rem">New Customer Estimate Lead</h1>
+                    <p style="margin:4px 0 0;opacity:0.9;font-size:0.9rem">via WhatShouldICharge</p>
+                  </div>
+                  <div style="background:#fff;border:1px solid #e2e8f0;padding:24px;border-radius:0 0 12px 12px">
+                    <h2 style="margin:0 0 16px;font-size:1.1rem;color:#0f172a">Customer Information</h2>
+                    <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+                      <tr><td style="padding:6px 0;color:#64748b;width:100px">Name</td><td style="padding:6px 0;font-weight:600">{cust_name}</td></tr>
+                      <tr><td style="padding:6px 0;color:#64748b">Email</td><td style="padding:6px 0"><a href="mailto:{cust_email}">{cust_email}</a></td></tr>
+                      <tr><td style="padding:6px 0;color:#64748b">Phone</td><td style="padding:6px 0"><a href="tel:{cust_phone}">{cust_phone}</a></td></tr>
+                    </table>
+
+                    <h2 style="margin:0 0 12px;font-size:1.1rem;color:#0f172a">Estimate Summary</h2>
+                    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;text-align:center;margin-bottom:16px">
+                      <div style="font-size:2rem;font-weight:800;color:#16a34a">${price_low:,.0f} — ${price_high:,.0f}</div>
+                      <div style="color:#64748b;font-size:0.85rem;margin-top:4px">{cy_mid} cubic yards estimated</div>
+                    </div>
+
+                    <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+                      <tr style="background:#f8fafc"><th style="padding:8px 12px;text-align:left;font-size:0.85rem">Item</th><th style="padding:8px 12px;text-align:center;font-size:0.85rem">Qty</th><th style="padding:8px 12px;text-align:right;font-size:0.85rem">Volume</th></tr>
+                      {items_html}
+                    </table>
+
+                    {special_html}
+
+                    <h2 style="margin:20px 0 12px;font-size:1.1rem;color:#0f172a">Customer Photos</h2>
+                    <div style="margin-bottom:16px">{photos_html}</div>
+                    <p style="font-size:0.8rem;color:#94a3b8">View all {num_photos} photo(s) and full details in your <a href="https://whatshouldicharge.app/estimate">WSIC dashboard</a>.</p>
+
+                    <div style="margin-top:20px;padding:16px;background:#f8fafc;border-radius:8px;text-align:center">
+                      <p style="margin:0 0 8px;font-weight:600;color:#0f172a">Ready to book this job?</p>
+                      <p style="margin:0;font-size:0.85rem;color:#64748b">Contact the customer to schedule an appointment.</p>
+                    </div>
+                  </div>
+                </div>"""
+
+                send_email(
+                    company_email,
+                    f"New Estimate Lead: {cust_name} — ${price_low:,.0f}-${price_high:,.0f}",
+                    lead_html,
+                )
+        except Exception:
+            pass  # Don't fail the estimate if email fails
 
         remaining = max(0, user.estimates_limit - user.estimates_used)
 
@@ -3358,7 +3504,51 @@ async def get_estimate_detail(request: Request, estimate_id: int):
             "customer_email": decrypt_pii(e.customer_email or ""),
             "customer_phone": decrypt_pii(e.customer_phone or ""),
             "result": result_data,
+            "has_photos": bool(e.photos_json),
         }
+
+
+@app.get("/api/estimates/{estimate_id}/photos")
+async def get_estimate_photos(request: Request, estimate_id: int):
+    """Return stored photos for an estimate (base64 JPEG array)."""
+    user = await require_user(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Estimate).where(Estimate.id == estimate_id, Estimate.user_id == user.id)
+        )
+        e = result.scalar_one_or_none()
+        if not e:
+            raise HTTPException(status_code=404, detail="Estimate not found.")
+        if not e.photos_json:
+            return {"photos": []}
+        try:
+            photos = json.loads(e.photos_json)
+        except Exception:
+            photos = []
+        return {"photos": photos, "count": len(photos)}
+
+
+@app.get("/api/estimates/{estimate_id}/photo/{photo_index}")
+async def get_estimate_photo_image(request: Request, estimate_id: int, photo_index: int):
+    """Serve a single photo as a JPEG image (for <img> tags)."""
+    user = await require_user(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Estimate).where(Estimate.id == estimate_id, Estimate.user_id == user.id)
+        )
+        e = result.scalar_one_or_none()
+        if not e:
+            raise HTTPException(status_code=404, detail="Estimate not found.")
+        if not e.photos_json:
+            raise HTTPException(status_code=404, detail="No photos stored.")
+        try:
+            photos = json.loads(e.photos_json)
+        except Exception:
+            raise HTTPException(status_code=404, detail="No photos stored.")
+        if photo_index < 0 or photo_index >= len(photos):
+            raise HTTPException(status_code=404, detail="Photo not found.")
+        image_bytes = base64.standard_b64decode(photos[photo_index])
+        return Response(content=image_bytes, media_type="image/jpeg")
 
 
 # ============== ADMIN API ==============

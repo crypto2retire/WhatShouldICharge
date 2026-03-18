@@ -742,9 +742,12 @@ async def require_team_member(request: Request):
 
 
 def send_email(to_email: str, subject: str, html_content: str):
+    import logging
+    logger = logging.getLogger("wsic.email")
     api_key = os.environ.get("SENDGRID_API_KEY")
     if not api_key:
-        return
+        logger.error("[send_email] SENDGRID_API_KEY not set — email not sent")
+        return False
     try:
         from sendgrid import SendGridAPIClient
         from sendgrid.helpers.mail import Mail
@@ -755,9 +758,12 @@ def send_email(to_email: str, subject: str, html_content: str):
             html_content=html_content,
         )
         sg = SendGridAPIClient(api_key)
-        sg.send(message)
-    except Exception:
-        pass
+        response = sg.send(message)
+        logger.info(f"[send_email] Sent to {to_email}, status={response.status_code}")
+        return True
+    except Exception as e:
+        logger.error(f"[send_email] FAILED to send to {to_email}: {type(e).__name__}: {e}")
+        return False
 
 
 @app.get("/robots.txt")
@@ -1531,7 +1537,7 @@ async def public_verify_send(request: Request):
         _verify_codes[email]["expires"] = time.time() + 600
         _verify_codes[email]["count"] = existing.get("count", 0) + 1
 
-    send_email(
+    email_sent = send_email(
         email,
         "Your verification code",
         f"""<div style="font-family:sans-serif;max-width:400px;margin:0 auto;padding:20px;">
@@ -1541,6 +1547,8 @@ async def public_verify_send(request: Request):
         <p style="color:#666;font-size:14px;">This code expires in 10 minutes. If you didn't request this, you can ignore this email.</p>
         </div>"""
     )
+    if not email_sent:
+        raise HTTPException(status_code=500, detail="Unable to send verification email. Please try again or contact support.")
     return {"ok": True, "message": "Verification code sent"}
 
 

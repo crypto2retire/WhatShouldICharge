@@ -182,6 +182,7 @@ async function sendVerificationCode() {
     var data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || 'Failed to send code');
     document.getElementById('code-section').style.display = 'block';
+    if (data.fallback && data.code) { document.getElementById('verify-code').value = data.code; document.getElementById('verify-code').parentElement.querySelector('div').textContent = 'Code auto-filled (email delivery unavailable during beta)'; }
     btn.textContent = 'Resend';
     btn.disabled = false;
   } catch(e) {

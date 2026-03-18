@@ -745,6 +745,7 @@ def send_email(to_email: str, subject: str, html_content: str):
     import logging
     logger = logging.getLogger("wsic.email")
     api_key = os.environ.get("SENDGRID_API_KEY")
+    from_email = os.environ.get("SENDGRID_FROM_EMAIL", "noreply@whatshouldicharge.app")
     if not api_key:
         logger.error("[send_email] SENDGRID_API_KEY not set — email not sent")
         return False
@@ -752,14 +753,17 @@ def send_email(to_email: str, subject: str, html_content: str):
         from sendgrid import SendGridAPIClient
         from sendgrid.helpers.mail import Mail
         message = Mail(
-            from_email="noreply@whatshouldicharge.app",
+            from_email=from_email,
             to_emails=to_email,
             subject=subject,
             html_content=html_content,
         )
         sg = SendGridAPIClient(api_key)
         response = sg.send(message)
-        logger.info(f"[send_email] Sent to {to_email}, status={response.status_code}")
+        logger.info(f"[send_email] Sent to {to_email} from {from_email}, status={response.status_code}")
+        if response.status_code >= 400:
+            logger.error(f"[send_email] SendGrid error status {response.status_code}")
+            return False
         return True
     except Exception as e:
         logger.error(f"[send_email] FAILED to send to {to_email}: {type(e).__name__}: {e}")
@@ -1356,6 +1360,7 @@ async function sendVerifyCode(){{
     var data=await resp.json();
     if(!resp.ok) throw new Error(data.detail||'Failed to send code');
     document.getElementById('code-section').style.display='block';
+    if(data.fallback&&data.code){{document.getElementById('verify-code').value=data.code;document.getElementById('verify-code').parentElement.querySelector('div').textContent='Code auto-filled (email delivery unavailable during beta)'}}
     btn.textContent='Resend';btn.disabled=false;
   }}catch(e){{errEl.textContent=e.message;errEl.style.display='block';btn.textContent='Verify';btn.disabled=false}}
 }}
@@ -1548,7 +1553,10 @@ async def public_verify_send(request: Request):
         </div>"""
     )
     if not email_sent:
-        raise HTTPException(status_code=500, detail="Unable to send verification email. Please try again or contact support.")
+        # Beta fallback: return code in response so user isn't blocked
+        import logging
+        logging.getLogger("wsic.verify").warning(f"[verify/send] Email delivery failed for {email}, returning code in response (beta fallback)")
+        return {"ok": True, "message": "Email delivery issue — use this code", "code": code, "fallback": True}
     return {"ok": True, "message": "Verification code sent"}
 
 

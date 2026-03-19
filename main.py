@@ -1335,7 +1335,7 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
   <footer class="footer">
     <div class="footer-company">{name}</div>
     {f'<div class="footer-location">{location}</div>' if location else ''}
-    <div class="footer-powered">Powered by <a href="https://whatshouldicharge.app">WhatShouldICharge</a> &middot; <a href="/terms">Terms</a> &middot; <a href="/privacy">Privacy</a></div>
+    <div class="footer-powered">Powered by <a href="https://whatshouldicharge.app">WhatShouldICharge</a> by <a href="https://donelocal.io">DoneLocal.io</a> &middot; <a href="/terms">Terms</a> &middot; <a href="/privacy">Privacy</a></div>
   </footer>
 </div>
 

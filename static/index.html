@@ -1038,6 +1038,26 @@
 
       <button id="settings-save" style="width:100%;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-weight:700;font-size:0.9rem;cursor:pointer;">Save Settings</button>
       <div id="settings-msg" style="text-align:center;font-size:0.8rem;margin-top:8px;color:var(--accent);display:none;"></div>
+
+      <hr style="border-color:var(--border);margin:24px 0;">
+      <div style="font-size:0.85rem;color:var(--text);font-weight:600;margin-bottom:8px;">Team Members</div>
+      <div style="font-size:0.75rem;color:var(--muted);margin-bottom:14px;">Add employees who can submit estimates using a simple PIN login. They access the estimator at <a href="/team-login" target="_blank" style="color:var(--accent);">whatshouldicharge.app/team-login</a></div>
+
+      <div id="team-list" style="margin-bottom:14px;"></div>
+
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px;">
+        <div style="font-size:0.82rem;font-weight:600;color:var(--text);margin-bottom:10px;">Add Team Member</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input type="text" id="team-name" placeholder="Employee name" style="flex:2;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;">
+          <input type="text" id="team-pin" placeholder="PIN (4+ digits)" maxlength="8" style="flex:1;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;text-align:center;letter-spacing:2px;">
+        </div>
+        <select id="team-role" style="width:100%;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;margin-bottom:8px;">
+          <option value="estimator">Estimator — can submit estimates</option>
+          <option value="manager">Manager — can view all estimates</option>
+        </select>
+        <button onclick="addTeamMember()" style="width:100%;padding:8px;background:var(--green,#16a34a);color:#fff;border:none;border-radius:6px;font-weight:600;font-size:0.85rem;cursor:pointer;">Add Member</button>
+        <div id="team-add-msg" style="font-size:0.75rem;margin-top:6px;display:none;text-align:center;"></div>
+      </div>
     </div>
   </div>
 
@@ -1115,6 +1135,7 @@ document.getElementById('nav-logout').addEventListener('click', async () => {
         updateSlugPreview();
       }
     } catch(e) {}
+    loadTeamMembers();
   }
 
   function closeSettings() { modal.style.display = 'none'; }
@@ -1923,6 +1944,63 @@ async function changePassword() {
     if (resp.ok) { pwMsg.textContent = 'Password updated!'; pwMsg.style.color = 'var(--green)'; pwMsg.style.display = 'block'; document.getElementById('set-new-password').value = ''; }
     else { var err = await resp.json(); pwMsg.textContent = err.detail || 'Failed to update password.'; pwMsg.style.color = 'var(--red)'; pwMsg.style.display = 'block'; }
   } catch(e) { pwMsg.textContent = 'Connection error.'; pwMsg.style.color = 'var(--red)'; pwMsg.style.display = 'block'; }
+}
+
+// Team member management
+async function loadTeamMembers() {
+  var list = document.getElementById('team-list');
+  if (!list) return;
+  try {
+    var resp = await fetch('/api/team/members', { headers: {'X-CSRF-Token': getCsrfToken()} });
+    if (!resp.ok) { list.innerHTML = ''; return; }
+    var members = await resp.json();
+    if (!members.length) { list.innerHTML = '<div style="font-size:0.8rem;color:var(--muted);padding:8px 0;">No team members yet.</div>'; return; }
+    var html = '';
+    members.forEach(function(m) {
+      var statusColor = m.is_active ? 'var(--green)' : 'var(--red)';
+      var statusText = m.is_active ? 'Active' : 'Inactive';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">' +
+        '<div><div style="font-size:0.88rem;font-weight:600;">' + esc(m.name) + '</div>' +
+        '<div style="font-size:0.72rem;color:var(--muted);">' + esc(m.role) + ' · <span style="color:' + statusColor + '">' + statusText + '</span></div></div>' +
+        '<div style="display:flex;gap:6px;">' +
+        '<button onclick="toggleTeamMember(' + m.id + ',' + (m.is_active ? 'false' : 'true') + ')" style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-size:0.72rem;cursor:pointer;">' + (m.is_active ? 'Deactivate' : 'Activate') + '</button>' +
+        '<button onclick="deleteTeamMember(' + m.id + ',\'' + esc(m.name).replace(/'/g, "\\'") + '\')" style="padding:4px 10px;border-radius:6px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.1);color:var(--red);font-size:0.72rem;cursor:pointer;">Remove</button>' +
+        '</div></div>';
+    });
+    list.innerHTML = html;
+  } catch(e) { list.innerHTML = ''; }
+}
+
+async function addTeamMember() {
+  var name = document.getElementById('team-name').value.trim();
+  var pin = document.getElementById('team-pin').value.trim();
+  var role = document.getElementById('team-role').value;
+  var msg = document.getElementById('team-add-msg');
+  msg.style.display = 'none';
+  if (!name || !pin || pin.length < 4) { msg.textContent = 'Name and PIN (min 4 digits) required.'; msg.style.color = 'var(--red)'; msg.style.display = 'block'; return; }
+  try {
+    var resp = await fetch('/api/team/members', { method: 'POST', headers: {'Content-Type':'application/json','X-CSRF-Token':getCsrfToken()}, body: JSON.stringify({name:name,pin:pin,role:role}) });
+    if (resp.ok) {
+      msg.textContent = name + ' added!'; msg.style.color = 'var(--green)'; msg.style.display = 'block';
+      document.getElementById('team-name').value = ''; document.getElementById('team-pin').value = '';
+      loadTeamMembers();
+    } else { var err = await resp.json(); msg.textContent = err.detail || 'Failed to add.'; msg.style.color = 'var(--red)'; msg.style.display = 'block'; }
+  } catch(e) { msg.textContent = 'Connection error.'; msg.style.color = 'var(--red)'; msg.style.display = 'block'; }
+}
+
+async function toggleTeamMember(id, active) {
+  try {
+    await fetch('/api/team/members/' + id, { method: 'PUT', headers: {'Content-Type':'application/json','X-CSRF-Token':getCsrfToken()}, body: JSON.stringify({is_active:active}) });
+    loadTeamMembers();
+  } catch(e) {}
+}
+
+async function deleteTeamMember(id, name) {
+  if (!confirm('Remove ' + name + ' from your team? This cannot be undone.')) return;
+  try {
+    await fetch('/api/team/members/' + id, { method: 'DELETE', headers: {'X-CSRF-Token':getCsrfToken()} });
+    loadTeamMembers();
+  } catch(e) {}
 }
 
 function showError(msg) {

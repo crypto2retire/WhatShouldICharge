@@ -3949,7 +3949,7 @@ async def admin_estimates(request: Request, page: int = 1, q: str = ""):
 
 @app.post("/api/team/members")
 async def create_team_member(request: Request):
-    user = await require_admin(request)
+    user = await require_user(request)
     body = await request.json()
     name = body.get("name", "").strip()
     pin = body.get("pin", "").strip()
@@ -3974,7 +3974,7 @@ async def create_team_member(request: Request):
 
 @app.get("/api/team/members")
 async def list_team_members(request: Request):
-    user = await require_admin(request)
+    user = await require_user(request)
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(TeamMember).where(TeamMember.owner_user_id == user.id).order_by(TeamMember.created_at.desc())
@@ -3989,7 +3989,7 @@ async def list_team_members(request: Request):
 
 @app.put("/api/team/members/{member_id}")
 async def update_team_member(request: Request, member_id: int):
-    user = await require_admin(request)
+    user = await require_user(request)
     body = await request.json()
     async with AsyncSessionLocal() as db:
         result = await db.execute(
@@ -4014,7 +4014,7 @@ async def update_team_member(request: Request, member_id: int):
 
 @app.delete("/api/team/members/{member_id}")
 async def delete_team_member(request: Request, member_id: int):
-    user = await require_admin(request)
+    user = await require_user(request)
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(TeamMember).where(TeamMember.id == member_id, TeamMember.owner_user_id == user.id)

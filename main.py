@@ -338,6 +338,15 @@ async def init_db():
     import logging
     logger = logging.getLogger("wsic")
 
+    # Log which database we're connecting to
+    db_type = "PostgreSQL" if _is_postgres else "SQLite (EPHEMERAL - DATA WILL BE LOST ON DEPLOY)"
+    env_keys = [k for k in ("DATABASE_PRIVATE_URL", "DATABASE_PUBLIC_URL", "DATABASE_URL") if os.environ.get(k)]
+    logger.warning(f"[init_db] Database type: {db_type}")
+    logger.warning(f"[init_db] Database URL prefix: {DATABASE_URL[:40]}...")
+    logger.warning(f"[init_db] Environment variables found: {env_keys}")
+    if not _is_postgres:
+        logger.error("[init_db] ⚠️ USING SQLITE — ALL DATA WILL BE LOST ON NEXT DEPLOY. Set DATABASE_URL to PostgreSQL!")
+
     for attempt in range(5):
         try:
             async with engine.begin() as conn:
@@ -768,6 +777,29 @@ def send_email(to_email: str, subject: str, html_content: str):
     except Exception as e:
         logger.error(f"[send_email] FAILED to send to {to_email}: {type(e).__name__}: {e}")
         return False
+
+
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint — shows DB type and connection status."""
+    db_type = "postgresql" if _is_postgres else "sqlite"
+    db_url_masked = DATABASE_URL[:30] + "..." if len(DATABASE_URL) > 30 else DATABASE_URL
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("SELECT COUNT(*) FROM users"))
+            user_count = result.scalar()
+        db_status = "connected"
+    except Exception as e:
+        user_count = 0
+        db_status = f"error: {type(e).__name__}"
+    return {
+        "status": "ok",
+        "database_type": db_type,
+        "database_url_prefix": db_url_masked,
+        "database_status": db_status,
+        "user_count": user_count,
+        "env_keys": [k for k in ("DATABASE_PRIVATE_URL", "DATABASE_PUBLIC_URL", "DATABASE_URL") if os.environ.get(k)],
+    }
 
 
 @app.get("/robots.txt")

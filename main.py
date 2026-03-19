@@ -1233,7 +1233,7 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
     </div>
 
     <div class="error" id="error-msg"></div>
-    <button class="btn" id="submit-btn" disabled>Schedule an Appointment</button>
+    <button class="btn" id="submit-btn" disabled>Get Your Estimate</button>
   </div>
 
   <!-- Loading -->
@@ -1454,7 +1454,7 @@ document.getElementById('submit-btn').addEventListener('click',async function(){
   }}catch(e){{
     document.getElementById('error-msg').textContent=e.message;
     document.getElementById('error-msg').style.display='block';
-    btn.disabled=false;btn.textContent='Schedule an Appointment';
+    btn.disabled=false;btn.textContent='Get Your Estimate';
   }}
 }});
 

@@ -2721,17 +2721,29 @@ For fixed reference items: use the pre-verified CY value from the library. No me
 
 Step 4 — MEASURE THE TOTAL SPACE FIRST, THEN VERIFY WITH ITEMS:
 a) Using your anchor items, measure the overall dimensions of the cluttered area: length × width × average height of the pile/items.
-b) Calculate the total cubic yardage of that space: (L × W × H in inches) / 46,656 = CY. Apply packing factor (50-70% for loosely packed, 70-85% for tightly packed).
-c) THIS is your primary estimate.
-d) Now list individual items as a sanity check. Do they add up to roughly the same total? If your spatial measurement says 6 CY but your item-by-item says 15 CY, your item sizes are wrong — adjust them down. If spatial says 6 CY and items say 2 CY, you may be missing hidden items behind the pile.
-e) ALWAYS use the spatial measurement as the anchor. Items verify — they don't drive.
+b) SHOW YOUR MATH in the notes: "Pile measures approximately X ft × Y ft × Z ft = A cubic feet = B cubic yards"
+c) Calculate: (L_ft × W_ft × H_ft) / 27 = CY. Then apply packing factor:
+   - Loosely packed (gaps, air, irregular shapes): multiply by 0.50-0.65
+   - Mixed pile (some air, some solid): multiply by 0.65-0.75
+   - Tightly packed (solid, compressed): multiply by 0.75-0.85
+d) THIS spatial measurement is your primary estimate. Write it down before listing items.
+e) Now list individual items. Their CY values MUST add up to approximately the same total as your spatial measurement. If they don't match, ADJUST INDIVIDUAL ITEM CY VALUES to fit the spatial total.
+f) COMMON OVERESTIMATION: Outdoor piles look bigger than they are because they're spread out and loosely stacked. A pile that's 5ft × 4ft × 4ft = 80 cubic feet = 2.96 CY, with 60% packing = 1.8 CY. Do the math — don't guess.
+
+REFERENCE: Outdoor debris pile size guide:
+- Small pile (fits in a pickup truck bed): 1-2 CY
+- Medium pile (waist-high, 4×4 footprint): 2-4 CY
+- Large pile (chest-high, 6×6 footprint): 4-7 CY
+- Very large pile (above head, wide footprint): 8-12 CY
 
 Step 5 — CROSS-CHECK VARIABLE ITEMS AGAINST KNOWN RANGES:
-Every variable item (dresser, desk, table, shelving) has a plausible CY range:
-- Small dresser: 0.5-0.8 CY | Large dresser: 1.0-1.5 CY (NEVER over 1.5 CY for a single dresser)
+Every variable item has a plausible CY range. If your number falls outside these, remeasure:
+- Small dresser: 0.5-0.8 CY | Large dresser: 1.0-1.5 CY (NEVER over 1.5 CY)
 - Desk: 0.5-1.5 CY | Bookshelf: 0.5-1.0 CY | Dining table: 0.5-1.2 CY
 - Couch/sofa: 1.5-3.0 CY | Recliner: 0.8-1.2 CY | Office chair: 0.3-0.5 CY
-If your measured CY for any variable item falls outside these ranges, REMEASURE using a different anchor.
+- Lumber pile (loose, small): 0.5-1.5 CY | Lumber pile (medium): 1.5-3.0 CY | Lumber pile (large): 3-5 CY
+- Single pallet: 0.3-0.5 CY | Cardboard box (medium): 0.1-0.15 CY
+- 5-gallon bucket: 0.08-0.1 CY | Trash bag (full): 0.15-0.25 CY
 
 List your reference points in the "reference_points" array. For variable items, include which anchor you used to measure them in the item's notes.
 
@@ -2978,6 +2990,7 @@ async def lookup_item_dimensions(item_name: str, api_key: str) -> dict:
             return client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=200,
+                temperature=0,
                 messages=[{
                     "role": "user",
                     "content": f"""From this text, extract the dimensions of a {item_name} and calculate cubic yards.
@@ -3229,6 +3242,7 @@ async def run_estimate(
             return client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=2048,
+                temperature=0,
                 system=system_prompt,
                 messages=[{
                     "role": "user",

@@ -2569,9 +2569,20 @@ Analyze ALL photos carefully and return ONLY valid JSON with no markdown, no exp
 
 STEP ZERO — CHECK FOR MARKINGS FIRST (before identifying ANY items):
 Before you do ANYTHING else, scan every photo for colored annotations — red circles, rectangles, boxes, arrows, highlighter marks, pen outlines, or any digital markings that are clearly overlaid on the photo (not part of the scene). These markings are typically red, orange, yellow, or bright green — colors that stand out from the natural scene.
-- If you detect ANY markings: ONLY estimate the marked/circled items. Everything else in the photo is being KEPT by the customer. Still use all items for scale calibration, but only add marked items to the items list and totals.
-- If no markings detected: estimate all items as normal.
-This check MUST happen first. Getting this wrong means estimating items the customer doesn't want removed.
+
+IF MARKINGS ARE DETECTED — THIS CHANGES EVERYTHING:
+- The "items" array in your JSON response must ONLY contain items that are INSIDE the marked/circled areas. NO EXCEPTIONS.
+- Do NOT add wheelchairs, workbenches, boxes, tools, or ANYTHING that is not inside a circle/rectangle/marking.
+- Unmarked items DO NOT go in the "items" array. Period.
+- You MUST still scan and use ALL visible items (marked and unmarked) for scale calibration and reference_points. Unmarked items are your measurement rulers — use them in reference_points but NEVER in items.
+- The "totals" must reflect ONLY the marked items.
+- Add to notes: "Customer marked X item(s) for removal. Y other items visible but excluded (kept by customer)."
+- COMMON MISTAKE: The AI detects markings, mentions them in notes, but then lists all items anyway. DO NOT DO THIS. If markings exist, the items array is ONLY marked items.
+
+IF NO MARKINGS DETECTED:
+- Estimate all visible items as normal.
+
+This check MUST happen first. Getting this wrong means billing for items the customer is keeping.
 
 CRITICAL ACCURACY RULES — FOLLOW THESE BEFORE ANYTHING ELSE:
 
@@ -2772,34 +2783,27 @@ ITEM IDENTIFICATION RULES:
 - Assign cubic_yards to each item based on its size RELATIVE TO YOUR REFERENCE POINTS — not generic guesses
 - When counting multiples (boxes, bags, etc.), count only what you can actually see. If boxes are stacked and you can see the front row of 3, say "3+ boxes" not "15 boxes".
 - FLAT SCREEN TVs vs OTHER THIN RECTANGLES — FALSE TV DETECTION IS A CRITICAL ERROR:
-  Many thin, flat, rectangular objects get misidentified as TVs. This is one of the MOST COMMON errors. DEFAULT ASSUMPTION: a thin rectangular object is NOT a TV unless you see OVERWHELMING evidence.
+  ASSUME IT IS NOT A TV. Every flat rectangular object you see is NOT a TV until proven otherwise beyond reasonable doubt. This is the single most common identification error.
 
-  TV SHAPE TEST (check FIRST):
-  - Real TVs have a 16:9 aspect ratio (width is ~1.78x the height). They are RECTANGLES, not squares.
-  - If the object is close to square (1:1 ratio) or tall and narrow, it is NOT a TV.
-  - Window screens can be any shape — many are nearly square or tall rectangles.
+  MANDATORY TV VERIFICATION CHECKLIST — you must confirm ALL THREE:
+  ✅ 1. ASPECT RATIO: Is it clearly 16:9 (width ~1.78x height)? NOT square, NOT tall-and-narrow.
+  ✅ 2. SURFACE: Is the surface glossy/reflective black glass? NOT matte, NOT mesh, NOT fabric, NOT wood.
+  ✅ 3. AT LEAST ONE HARDWARE INDICATOR: Can you see ANY of these: brand logo, attached stand/base, power cord, HDMI ports, bottom bezel thicker than top, IR sensor dot?
 
-  POSITIVE TV indicators (need at least 3 of these to call it a TV):
-  - 16:9 widescreen aspect ratio (wider than tall, approximately 1.78:1)
-  - Glossy/reflective black screen surface (not matte, not mesh)
-  - Visible brand logo (Samsung, LG, Sony, Vizio, TCL, Roku, etc.)
-  - Stand base or VESA mount bracket attached to the back
-  - Ports/connections visible on back or side edge (HDMI, USB, power)
-  - Power cord or cable attached
-  - Larger bottom bezel — TVs typically have a thicker frame along the bottom edge where the logo sits
-  - Visible IR sensor or power LED indicator (small dot near bottom edge)
+  If you CANNOT confirm all three: it is NOT a TV. Label it as what it actually is (window screen, mirror, picture frame, panel, etc.) or as "flat rectangular object — verify on site" with is_special: false.
 
-  Things commonly MISIDENTIFIED as TVs — these are NOT TVs:
-  - WINDOW SCREENS — the #1 false positive. They have mesh/screen material visible (zoom in to check), a thin metal or wood frame, and are often leaning against walls in basements/garages. They can look like TVs from a distance but NEVER have a glossy screen, power cord, stand, or logo.
-  - Mirrors (reflective but shows room reflections, often has decorative frame)
-  - Picture frames or artwork (has visible image or canvas texture)
-  - Cabinet doors or panel boards (wood grain, hinges, or hardware visible)
-  - Whiteboards or chalkboards (writing surface, marker tray)
-  - Folding tables leaning on edge (metal legs visible, thicker than a TV)
-  - Headboards (fabric or wood, wider than typical TV)
-  - Solar panels or glass panels (metal frame, grid pattern visible)
+  BASEMENT AND GARAGE RULE: In basements and garages, dark rectangular objects leaning against walls are almost ALWAYS window screens, not TVs. Window screens are stored in basements. TVs are NOT typically stored leaning against basement walls. If the object is in a basement leaning against a wall or workbench — it is a window screen unless you can see the TV stand, logo, power cord, AND glossy screen surface.
 
-  When uncertain: label as "flat rectangular object — verify if TV on site" and set is_special: false. Only flag as TV (is_special: true) when you are CERTAIN based on 3+ positive indicators including the 16:9 ratio. When in doubt, it is NOT a TV.
+  WINDOW SCREEN INDICATORS (if ANY of these are visible, it is NOT a TV):
+  - Mesh/screen texture visible anywhere on the surface
+  - Thin metal or wood frame (not plastic bezel)
+  - No power cord, no stand, no ports visible
+  - Leaning against wall in basement/garage storage area
+  - Matte/dull surface (not glossy reflective glass)
+  - Frame corners have clips or latches (screen hardware)
+
+  Other things commonly MISIDENTIFIED as TVs:
+  - Mirrors, picture frames, cabinet doors, whiteboards, folding tables on edge, headboards, solar panels
 - BED SIZE IDENTIFICATION — COMMON MISIDENTIFICATION ERROR:
   Beds are frequently mis-sized (e.g., calling a queen a twin). ALWAYS determine bed size by measuring the mattress WIDTH against a nearby anchor. Standard mattress widths:
   - Twin: 38" wide (just over 3 feet — barely wider than a door frame)
@@ -2837,13 +2841,8 @@ SPECIAL ITEM FLAGGING — set is_special: true for ANY of these (do NOT calculat
 
 These items may have recycling or disposal fees that vary by location. Just identify them and set is_special: true.
 
-CIRCLED OR MARKED ITEMS (CRITICAL — THIS OVERRIDES EVERYTHING ELSE):
-- If the customer has drawn circles, arrows, rectangles, boxes, or ANY colored markings/annotations on items in the photo, ONLY include the marked items in your estimate.
-- Markings can be: red circles, colored rectangles/boxes, drawn arrows pointing at items, highlighter marks, pen/marker outlines, digital annotations. They are typically a different color from the scene (red, orange, yellow, bright green).
-- Unmarked items in photos with markings should be EXCLUDED from the items list and totals — they are items the customer wants to KEEP.
-- However, you MUST STILL USE all visible items (marked AND unmarked) as reference points for spatial calibration and scale measurement. Uncircled items are your rulers — just don't add them to the estimate.
-- If no markings or circles are visible in any photo, include ALL items as normal.
-- When you detect markings, add "Customer marked specific items — only marked items included in estimate" to your notes. List what was marked and what was excluded.
+CIRCLED OR MARKED ITEMS (see STEP ZERO above for full rules):
+- Reminder: if markings detected, the "items" array contains ONLY marked items. All other items go in reference_points only.
 
 JOB TYPE RULES — read carefully:
 STANDARD ($35-40/CY): Clean loads, easy access, under 8 CY, no stairs, no heavy items, no clutter

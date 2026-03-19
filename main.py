@@ -181,16 +181,34 @@ app.add_middleware(
 
 def _get_database_url() -> str:
     """Resolve database URL for Railway PostgreSQL or local SQLite fallback."""
+    import logging
+    logger = logging.getLogger("wsic.db")
+
+    # Method 1: Check for full connection URL env vars
     for key in ("DATABASE_PRIVATE_URL", "DATABASE_PUBLIC_URL", "DATABASE_URL"):
-        url = os.environ.get(key, "")
-        if url:
+        url = os.environ.get(key, "").strip()
+        if url and url.startswith("postgres"):
             # Normalize to async driver
             if url.startswith("postgres://"):
                 url = url.replace("postgres://", "postgresql+asyncpg://", 1)
             elif url.startswith("postgresql://"):
                 url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            logger.info(f"[db] Using {key} (PostgreSQL)")
             return url
-    # Local dev fallback to SQLite
+
+    # Method 2: Build URL from individual PG* variables (Railway Postgres always has these)
+    pghost = os.environ.get("PGHOST", "").strip()
+    pgport = os.environ.get("PGPORT", "5432").strip()
+    pguser = os.environ.get("PGUSER", "").strip()
+    pgpassword = os.environ.get("PGPASSWORD", "").strip()
+    pgdatabase = os.environ.get("PGDATABASE", "").strip()
+    if pghost and pguser and pgpassword and pgdatabase:
+        url = f"postgresql+asyncpg://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}"
+        logger.info(f"[db] Built URL from PG* env vars (host={pghost})")
+        return url
+
+    # Method 3: Local dev fallback to SQLite
+    logger.warning("[db] No PostgreSQL config found — falling back to SQLite (DATA WILL BE LOST ON DEPLOY)")
     return "sqlite+aiosqlite:///./estimates.db"
 
 

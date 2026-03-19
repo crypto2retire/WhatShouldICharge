@@ -690,9 +690,18 @@ async def ensure_admin_user():
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.email == admin_email))
         user = result.scalar_one_or_none()
-        if user and not user.is_admin:
-            user.is_admin = True
-            await db.commit()
+        if user:
+            changed = False
+            if not user.is_admin:
+                user.is_admin = True
+                changed = True
+            # Admin gets unlimited estimates for testing
+            if user.estimates_limit < 999:
+                user.estimates_limit = 999
+                user.estimates_used = 0
+                changed = True
+            if changed:
+                await db.commit()
 
 
 @asynccontextmanager

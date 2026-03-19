@@ -934,6 +934,7 @@
         </div>
         <button class="detail-close" onclick="closeDetail()" aria-label="Close">&times;</button>
       </div>
+      <div id="detail-photos" style="margin-bottom:16px;"></div>
       <div class="detail-info-row" id="detail-info"></div>
       <div id="detail-refpoints"></div>
       <div id="detail-items"></div>
@@ -2028,6 +2029,27 @@ async function openDetail(id) {
       });
     }
     document.getElementById('detail-special').innerHTML = specialHtml;
+
+    // Load photos
+    var photosEl = document.getElementById('detail-photos');
+    photosEl.innerHTML = '';
+    if (data.has_photos) {
+      photosEl.innerHTML = '<div class="detail-section-title">Customer Photos</div><div style="color:var(--muted);font-size:0.8rem;">Loading photos...</div>';
+      fetch('/api/estimates/' + data.id + '/photos', { headers: {'X-CSRF-Token': getCsrfToken()} })
+        .then(function(r) { return r.json(); })
+        .then(function(pData) {
+          var photos = pData.photos || [];
+          if (photos.length === 0) { photosEl.innerHTML = ''; return; }
+          var html = '<div class="detail-section-title">Customer Photos (' + photos.length + ')</div>';
+          html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">';
+          photos.forEach(function(b64, idx) {
+            html += '<img src="data:image/jpeg;base64,' + b64 + '" style="width:120px;height:120px;object-fit:cover;border-radius:10px;border:2px solid var(--border);cursor:pointer;" onclick="window.open(this.src)" alt="Photo ' + (idx+1) + '">';
+          });
+          html += '</div>';
+          photosEl.innerHTML = html;
+        })
+        .catch(function() { photosEl.innerHTML = ''; });
+    }
 
     document.getElementById('detail-actions').innerHTML =
       '<button style="background:var(--accent);color:#fff;" onclick="detailPDF(' + data.id + ')">Download PDF</button>' +

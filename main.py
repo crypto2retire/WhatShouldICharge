@@ -1259,6 +1259,12 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
       <div class="cy-display" id="res-cy"></div>
     </div>
 
+    <div class="card" id="res-photos-card" style="display:none">
+      <div class="card-title">Your Photos</div>
+      <div id="res-photos" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+      <div style="font-size:0.75rem;color:#94a3b8;margin-top:8px;">These photos were used to generate your estimate. Only items visible in these photos are included in the price above.</div>
+    </div>
+
     <div class="card">
       <div class="card-title">Items Detected</div>
       <div id="res-items"></div>
@@ -1498,6 +1504,19 @@ function showResults(r){{
   var dp=r.potential_duplicates||[];
   if(dp.length>0){{var dh='<strong>Items to verify (may be duplicates):</strong><br>';dp.forEach(function(d){{dh+=esc(d.item_a)+' vs '+esc(d.item_b)+'<br>'}});document.getElementById('res-dupes').innerHTML=dh;document.getElementById('res-dupes').style.display='block'}}
   if(r.notes){{document.getElementById('res-notes').textContent=r.notes;document.getElementById('res-notes-card').style.display='block'}}
+  // Show customer photos
+  var photos=r.photos||[];
+  if(photos.length>0){{
+    var pe=document.getElementById('res-photos');pe.innerHTML='';
+    photos.forEach(function(b64,idx){{
+      var img=document.createElement('img');
+      img.src='data:image/jpeg;base64,'+b64;
+      img.style='width:100px;height:100px;object-fit:cover;border-radius:10px;border:2px solid #e2e8f0;';
+      img.alt='Photo '+(idx+1);
+      pe.appendChild(img);
+    }});
+    document.getElementById('res-photos-card').style.display='block';
+  }}
   if(!companyPhone){{document.getElementById('cta-section').style.display='none'}}
   // Scroll to results
   el.scrollIntoView({{behavior:'smooth',block:'start'}});
@@ -1745,6 +1764,8 @@ async def public_estimate_status(request: Request, job_id: str):
 
     if job["status"] == "complete" and job.get("result"):
         r = job["result"]
+        # Include photo count (not full base64) for customer display
+        stored_photos = job.get("stored_photos", [])
         return {
             "status": "complete",
             "message": job["message"],
@@ -1761,6 +1782,7 @@ async def public_estimate_status(request: Request, job_id: str):
                 "special_items": r.get("special_items", []),
                 "min_charge_applied": r.get("min_charge_applied", False),
                 "potential_duplicates": r.get("potential_duplicates", []),
+                "photos": stored_photos,
             }
         }
     return {"status": job["status"], "message": job["message"], "result": None}

@@ -1281,6 +1281,9 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
   <div id="upload-section" style="display:none">
     <div class="card">
       <div class="card-title">Upload Photos of Items for Removal</div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:0.82rem;color:#166534;line-height:1.5;">
+        <strong>Tip:</strong> Only want some items removed? Circle or mark the items in your photos before uploading. Our AI will only estimate the marked items — everything else will be left in place.
+      </div>
       <div class="drop-zone" id="drop-zone">
         <div class="drop-zone-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
         <div class="drop-label">Tap to upload or drag photos here</div>
@@ -1540,7 +1543,27 @@ async function pollStatus(jobId){{
   }},2000);
 }}
 
+var lastResult=null;
+function recalcPrice(){{
+  if(!lastResult) return;
+  var items=lastResult.items||[];
+  var totalCY=0;
+  items.forEach(function(item,idx){{
+    var cb=document.getElementById('item-cb-'+idx);
+    if(cb&&cb.checked){{totalCY+=((item.cubic_yards||0)*(item.quantity||1))}}
+  }});
+  totalCY=Math.round(totalCY*10)/10;
+  var rateLow=lastResult.rate_low||35;
+  var rateHigh=lastResult.rate_high||40;
+  var minCharge=lastResult.min_charge||75;
+  var newLow=Math.max(minCharge,Math.round(totalCY*rateLow));
+  var newHigh=Math.max(minCharge,Math.round(totalCY*rateHigh));
+  document.getElementById('res-price').textContent='$'+newLow.toLocaleString()+' — $'+newHigh.toLocaleString();
+  document.getElementById('res-cy').textContent=totalCY+' cubic yards estimated';
+}}
+
 function showResults(r){{
+  lastResult=r;
   var el=document.getElementById('results');
   el.style.display='block';
   el.classList.add('show');
@@ -1553,9 +1576,10 @@ function showResults(r){{
   document.getElementById('res-badge').textContent=bl[jt]||jt;
   document.getElementById('res-badge').className='badge badge-'+jt;
   var items=document.getElementById('res-items');items.innerHTML='';
-  (r.items||[]).forEach(function(item){{
+  items.innerHTML='<div style="font-size:0.78rem;color:#94a3b8;margin-bottom:8px;">Uncheck items that are NOT being removed:</div>';
+  (r.items||[]).forEach(function(item,idx){{
     var row=document.createElement('div');row.className='item-row';
-    row.innerHTML='<div class="item-name">'+esc(item.name||'Item')+'</div><div class="item-cy">'+(item.cubic_yards||0)+' CY</div><div class="item-qty">&times;'+(item.quantity||1)+'</div>';
+    row.innerHTML='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;margin:0"><input type="checkbox" id="item-cb-'+idx+'" checked onchange="recalcPrice()" style="width:18px;height:18px;accent-color:#16a34a;flex-shrink:0"><span class="item-name">'+esc(item.name||'Item')+'</span></label><div class="item-cy">'+(item.cubic_yards||0)+' CY</div><div class="item-qty">&times;'+(item.quantity||1)+'</div>';
     items.appendChild(row);
   }});
   var sp=r.special_items||[];
@@ -2741,28 +2765,35 @@ ITEM IDENTIFICATION RULES:
 - If you can see something but can't identify it clearly, use a generic description like "unidentifiable pile" or "miscellaneous items" — do NOT guess specific item types.
 - Assign cubic_yards to each item based on its size RELATIVE TO YOUR REFERENCE POINTS — not generic guesses
 - When counting multiples (boxes, bags, etc.), count only what you can actually see. If boxes are stacked and you can see the front row of 3, say "3+ boxes" not "15 boxes".
-- FLAT SCREEN TVs vs OTHER THIN RECTANGLES — FALSE TV DETECTION IS A COMMON ERROR:
-  Many thin, flat, rectangular objects get misidentified as TVs. DEFAULT ASSUMPTION: a thin rectangular object is NOT a TV unless you see clear TV-specific evidence.
+- FLAT SCREEN TVs vs OTHER THIN RECTANGLES — FALSE TV DETECTION IS A CRITICAL ERROR:
+  Many thin, flat, rectangular objects get misidentified as TVs. This is one of the MOST COMMON errors. DEFAULT ASSUMPTION: a thin rectangular object is NOT a TV unless you see OVERWHELMING evidence.
 
-  POSITIVE TV indicators (need at least 2 of these to call it a TV):
-  - Glossy/reflective black screen surface (not matte)
-  - Visible brand logo (Samsung, LG, Sony, Vizio, TCL, etc.)
-  - Stand base or VESA mount bracket attached
-  - Ports/connections visible on back or side edge
-  - Thick plastic bezel (1-2 inches) framing the screen
-  - Power cord or cable visible
+  TV SHAPE TEST (check FIRST):
+  - Real TVs have a 16:9 aspect ratio (width is ~1.78x the height). They are RECTANGLES, not squares.
+  - If the object is close to square (1:1 ratio) or tall and narrow, it is NOT a TV.
+  - Window screens can be any shape — many are nearly square or tall rectangles.
+
+  POSITIVE TV indicators (need at least 3 of these to call it a TV):
+  - 16:9 widescreen aspect ratio (wider than tall, approximately 1.78:1)
+  - Glossy/reflective black screen surface (not matte, not mesh)
+  - Visible brand logo (Samsung, LG, Sony, Vizio, TCL, Roku, etc.)
+  - Stand base or VESA mount bracket attached to the back
+  - Ports/connections visible on back or side edge (HDMI, USB, power)
+  - Power cord or cable attached
+  - Larger bottom bezel — TVs typically have a thicker frame along the bottom edge where the logo sits
+  - Visible IR sensor or power LED indicator (small dot near bottom edge)
 
   Things commonly MISIDENTIFIED as TVs — these are NOT TVs:
-  - Window screens (thin metal/wood frame with mesh — look for the mesh texture)
+  - WINDOW SCREENS — the #1 false positive. They have mesh/screen material visible (zoom in to check), a thin metal or wood frame, and are often leaning against walls in basements/garages. They can look like TVs from a distance but NEVER have a glossy screen, power cord, stand, or logo.
   - Mirrors (reflective but shows room reflections, often has decorative frame)
   - Picture frames or artwork (has visible image or canvas texture)
   - Cabinet doors or panel boards (wood grain, hinges, or hardware visible)
   - Whiteboards or chalkboards (writing surface, marker tray)
   - Folding tables leaning on edge (metal legs visible, thicker than a TV)
   - Headboards (fabric or wood, wider than typical TV)
-  - Solar panels or glass panels (metal frame, grid pattern)
+  - Solar panels or glass panels (metal frame, grid pattern visible)
 
-  When uncertain: label as "flat rectangular object — verify if TV on site" and set is_special: false. Only flag as TV (is_special: true) when you are confident based on 2+ positive indicators.
+  When uncertain: label as "flat rectangular object — verify if TV on site" and set is_special: false. Only flag as TV (is_special: true) when you are CERTAIN based on 3+ positive indicators including the 16:9 ratio. When in doubt, it is NOT a TV.
 - BED SIZE IDENTIFICATION — COMMON MISIDENTIFICATION ERROR:
   Beds are frequently mis-sized (e.g., calling a queen a twin). ALWAYS determine bed size by measuring the mattress WIDTH against a nearby anchor. Standard mattress widths:
   - Twin: 38" wide (just over 3 feet — barely wider than a door frame)

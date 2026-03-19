@@ -1282,7 +1282,7 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
     <div class="card">
       <div class="card-title">Upload Photos of Items for Removal</div>
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:0.82rem;color:#166534;line-height:1.5;">
-        <strong>Tip:</strong> Only want some items removed? Circle or mark the items in your photos before uploading. Our AI will only estimate the marked items — everything else will be left in place.
+        <strong>Tip:</strong> Take photos of the area — our AI will identify all items. After the estimate, you can uncheck anything you're keeping and add items that weren't in the photos.
       </div>
       <div class="drop-zone" id="drop-zone">
         <div class="drop-zone-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
@@ -1338,6 +1338,12 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
     <div class="card" id="res-notes-card" style="display:none">
       <div class="card-title">Notes</div>
       <div id="res-notes" style="font-size:0.88rem;color:#475569;line-height:1.6"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Additional Items Not in Photos</div>
+      <div style="font-size:0.82rem;color:#64748b;margin-bottom:10px;">Have items that weren't in your photos? List them below and we'll factor them in on arrival. Additional items will be priced at standard rates.</div>
+      <textarea id="additional-items" placeholder="e.g. 2 mattresses in upstairs bedroom, old washer in garage, pile of lumber behind shed..." style="width:100%;padding:12px 16px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;color:#1e293b;font-size:0.9rem;font-family:inherit;min-height:80px;resize:vertical;"></textarea>
     </div>
 
     <div class="cta-section" id="cta-section">
@@ -2567,22 +2573,9 @@ async def get_market_rates(city: str, state: str) -> dict:
 SYSTEM_PROMPT_BASE = """You are an expert junk removal estimator with years of field experience.
 Analyze ALL photos carefully and return ONLY valid JSON with no markdown, no explanation, no code blocks — raw JSON only.
 
-STEP ZERO — CHECK FOR MARKINGS FIRST (before identifying ANY items):
-Before you do ANYTHING else, scan every photo for colored annotations — red circles, rectangles, boxes, arrows, highlighter marks, pen outlines, or any digital markings that are clearly overlaid on the photo (not part of the scene). These markings are typically red, orange, yellow, or bright green — colors that stand out from the natural scene.
+IMPORTANT CONTEXT: Customers can uncheck items they want to keep AFTER the estimate is generated. Your job is to identify ALL visible items accurately. The customer controls what's included via checkboxes on their end. List everything you can see — the customer will deselect what they're keeping.
 
-IF MARKINGS ARE DETECTED — THIS CHANGES EVERYTHING:
-- The "items" array in your JSON response must ONLY contain items that are INSIDE the marked/circled areas. NO EXCEPTIONS.
-- Do NOT add wheelchairs, workbenches, boxes, tools, or ANYTHING that is not inside a circle/rectangle/marking.
-- Unmarked items DO NOT go in the "items" array. Period.
-- You MUST still scan and use ALL visible items (marked and unmarked) for scale calibration and reference_points. Unmarked items are your measurement rulers — use them in reference_points but NEVER in items.
-- The "totals" must reflect ONLY the marked items.
-- Add to notes: "Customer marked X item(s) for removal. Y other items visible but excluded (kept by customer)."
-- COMMON MISTAKE: The AI detects markings, mentions them in notes, but then lists all items anyway. DO NOT DO THIS. If markings exist, the items array is ONLY marked items.
-
-IF NO MARKINGS DETECTED:
-- Estimate all visible items as normal.
-
-This check MUST happen first. Getting this wrong means billing for items the customer is keeping.
+If you happen to notice colored annotations (circles, rectangles, arrows) drawn on the photos, mention this in your notes but still list all items. The customer-side UI handles the selection.
 
 CRITICAL ACCURACY RULES — FOLLOW THESE BEFORE ANYTHING ELSE:
 
@@ -2840,9 +2833,6 @@ SPECIAL ITEM FLAGGING — set is_special: true for ANY of these (do NOT calculat
 - Electronics with circuit boards
 
 These items may have recycling or disposal fees that vary by location. Just identify them and set is_special: true.
-
-CIRCLED OR MARKED ITEMS (see STEP ZERO above for full rules):
-- Reminder: if markings detected, the "items" array contains ONLY marked items. All other items go in reference_points only.
 
 JOB TYPE RULES — read carefully:
 STANDARD ($35-40/CY): Clean loads, easy access, under 8 CY, no stairs, no heavy items, no clutter

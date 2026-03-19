@@ -3016,6 +3016,9 @@ async def create_estimate(
             )
         })
 
+    # Store photos for persistence
+    stored_photos = [pd["b64"] for pd in photo_data]
+
     job_id = secrets.token_hex(8)
     estimate_jobs[job_id] = {
         "status": "analyzing",
@@ -3024,6 +3027,7 @@ async def create_estimate(
         "user_id": user.id,
         "estimate_name": estimate_name.strip(),
         "created_at": datetime.utcnow(),
+        "stored_photos": stored_photos,
     }
 
     asyncio.create_task(run_estimate(
@@ -3178,6 +3182,15 @@ async def run_estimate(
         # Serialize stored photos for DB persistence
         stored_photos = job.get("stored_photos", [])
         photos_json_str = json.dumps(stored_photos) if stored_photos else ""
+        logger.info(f"[run_estimate] Job {job_id}: saving {len(stored_photos)} photos ({len(photos_json_str)} bytes)")
+
+        async with AsyncSessionLocal() as db:
+            # First try to add the column if it doesn't exist (safety net)
+            try:
+                await db.execute(text("ALTER TABLE estimates ADD COLUMN IF NOT EXISTS photos_json TEXT DEFAULT ''"))
+                await db.commit()
+            except Exception:
+                await db.rollback()
 
         async with AsyncSessionLocal() as db:
             est = Estimate(
@@ -3198,8 +3211,19 @@ async def run_estimate(
                 photos_json=photos_json_str,
             )
             db.add(est)
-            await db.commit()
-            await db.refresh(est)
+            try:
+                await db.commit()
+                await db.refresh(est)
+                logger.info(f"[run_estimate] Job {job_id}: estimate saved as ID {est.id}, photos_json length={len(est.photos_json or '')}")
+            except Exception as db_err:
+                logger.error(f"[run_estimate] Job {job_id}: DB commit failed: {type(db_err).__name__}: {db_err}")
+                await db.rollback()
+                # Retry without photos if column issue
+                est.photos_json = ""
+                db.add(est)
+                await db.commit()
+                await db.refresh(est)
+                logger.warning(f"[run_estimate] Job {job_id}: saved without photos as fallback, ID {est.id}")
             estimate_id = est.id
 
         async with AsyncSessionLocal() as db:
@@ -3487,6 +3511,7 @@ async def get_estimates(request: Request):
                 "estimate_name": e.estimate_name or "",
                 "customer_name": decrypt_pii(e.customer_name or ""),
                 "customer_email": decrypt_pii(e.customer_email or ""),
+                "has_photos": bool(getattr(e, 'photos_json', None)),
             }
             for e in estimates
         ]
@@ -4004,6 +4029,9 @@ async def team_create_estimate(
                 "source": {"type": "base64", "media_type": "image/jpeg", "data": pd["b64"]}
             })
 
+    # Store photos for persistence
+    stored_photos = [pd["b64"] for pd in photo_data]
+
     now = datetime.utcnow()
     job_id = f"team-{member.id}-{secrets.token_hex(8)}"
     estimate_jobs[job_id] = {
@@ -4017,6 +4045,7 @@ async def team_create_estimate(
         "customer_email": customer_email,
         "customer_phone": customer_phone,
         "created_at": now,
+        "stored_photos": stored_photos,
     }
 
     asyncio.create_task(run_estimate(

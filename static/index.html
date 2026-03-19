@@ -951,6 +951,19 @@
         <button id="settings-close" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;">&times;</button>
       </div>
 
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:18px;">
+        <div style="font-size:0.85rem;color:var(--text);font-weight:600;margin-bottom:8px;">Account</div>
+        <div style="font-size:0.82rem;color:var(--muted);margin-bottom:4px;">Logged in as: <span id="set-user-email" style="color:var(--text);"></span></div>
+        <div style="font-size:0.82rem;color:var(--muted);margin-bottom:10px;">Plan: <span id="set-user-plan" style="color:var(--green);font-weight:600;"></span></div>
+        <div id="password-section">
+          <div style="display:flex;gap:8px;margin-bottom:6px;">
+            <input type="password" id="set-new-password" placeholder="New password (min 6 chars)" minlength="6" style="flex:1;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;">
+            <button id="change-pw-btn" onclick="changePassword()" style="padding:8px 14px;background:var(--border);color:var(--text);border:none;border-radius:6px;font-size:0.8rem;cursor:pointer;white-space:nowrap;">Change Password</button>
+          </div>
+          <div id="pw-msg" style="font-size:0.75rem;color:var(--green);display:none;"></div>
+        </div>
+      </div>
+
       <div style="margin-bottom:14px;">
         <label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">Company Name</label>
         <input type="text" id="set-company-name" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;">
@@ -1085,6 +1098,9 @@ document.getElementById('nav-logout').addEventListener('click', async () => {
       var resp = await fetch('/api/settings?_t=' + Date.now());
       if (resp.ok) {
         var s = await resp.json();
+        document.getElementById('set-user-email').textContent = currentUser.email || '';
+        var tierNames = {free:'Free (3 estimates)',starter:'Starter',pro:'Professional',agency:'Business'};
+        document.getElementById('set-user-plan').textContent = tierNames[currentUser.subscription_tier] || currentUser.subscription_tier || 'Free';
         document.getElementById('set-company-name').value = s.company_name || '';
         document.getElementById('set-city').value = s.company_city || '';
         document.getElementById('set-state').value = s.company_state || '';
@@ -1895,6 +1911,18 @@ async function sendEstimate() {
   } catch (e) {
     alert('Connection error. Please try again.');
   }
+}
+
+async function changePassword() {
+  var pw = document.getElementById('set-new-password').value;
+  var pwMsg = document.getElementById('pw-msg');
+  pwMsg.style.display = 'none';
+  if (!pw || pw.length < 6) { pwMsg.textContent = 'Password must be at least 6 characters.'; pwMsg.style.color = 'var(--red)'; pwMsg.style.display = 'block'; return; }
+  try {
+    var resp = await fetch('/api/settings/password', { method: 'PUT', headers: {'Content-Type':'application/json','X-CSRF-Token':getCsrfToken()}, body: JSON.stringify({new_password:pw}) });
+    if (resp.ok) { pwMsg.textContent = 'Password updated!'; pwMsg.style.color = 'var(--green)'; pwMsg.style.display = 'block'; document.getElementById('set-new-password').value = ''; }
+    else { var err = await resp.json(); pwMsg.textContent = err.detail || 'Failed to update password.'; pwMsg.style.color = 'var(--red)'; pwMsg.style.display = 'block'; }
+  } catch(e) { pwMsg.textContent = 'Connection error.'; pwMsg.style.color = 'var(--red)'; pwMsg.style.display = 'block'; }
 }
 
 function showError(msg) {

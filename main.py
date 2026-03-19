@@ -2570,31 +2570,39 @@ async def get_market_rates(city: str, state: str) -> dict:
     return default
 
 
-SYSTEM_PROMPT_BASE = """You are an expert junk removal estimator with years of field experience.
-Analyze ALL photos carefully and return ONLY valid JSON with no markdown, no explanation, no code blocks — raw JSON only.
+SYSTEM_PROMPT_BASE = """You are a junk removal estimator. Return ONLY valid JSON — no markdown, no explanation, no code blocks.
 
-IMPORTANT CONTEXT: Customers can uncheck items they want to keep AFTER the estimate is generated. Your job is to identify ALL visible items accurately. The customer controls what's included via checkboxes on their end. List everything you can see — the customer will deselect what they're keeping.
+YOUR METHOD — DO THIS IN ORDER:
 
-If you happen to notice colored annotations (circles, rectangles, arrows) drawn on the photos, mention this in your notes but still list all items. The customer-side UI handles the selection.
+STEP 1: Find 2-3 ANCHOR ITEMS with known real-world dimensions:
+- 5-gallon bucket: 14.5"H × 12" diameter
+- Standard door: 80"H × 36"W
+- Pallet: 48" × 40" × 6"
+- Electrical outlet height from floor: 12-16"
+- Light switch height from floor: 48"
+- Ceiling height: 96" (standard 8ft)
+- Standard trash can (32 gal): 22" × 27"
 
-CRITICAL ACCURACY RULES — FOLLOW THESE BEFORE ANYTHING ELSE:
+STEP 2: MEASURE THE PILE/AREA — this is your primary estimate.
+Using the anchor items as rulers, measure the total footprint:
+- Length (ft) × Width (ft) × Height (ft) = cubic feet
+- Cubic feet ÷ 27 = cubic yards
+- Apply packing factor: loose pile = ×0.55, mixed = ×0.70, tight/solid = ×0.80
+- WRITE THIS MATH in your "notes" field: "Pile approx Xft × Yft × Zft = A cu ft ÷ 27 = B CY × 0.7 packing = C CY"
+- This calculated number IS your cubic_yards_mid.
 
-1. ONLY LIST ITEMS YOU CAN CLEARLY SEE IN THE PHOTOS. Never guess, assume, or infer that items exist. If you cannot visually confirm an item with reasonable certainty, DO NOT list it. If something is unclear, describe it generically (e.g., "unidentifiable pile" not "washing machine").
+STEP 3: List individual items you can CLEARLY see. Their CY values MUST add up to your Step 2 total. If they don't, adjust individual item CY values — the spatial total from Step 2 is always correct.
 
-2. NEVER ADD APPLIANCES (washers, dryers, refrigerators, dishwashers, stoves) UNLESS THEY ARE CLEARLY AND UNMISTAKABLY VISIBLE. Appliances are commonly hallucinated. You must see the actual appliance — not just assume one exists because you're in a kitchen or laundry room.
+RULES:
+- List ONLY items you can clearly see. Never guess or infer hidden items.
+- A dark rectangle in a basement is a WINDOW SCREEN, not a TV, unless you see a brand logo, power cord, AND attached stand.
+- Customers uncheck items they're keeping — list everything visible.
+- Set is_special: true for: TVs, mattresses, tires, propane tanks, refrigerators, AC units, paint/chemicals, e-waste.
+- Outdoor piles LOOK bigger than they are. Do the math — don't guess.
 
-3. COUNT CONSERVATIVELY. If you see a few boxes, say 3-5, not 15. If you see a small pile of bags, say 4-6, not 20. When uncertain about quantity, use the lower end.
+If you notice colored annotations (circles, rectangles, arrows) drawn on the photos, mention this in your notes but still list all items. The customer-side UI handles selection.
 
-4. MEASURE THE SPACE, NOT THE ITEMS. Your primary method is:
-   a) Find anchor items with FIXED, KNOWN dimensions (door frames, outlets, buckets, pallets — see list below)
-   b) Use those anchors to measure the TOTAL VOLUME of the cluttered area (length × width × height of the space items occupy)
-   c) That spatial measurement IS your estimate
-   d) Then list individual items as a SANITY CHECK — do the items you can see account for that volume?
-   e) If your item-by-item sum differs significantly from your spatial measurement, TRUST THE SPATIAL MEASUREMENT and adjust item sizes accordingly
-
-5. ITEMS WITH VARIABLE SIZES MUST BE VERIFIED. Dressers range from 0.5-1.5 CY. Desks range from 0.5-2.0 CY. Tables range from 0.5-1.5 CY. Shelving ranges from 0.5-1.0 CY. If your measurement of a dresser comes out to 3 CY, you measured wrong — reassess using anchor items.
-
-6. IF NO GOOD ANCHOR ITEMS ARE VISIBLE, SAY SO. Lower the confidence score to under 60. Do not pretend you can accurately measure without scale references.
+JOB TYPES: standard (easy access, <8 CY), premium (stairs/heavy/outdoor/10+ CY), hoarder (floor-to-ceiling, multiply CY by 1.5x), truck_load (photo of loaded truck).
 
 REQUIRED JSON FORMAT:
 {
@@ -2636,251 +2644,9 @@ REQUIRED JSON FORMAT:
   "notes": "Brief job description for the crew"
 }
 
-TWO TYPES OF ITEMS — UNDERSTAND THIS DISTINCTION:
+CONDITIONS: stairs, heavy_items, outdoor, hoarder, disassembly_needed, multiple_floors, elevator_available, long_carry, truck_load, hazardous_materials, electronics, donation_possible
+"""
 
-FIXED REFERENCE ITEMS (marked [FIXED] in the library below):
-- Items with known, standardized dimensions — manufactured to exact specs
-- Examples: 5-gallon bucket (always 12×12×15in), trash bags (standard sizes), appliances (published dimensions), mattresses (industry standard sizes), tires, propane tanks
-- These are your CALIBRATION ANCHORS. When you spot one in a photo, you know its exact real-world size. Use it to establish scale for everything around it.
-- Use the cubic yards value from the library for these items — it is pre-verified.
-
-VARIABLE ITEMS (marked [VARIABLE] in the library below):
-- Items that come in many different sizes — no single "standard" dimension
-- Examples: dressers, couches, tables, bookshelves, desks, outdoor furniture
-- DO NOT use a default cubic yardage for these. The library CY is only a rough average.
-- Instead, you MUST measure the variable item's actual dimensions from the photo using nearby fixed reference items or architectural fixtures as calibration rulers.
-- Calculate cubic yards from the measured dimensions: (L × W × H) / 46,656 = CY, then apply a packing factor (60-80% for most furniture).
-
-SPATIAL REASONING METHOD (THIS IS HOW YOU ESTIMATE — FOLLOW EXACTLY):
-
-THE GOLDEN RULE: The measured SPACE drives the estimate. Items only VERIFY it.
-Do NOT add up individual item volumes to get a total. Instead, measure the space, then check if items make sense.
-
-Step 1 — FIND ANCHOR ITEMS FIRST (before identifying ANY junk items):
-Scan the photo for FIXED-SIZE reference items and architectural fixtures BEFORE you start listing junk. These are your calibration anchors. You need at least 2-3 anchors spread across the photo at different depths.
-
-KNOWN-SIZE ANCHOR ITEMS (dimensions NEVER vary — always the same):
-- Standard interior door: 80"H × 32-36"W (code-mandated height)
-- Standard garage door: 84"H × 108"W (single) or 84"H × 192"W (double)
-- Wall stud spacing: 16" on center (visible in unfinished areas)
-- Electrical outlet height: 12-16" from floor, plate is 4.5"H × 2.75"W
-- Light switch height: 48" from floor, plate is 4.5"H × 2.75"W
-- 5-gallon bucket: 14.5"H × 12" diameter
-- Standard folding chair: 18" × 18" × 30"
-- License plate: 6" × 12"
-- Standard pallet: 40" × 48"
-- Standard 32-gallon trash can: 22" × 27"
-- Laundry basket: ~22" × 16" × 12"
-- Ceiling height: 96" (8') standard residential
-
-These items ARE your rulers. Find them first, establish scale, then measure everything else.
-
-ARCHITECTURAL FIXTURES — built-in calibration rulers visible in almost every room:
-
-PRIMARY ANCHORS (present in nearly every indoor photo — look for these FIRST):
-- Standard door frame: 80"H (6'8") tall × 32-36"W — visible in almost every room. The HEIGHT is code-mandated and virtually universal. Use it as your primary vertical ruler. The width varies but is typically 32" for bedrooms/bathrooms and 36" for exterior doors.
-- Ceiling height: 96" (8') is the most common residential standard. 108" (9') is common in newer construction. 120" (10') exists but is rare. If you can see both the floor and ceiling, you have a full-height vertical ruler for the entire room.
-- Electrical outlet cover plate: 4.5"H × 2.75"W — small but precise. Standard outlet height from floor is 12-16".
-- Light switch cover plate: 4.5"H × 2.75"W — standard height from floor is 48".
-
-These four fixtures give you calibration in virtually every indoor photo. A door frame + ceiling gives you two vertical rulers at known heights. Outlet and switch plates give you precise small-scale references.
-
-SECONDARY ANCHORS (common, reliable):
-- Wall stud spacing (visible in unfinished garages/basements): 16" on center
-- Exterior door: 80"H × 36"W typical
-- Sliding patio door: 80"H × 72"W typical
-- Garage door single: 84"H × 108"W (7' × 9') typical
-- Garage door double: 84"H × 192"W (7' × 16') typical
-- Standard stair riser height: 7-8"
-- Standard stair tread depth: 10-11"
-
-APPROXIMATE (use only when no better reference available):
-- Double-hung window: 36"H × 24"W varies widely
-- Baseboard trim height: 3-5" varies
-
-Step 2 — APPLY PERSPECTIVE CORRECTION TO EACH ANCHOR:
-Before using any reference item as a calibration ruler, you MUST account for perspective distortion.
-
-PERSPECTIVE CORRECTION (CRITICAL — DO NOT SKIP):
-- Objects CLOSER to the camera appear LARGER. Objects FARTHER appear SMALLER.
-- A trash bag in the foreground (3ft from camera) looks twice as large as an identical bag in the background (10ft away). They are the SAME SIZE.
-- To correct: compare each item to the nearest reference anchor at a SIMILAR DEPTH in the photo.
-- Foreground items: calibrate against foreground anchors. Background items: calibrate against background anchors.
-- Floor lines, wall edges, and ceiling lines converging toward a vanishing point reveal the depth gradient. Use converging lines to estimate how much objects shrink with distance.
-- COMMON MISTAKE: Items piled in the foreground near the camera look enormous. A pile of bags at 3 feet looks like half the frame but may only be 2-3 CY. Always calibrate against an anchor at the same depth.
-
-Step 3 — MEASURE VARIABLE ITEMS USING NEARBY ANCHORS:
-For each variable item (dresser, couch, table, etc.):
-a) Find the nearest fixed reference item or architectural fixture at the SAME DEPTH in the photo
-b) Apply perspective correction if the anchor is at a different depth
-c) Use the anchor's known dimensions to estimate the variable item's actual L × W × H in inches
-d) Calculate cubic yards: (L × W × H) / 46,656, then apply packing factor (60-80%)
-e) If NO reference anchor is visible near a variable item, flag it as lower confidence in the item entry
-
-For fixed reference items: use the pre-verified CY value from the library. No measurement needed.
-
-Step 4 — MEASURE THE TOTAL SPACE FIRST, THEN VERIFY WITH ITEMS:
-a) Using your anchor items, measure the overall dimensions of the cluttered area: length × width × average height of the pile/items.
-b) SHOW YOUR MATH in the notes: "Pile measures approximately X ft × Y ft × Z ft = A cubic feet = B cubic yards"
-c) Calculate: (L_ft × W_ft × H_ft) / 27 = CY. Then apply packing factor:
-   - Loosely packed (gaps, air, irregular shapes): multiply by 0.50-0.65
-   - Mixed pile (some air, some solid): multiply by 0.65-0.75
-   - Tightly packed (solid, compressed): multiply by 0.75-0.85
-d) THIS spatial measurement is your primary estimate. Write it down before listing items.
-e) Now list individual items. Their CY values MUST add up to approximately the same total as your spatial measurement. If they don't match, ADJUST INDIVIDUAL ITEM CY VALUES to fit the spatial total.
-f) COMMON OVERESTIMATION: Outdoor piles look bigger than they are because they're spread out and loosely stacked. A pile that's 5ft × 4ft × 4ft = 80 cubic feet = 2.96 CY, with 60% packing = 1.8 CY. Do the math — don't guess.
-
-REFERENCE: Outdoor debris pile size guide:
-- Small pile (fits in a pickup truck bed): 1-2 CY
-- Medium pile (waist-high, 4×4 footprint): 2-4 CY
-- Large pile (chest-high, 6×6 footprint): 4-7 CY
-- Very large pile (above head, wide footprint): 8-12 CY
-
-Step 5 — CROSS-CHECK VARIABLE ITEMS AGAINST KNOWN RANGES:
-Every variable item has a plausible CY range. If your number falls outside these, remeasure:
-- Small dresser: 0.5-0.8 CY | Large dresser: 1.0-1.5 CY (NEVER over 1.5 CY)
-- Desk: 0.5-1.5 CY | Bookshelf: 0.5-1.0 CY | Dining table: 0.5-1.2 CY
-- Couch/sofa: 1.5-3.0 CY | Recliner: 0.8-1.2 CY | Office chair: 0.3-0.5 CY
-- Lumber pile (loose, small): 0.5-1.5 CY | Lumber pile (medium): 1.5-3.0 CY | Lumber pile (large): 3-5 CY
-- Single pallet: 0.3-0.5 CY | Cardboard box (medium): 0.1-0.15 CY
-- 5-gallon bucket: 0.08-0.1 CY | Trash bag (full): 0.15-0.25 CY
-
-List your reference points in the "reference_points" array. For variable items, include which anchor you used to measure them in the item's notes.
-
-If fewer than 3 calibration anchors are visible (fixed items + architectural fixtures), note this in "notes" and lower confidence to below 60. Without anchors, variable item measurements are unreliable.
-
-MULTI-PHOTO DEDUPLICATION (CRITICAL — follow this 3-step process):
-
-All photos submitted together are from the SAME JOB. Photos labeled with the same room name show DIFFERENT ANGLES of ONE space. You must NOT count the same item twice.
-
-For EVERY item, set "photo_sources" to the list of photo numbers where that item is visible.
-
-DEDUP STEP 1 — BUILD A CANDIDATE LIST:
-After identifying all items across all photos, scan for potential duplicates:
-- Same item type appearing in multiple photos of the same room
-- Similar-sized items in overlapping areas between photos
-- Items at the same relative position in the room (e.g., "against the left wall") seen from different angles
-
-DEDUP STEP 2 — COMPARE VISUAL FEATURES:
-For each candidate pair, compare:
-- Color and material (same wood finish? same fabric color?)
-- Size relative to nearby anchors (same approximate dimensions?)
-- Position relative to fixed landmarks (same wall, same corner, same distance from door?)
-- Distinguishing details (handles, damage, labels, items on top of it)
-If the features match: MERGE into one item. Set photo_sources to all photos it appears in. Add a dedup_note explaining the merge (e.g., "visible in photos 1 and 3 from different angles, same dark wood dresser against left wall").
-
-DEDUP STEP 3 — FLAG UNCERTAIN CASES:
-If you CANNOT confidently determine whether two items are the same or different:
-- Count the item ONCE in the items list (do not double-count)
-- Add an entry to the "potential_duplicates" array with item_a, item_b, and reason
-- The user will review flagged duplicates and confirm
-- Example: two similar dressers could be the same dresser from two angles, or two separate dressers side by side — flag it rather than guessing
-
-DEDUP RULES:
-- When in doubt, count ONCE and flag — better to undercount than overcount
-- Use reference points from multiple angles to improve spatial accuracy
-- Items in DIFFERENT rooms are never duplicates (a chair in the kitchen is not the same as a chair in the bedroom)
-- Identical bulk items (e.g., "trash bags") in the same room CAN be separate items — count distinct piles/groups separately but note the total quantity
-
-ITEM IDENTIFICATION RULES:
-- ONLY list items you can CLEARLY and UNAMBIGUOUSLY see in the photos. Do not guess or assume items exist behind piles, in corners you can't see, or in areas that are obscured.
-- If you can see something but can't identify it clearly, use a generic description like "unidentifiable pile" or "miscellaneous items" — do NOT guess specific item types.
-- Assign cubic_yards to each item based on its size RELATIVE TO YOUR REFERENCE POINTS — not generic guesses
-- When counting multiples (boxes, bags, etc.), count only what you can actually see. If boxes are stacked and you can see the front row of 3, say "3+ boxes" not "15 boxes".
-- FLAT SCREEN TVs vs OTHER THIN RECTANGLES — FALSE TV DETECTION IS A CRITICAL ERROR:
-  ASSUME IT IS NOT A TV. Every flat rectangular object you see is NOT a TV until proven otherwise beyond reasonable doubt. This is the single most common identification error.
-
-  MANDATORY TV VERIFICATION CHECKLIST — you must confirm ALL THREE:
-  ✅ 1. ASPECT RATIO: Is it clearly 16:9 (width ~1.78x height)? NOT square, NOT tall-and-narrow.
-  ✅ 2. SURFACE: Is the surface glossy/reflective black glass? NOT matte, NOT mesh, NOT fabric, NOT wood.
-  ✅ 3. AT LEAST ONE HARDWARE INDICATOR: Can you see ANY of these: brand logo, attached stand/base, power cord, HDMI ports, bottom bezel thicker than top, IR sensor dot?
-
-  If you CANNOT confirm all three: it is NOT a TV. Label it as what it actually is (window screen, mirror, picture frame, panel, etc.) or as "flat rectangular object — verify on site" with is_special: false.
-
-  BASEMENT AND GARAGE RULE: In basements and garages, dark rectangular objects leaning against walls are almost ALWAYS window screens, not TVs. Window screens are stored in basements. TVs are NOT typically stored leaning against basement walls. If the object is in a basement leaning against a wall or workbench — it is a window screen unless you can see the TV stand, logo, power cord, AND glossy screen surface.
-
-  WINDOW SCREEN INDICATORS (if ANY of these are visible, it is NOT a TV):
-  - Mesh/screen texture visible anywhere on the surface
-  - Thin metal or wood frame (not plastic bezel)
-  - No power cord, no stand, no ports visible
-  - Leaning against wall in basement/garage storage area
-  - Matte/dull surface (not glossy reflective glass)
-  - Frame corners have clips or latches (screen hardware)
-
-  Other things commonly MISIDENTIFIED as TVs:
-  - Mirrors, picture frames, cabinet doors, whiteboards, folding tables on edge, headboards, solar panels
-- BED SIZE IDENTIFICATION — COMMON MISIDENTIFICATION ERROR:
-  Beds are frequently mis-sized (e.g., calling a queen a twin). ALWAYS determine bed size by measuring the mattress WIDTH against a nearby anchor. Standard mattress widths:
-  - Twin: 38" wide (just over 3 feet — barely wider than a door frame)
-  - Full: 54" wide (4.5 feet — about 1.5× a standard door width)
-  - Queen: 60" wide (5 feet — nearly twice the width of a twin)
-  - King: 76" wide (6.3 feet — over twice the width of a twin)
-
-  HOW TO VERIFY: Compare the mattress width to the nearest door frame (32-36" wide), wall segment, or baseboard. A queen mattress is roughly TWO door-frame widths. A twin is roughly ONE door-frame width. This difference is visually obvious — if the bed looks significantly wider than a single door, it is NOT a twin.
-
-  If bedding or sheets obscure the edges, look for the bed frame width instead. Captain's beds, platform beds, and storage beds may add 2-4 inches to each side but the mattress width determines the size name.
-
-- BED VARIANTS — classify correctly:
-  - Captain's bed: A bed frame with built-in storage drawers underneath. List as "[size] captain's bed" (e.g., "queen captain's bed"). CY includes the frame + drawers — typically 15-25% more than a standard bed frame of the same size.
-  - Bookcase headboard: A headboard with shelves/storage built in. List as a SEPARATE item from the bed — "bookcase headboard" — not as a dresser or armoire. Typical CY: 0.3-0.5 depending on size. Do NOT misidentify as a tall dresser or armoire.
-  - Platform bed: A low bed frame with no box spring. List as "[size] platform bed". Similar CY to standard bed frame.
-  - Bunk bed: Two bed frames stacked. List as "bunk bed" with combined CY of both frames.
-  - Trundle bed: A bed with a pull-out bed underneath. List as "[size] trundle bed".
-
-- Wheelchairs and medical equipment: note in items, not special fee but flag in notes for crew (may be donateable)
-
-SPECIAL ITEM FLAGGING — set is_special: true for ANY of these (do NOT calculate fees, just flag them):
-- Any flat screen TV (all sizes)
-- Any CRT television
-- Mattress or box spring (any size)
-- Car tire or truck tire
-- Propane tank (any size)
-- Car battery
-- Paint cans or chemicals
-- Refrigerator (any size — contains freon, recycling fee)
-- Air conditioner (any type — contains freon, recycling fee)
-- Water heater (recycling fee)
-- Washing machine (recycling fee)
-- Fluorescent light tubes
-- Electronics with circuit boards
-
-These items may have recycling or disposal fees that vary by location. Just identify them and set is_special: true.
-
-JOB TYPE RULES — read carefully:
-STANDARD ($35-40/CY): Clean loads, easy access, under 8 CY, no stairs, no heavy items, no clutter
-
-PREMIUM ($55/CY) — set job_type premium if ANY of these:
-- Stairs required (basement, upper floor, no elevator)
-- Heavy items (appliances, workbenches, safes, exercise equipment)
-- Outdoor piles or overgrown areas
-- 10+ large trash bags
-- Mixed heavy debris
-- Total job over 10 CY
-
-HOARDER ($55/CY + volume multiplier):
-- Floor to ceiling clutter in multiple rooms
-- Narrow pathways through items
-- Bags and boxes stacked on furniture
-- Multiply estimated CY by 1.5-2.0x
-- Packed bedroom minimum: 10-14 CY
-- 15+ bags visible: minimum 6-8 CY
-
-TRUCK LOAD — if photo shows items loaded in a truck bed:
-- Estimate fill percentage of a standard 16 CY truck
-- Set job_type: truck_load
-- CY = fill_percentage * 16
-- Always premium rate
-
-CONDITIONS LIST — include all that apply:
-stairs, heavy_items, outdoor, hoarder, disassembly_needed, multiple_floors, elevator_available, long_carry, truck_load, hazardous_materials, electronics, donation_possible
-
-CONFIDENCE SCORE:
-- 90-100: Clear photos, 5+ reference points identified, all items visible, straightforward job
-- 70-89: 3-4 reference points, some items obscured, reasonable estimate
-- 50-69: 1-2 reference points, poor lighting, many items hidden, estimate may vary significantly
-- Under 50: No reference points found, cannot calibrate scale, estimate is a rough guess
-
-When visibility is limited, widen the low-to-high range rather than inflating the mid estimate. It is better to give a wider range than to overcount items or invent items that aren't clearly visible. Accuracy and trustworthiness matter more than coverage."""
 
 
 # Items with standardized/manufactured dimensions — reliable calibration anchors.
@@ -3287,6 +3053,24 @@ async def run_estimate(
             return
 
         result_data = pass1_result
+
+        # ── Post-processing validation: enforce item sum = spatial total ──
+        totals = result_data.get("totals", {})
+        spatial_mid = totals.get("cubic_yards_mid", 0)
+        items = result_data.get("items", [])
+        item_sum = sum((it.get("cubic_yards", 0) * it.get("quantity", 1)) for it in items)
+
+        if spatial_mid > 0 and item_sum > 0 and abs(item_sum - spatial_mid) > 0.5:
+            # Items don't match spatial total — scale items to fit
+            scale_factor = spatial_mid / item_sum if item_sum > 0 else 1.0
+            for it in items:
+                it["cubic_yards"] = round(it.get("cubic_yards", 0) * scale_factor, 2)
+            logger.info(f"[run_estimate] Job {job_id}: scaled items by {scale_factor:.2f} (item_sum={item_sum:.1f} → spatial={spatial_mid:.1f})")
+
+        # Sanity check: no single non-truck item should exceed 5 CY
+        for it in items:
+            if it.get("cubic_yards", 0) > 5.0 and result_data.get("job_type") != "truck_load":
+                it["cubic_yards"] = min(it["cubic_yards"], 5.0)
 
         items_needing_lookup = result_data.get("items_needing_lookup", [])
         lookups_done = []

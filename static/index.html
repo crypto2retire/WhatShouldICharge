@@ -1750,7 +1750,7 @@ function showResults(data) {
   }
 
   const marketEl = document.getElementById('res-market');
-  if (data.market_context) {
+  if (data.market_context && data.market_context.city && data.market_context.state && data.market_context.market_low != null) {
     const mc = data.market_context;
     marketEl.textContent = `📊 Market rates in ${mc.city}, ${mc.state}: $${mc.market_low}–$${mc.market_high}/CY (avg $${mc.market_avg}/CY)`;
     marketEl.classList.add('visible');

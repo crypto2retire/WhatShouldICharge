@@ -265,6 +265,8 @@ class User(Base):
     company_logo_url = Column(String, default="")
     price_per_cy_standard = Column(Float, default=None)
     price_per_cy_heavy = Column(Float, default=None)
+    is_active = Column(Boolean, default=True)
+    admin_notes = Column(Text, default="")
 
 
 class TeamMember(Base):
@@ -308,6 +310,20 @@ class PlanConfig(Base):
     is_active = Column(Boolean, default=True)
 
 
+class PromoCode(Base):
+    __tablename__ = "promo_codes"
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), unique=True, nullable=False, index=True)
+    discount_type = Column(String(20), nullable=False)  # 'percentage' or 'fixed'
+    discount_value = Column(Float, nullable=False)
+    applies_to = Column(Text, default='{"products":["all"]}')
+    usage_limit = Column(Integer, default=0)  # 0 = unlimited
+    times_used = Column(Integer, default=0)
+    expires_at = Column(DateTime, default=None)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class Session(Base):
     __tablename__ = "sessions"
     id = Column(Integer, primary_key=True, index=True)
@@ -337,6 +353,8 @@ class Estimate(Base):
     lookups_json = Column(Text, default="")
     photos_json = Column(Text, default="")
     actual_price = Column(Float, default=None)
+    actual_cy = Column(Float, default=None)
+    accuracy_notes = Column(Text, default="")
 
 
 class ItemReferenceLibrary(Base):
@@ -407,6 +425,10 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS price_per_cy_standard DOUBLE PRECISION DEFAULT NULL",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS price_per_cy_heavy DOUBLE PRECISION DEFAULT NULL",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS actual_price DOUBLE PRECISION DEFAULT NULL",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS actual_cy DOUBLE PRECISION DEFAULT NULL",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS accuracy_notes TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_notes TEXT DEFAULT ''",
         ]
     else:
         alter_statements = [
@@ -429,6 +451,10 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN price_per_cy_standard REAL DEFAULT NULL",
             "ALTER TABLE users ADD COLUMN price_per_cy_heavy REAL DEFAULT NULL",
             "ALTER TABLE estimates ADD COLUMN actual_price REAL DEFAULT NULL",
+            "ALTER TABLE estimates ADD COLUMN actual_cy REAL DEFAULT NULL",
+            "ALTER TABLE estimates ADD COLUMN accuracy_notes TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1",
+            "ALTER TABLE users ADD COLUMN admin_notes TEXT DEFAULT ''",
         ]
 
     async with engine.begin() as conn:
@@ -3697,6 +3723,8 @@ async def admin_users(request: Request, q: str = "", page: int = 1):
                  "company_city": u.company_city, "company_state": u.company_state,
                  "tier": u.subscription_tier, "estimates_used": u.estimates_used,
                  "estimates_limit": u.estimates_limit, "is_admin": u.is_admin,
+                 "pricing_setup": getattr(u, 'price_per_cy_standard', None) is not None,
+                 "is_active": getattr(u, 'is_active', True),
                  "created_at": u.created_at.isoformat() if u.created_at else None}
                 for u in users
             ],
@@ -3878,6 +3906,8 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
             "estimate_name": e.estimate_name or "",
             "lookups": lookups,
             "actual_price": e.actual_price,
+            "actual_cy": getattr(e, 'actual_cy', None),
+            "accuracy_notes": getattr(e, 'accuracy_notes', '') or "",
         }
 
 
@@ -3885,21 +3915,327 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
 async def admin_update_actual_price(request: Request, estimate_id: int):
     await require_admin(request)
     body = await request.json()
-    actual_price = body.get("actual_price")
-    if actual_price is not None:
-        try:
-            actual_price = float(actual_price)
-        except (ValueError, TypeError):
-            raise HTTPException(status_code=400, detail="Invalid price value")
-
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(Estimate).where(Estimate.id == estimate_id))
         e = result.scalar_one_or_none()
         if not e:
             raise HTTPException(status_code=404, detail="Estimate not found.")
-        e.actual_price = actual_price
+        if "actual_price" in body:
+            val = body["actual_price"]
+            e.actual_price = float(val) if val is not None and val != "" else None
+        if "actual_cy" in body:
+            val = body["actual_cy"]
+            e.actual_cy = float(val) if val is not None and val != "" else None
+        if "accuracy_notes" in body:
+            e.accuracy_notes = str(body["accuracy_notes"] or "")
         await db.commit()
-        return {"ok": True, "actual_price": actual_price}
+        return {"ok": True, "actual_price": e.actual_price, "actual_cy": e.actual_cy, "accuracy_notes": e.accuracy_notes or ""}
+
+
+@app.get("/api/admin/users/{user_id}")
+async def admin_user_detail(request: Request, user_id: int):
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == user_id))
+        u = result.scalar_one_or_none()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found.")
+        # Get their estimates
+        est_result = await db.execute(
+            select(Estimate).where(Estimate.user_id == user_id).order_by(Estimate.created_at.desc()).limit(50)
+        )
+        estimates = est_result.scalars().all()
+        last_estimate_at = estimates[0].created_at.isoformat() if estimates and estimates[0].created_at else None
+
+        return {
+            "id": u.id, "email": u.email, "company_name": u.company_name or "",
+            "company_city": u.company_city or "", "company_state": u.company_state or "",
+            "company_slug": getattr(u, 'company_slug', '') or "",
+            "company_phone": getattr(u, 'company_phone', '') or "",
+            "company_logo_url": getattr(u, 'company_logo_url', '') or "",
+            "subscription_tier": u.subscription_tier or "free",
+            "estimates_used": u.estimates_used, "estimates_limit": u.estimates_limit,
+            "is_admin": u.is_admin,
+            "is_active": getattr(u, 'is_active', True),
+            "admin_notes": getattr(u, 'admin_notes', '') or "",
+            "price_per_cy_low": u.price_per_cy_low, "price_per_cy_high": u.price_per_cy_high,
+            "price_per_cy_premium": u.price_per_cy_premium,
+            "price_per_cy_standard": getattr(u, 'price_per_cy_standard', None),
+            "price_per_cy_heavy": getattr(u, 'price_per_cy_heavy', None),
+            "min_charge": u.min_charge, "truck_capacity_cy": u.truck_capacity_cy,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+            "last_estimate_at": last_estimate_at,
+            "estimates": [
+                {"id": e.id, "photos_count": e.photos_count, "price_low": e.price_low,
+                 "price_high": e.price_high, "cy_estimate": e.cy_estimate,
+                 "created_at": e.created_at.isoformat() if e.created_at else None,
+                 "actual_price": e.actual_price}
+                for e in estimates
+            ],
+        }
+
+
+@app.put("/api/admin/users/{user_id}")
+async def admin_update_user(request: Request, user_id: int):
+    await require_admin(request)
+    body = await request.json()
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == user_id))
+        u = result.scalar_one_or_none()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found.")
+        for field in ["subscription_tier", "company_name", "company_city", "company_state",
+                      "company_slug", "company_phone", "admin_notes"]:
+            if field in body:
+                setattr(u, field, body[field])
+        for field in ["price_per_cy_standard", "price_per_cy_heavy", "price_per_cy_low",
+                      "price_per_cy_high", "price_per_cy_premium", "min_charge", "truck_capacity_cy"]:
+            if field in body:
+                val = body[field]
+                setattr(u, field, float(val) if val is not None and val != "" else None)
+        if "is_active" in body:
+            u.is_active = bool(body["is_active"])
+        if "estimates_limit" in body:
+            u.estimates_limit = int(body["estimates_limit"])
+        # If plan changed, update limit from plan config
+        if "subscription_tier" in body:
+            tier = body["subscription_tier"]
+            plan_result = await db.execute(select(PlanConfig).where(PlanConfig.tier_name == tier))
+            plan = plan_result.scalar_one_or_none()
+            if plan:
+                u.estimates_limit = plan.estimate_limit
+        await db.commit()
+        return {"ok": True}
+
+
+@app.post("/api/admin/users/{user_id}/reset-password")
+async def admin_reset_password(request: Request, user_id: int):
+    await require_admin(request)
+    new_password = secrets.token_urlsafe(12)
+    hashed = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == user_id))
+        u = result.scalar_one_or_none()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found.")
+        u.password_hash = hashed
+        await db.commit()
+        return {"ok": True, "new_password": new_password}
+
+
+# ── Promo Code API ──
+
+@app.get("/api/admin/promos")
+async def admin_list_promos(request: Request):
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(PromoCode).order_by(PromoCode.created_at.desc()))
+        promos = result.scalars().all()
+        return [
+            {"id": p.id, "code": p.code, "discount_type": p.discount_type,
+             "discount_value": p.discount_value, "applies_to": p.applies_to or '{"products":["all"]}',
+             "usage_limit": p.usage_limit, "times_used": p.times_used,
+             "expires_at": p.expires_at.isoformat() if p.expires_at else None,
+             "is_active": p.is_active,
+             "created_at": p.created_at.isoformat() if p.created_at else None}
+            for p in promos
+        ]
+
+
+@app.post("/api/admin/promos")
+async def admin_create_promo(request: Request):
+    await require_admin(request)
+    body = await request.json()
+    code = body.get("code", "").strip().upper()
+    if not code:
+        raise HTTPException(status_code=400, detail="Code is required")
+    async with AsyncSessionLocal() as db:
+        existing = await db.execute(select(PromoCode).where(PromoCode.code == code))
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Code already exists")
+        promo = PromoCode(
+            code=code,
+            discount_type=body.get("discount_type", "percentage"),
+            discount_value=float(body.get("discount_value", 0)),
+            applies_to=body.get("applies_to", '{"products":["all"]}'),
+            usage_limit=int(body.get("usage_limit", 0)),
+            expires_at=datetime.fromisoformat(body["expires_at"]) if body.get("expires_at") else None,
+            is_active=body.get("is_active", True),
+        )
+        db.add(promo)
+        await db.commit()
+        await db.refresh(promo)
+        return {"ok": True, "id": promo.id}
+
+
+@app.put("/api/admin/promos/{promo_id}")
+async def admin_update_promo(request: Request, promo_id: int):
+    await require_admin(request)
+    body = await request.json()
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(PromoCode).where(PromoCode.id == promo_id))
+        p = result.scalar_one_or_none()
+        if not p:
+            raise HTTPException(status_code=404, detail="Promo code not found")
+        if "code" in body:
+            p.code = body["code"].strip().upper()
+        if "discount_type" in body:
+            p.discount_type = body["discount_type"]
+        if "discount_value" in body:
+            p.discount_value = float(body["discount_value"])
+        if "usage_limit" in body:
+            p.usage_limit = int(body["usage_limit"])
+        if "is_active" in body:
+            p.is_active = bool(body["is_active"])
+        if "expires_at" in body:
+            p.expires_at = datetime.fromisoformat(body["expires_at"]) if body["expires_at"] else None
+        await db.commit()
+        return {"ok": True}
+
+
+@app.delete("/api/admin/promos/{promo_id}")
+async def admin_delete_promo(request: Request, promo_id: int):
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(PromoCode).where(PromoCode.id == promo_id))
+        p = result.scalar_one_or_none()
+        if not p:
+            raise HTTPException(status_code=404, detail="Promo code not found")
+        await db.delete(p)
+        await db.commit()
+        return {"ok": True}
+
+
+@app.post("/api/promo/validate")
+async def validate_promo_code(request: Request):
+    body = await request.json()
+    code = (body.get("code") or "").strip().upper()
+    if not code:
+        return {"valid": False, "reason": "No code provided"}
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(PromoCode).where(PromoCode.code == code))
+        p = result.scalar_one_or_none()
+        if not p:
+            return {"valid": False, "reason": "Invalid code"}
+        if not p.is_active:
+            return {"valid": False, "reason": "Code is inactive"}
+        if p.expires_at and p.expires_at < datetime.utcnow():
+            return {"valid": False, "reason": "Code expired"}
+        if p.usage_limit > 0 and p.times_used >= p.usage_limit:
+            return {"valid": False, "reason": "Code usage limit reached"}
+        return {"valid": True, "discount_type": p.discount_type, "discount_value": p.discount_value}
+
+
+# ── Accuracy API ──
+
+@app.get("/api/admin/accuracy")
+async def admin_accuracy(request: Request):
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        # Estimates with actual data
+        with_price = await db.execute(
+            select(Estimate).where(Estimate.actual_price.isnot(None))
+        )
+        price_estimates = with_price.scalars().all()
+
+        total_with_actuals = len(price_estimates)
+        price_accuracies = []
+        over_count = 0
+        under_count = 0
+        for e in price_estimates:
+            mid = (e.price_low + e.price_high) / 2 if e.price_low and e.price_high else 0
+            if e.actual_price and mid > 0:
+                acc = 1 - abs(mid - e.actual_price) / e.actual_price
+                price_accuracies.append(acc)
+                if mid > e.actual_price:
+                    over_count += 1
+                elif mid < e.actual_price:
+                    under_count += 1
+
+        avg_price_accuracy = round(sum(price_accuracies) / len(price_accuracies) * 100, 1) if price_accuracies else 0
+
+        # CY accuracy
+        with_cy = await db.execute(
+            select(Estimate).where(Estimate.actual_cy.isnot(None))
+        )
+        cy_estimates = with_cy.scalars().all()
+        cy_accuracies = []
+        for e in cy_estimates:
+            if e.actual_cy and e.cy_estimate and e.actual_cy > 0:
+                acc = 1 - abs(e.cy_estimate - e.actual_cy) / e.actual_cy
+                cy_accuracies.append(acc)
+        avg_cy_accuracy = round(sum(cy_accuracies) / len(cy_accuracies) * 100, 1) if cy_accuracies else 0
+
+        # Needs data queue: estimates older than 7 days without actual_price
+        cutoff = datetime.utcnow() - timedelta(days=7)
+        needs_data_result = await db.execute(
+            select(Estimate)
+            .where(Estimate.actual_price.is_(None), Estimate.created_at < cutoff)
+            .order_by(Estimate.created_at.desc())
+            .limit(50)
+        )
+        needs_data = needs_data_result.scalars().all()
+        # Map user emails
+        nd_user_ids = list(set(e.user_id for e in needs_data if e.user_id))
+        nd_users = {}
+        if nd_user_ids:
+            u_result = await db.execute(select(User).where(User.id.in_(nd_user_ids)))
+            for u in u_result.scalars().all():
+                nd_users[u.id] = {"email": u.email, "company": u.company_name or ""}
+
+        # Per-company accuracy
+        company_map = {}
+        for e in price_estimates:
+            if e.user_id not in company_map:
+                company_map[e.user_id] = {"price_accs": [], "cy_accs": [], "count": 0}
+            mid = (e.price_low + e.price_high) / 2 if e.price_low and e.price_high else 0
+            if e.actual_price and mid > 0:
+                company_map[e.user_id]["price_accs"].append(1 - abs(mid - e.actual_price) / e.actual_price)
+                company_map[e.user_id]["count"] += 1
+            if e.actual_cy and e.cy_estimate and e.actual_cy > 0:
+                company_map[e.user_id]["cy_accs"].append(1 - abs(e.cy_estimate - e.actual_cy) / e.actual_cy)
+
+        all_user_ids = list(company_map.keys())
+        company_names = {}
+        if all_user_ids:
+            u_res = await db.execute(select(User).where(User.id.in_(all_user_ids)))
+            for u in u_res.scalars().all():
+                company_names[u.id] = u.company_name or u.email
+
+        by_company = []
+        for uid, data in company_map.items():
+            by_company.append({
+                "company": company_names.get(uid, "Unknown"),
+                "count": data["count"],
+                "avg_price_accuracy": round(sum(data["price_accs"]) / len(data["price_accs"]) * 100, 1) if data["price_accs"] else 0,
+                "avg_cy_accuracy": round(sum(data["cy_accs"]) / len(data["cy_accs"]) * 100, 1) if data["cy_accs"] else 0,
+            })
+
+        return {
+            "total_with_actuals": total_with_actuals,
+            "avg_price_accuracy": avg_price_accuracy,
+            "avg_cy_accuracy": avg_cy_accuracy,
+            "overestimate_rate": round(over_count / total_with_actuals * 100, 1) if total_with_actuals else 0,
+            "underestimate_rate": round(under_count / total_with_actuals * 100, 1) if total_with_actuals else 0,
+            "needs_data": [
+                {"id": e.id, "user_email": nd_users.get(e.user_id, {}).get("email", "Unknown"),
+                 "company": nd_users.get(e.user_id, {}).get("company", ""),
+                 "price_low": e.price_low, "price_high": e.price_high, "cy_estimate": e.cy_estimate,
+                 "created_at": e.created_at.isoformat() if e.created_at else None}
+                for e in needs_data
+            ],
+            "by_company": by_company,
+        }
+
+
+# ── Env Status API ──
+
+@app.get("/api/admin/env-status")
+async def admin_env_status(request: Request):
+    await require_admin(request)
+    keys = ["ANTHROPIC_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
+            "TAVILY_API_KEY", "SENDGRID_API_KEY"]
+    return {k: bool(os.environ.get(k, "")) for k in keys}
 
 
 # ============== TEAM API ==============

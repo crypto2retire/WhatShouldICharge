@@ -5,532 +5,387 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WSIC Admin Dashboard</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a; --border: #2e3352;
+  --accent: #4f8ef7; --accent-glow: rgba(79,142,247,0.18);
+  --green: #22c55e; --orange: #f59e0b; --red: #ef4444;
+  --text: #e8eaf0; --muted: #7b82a0; --radius: 14px;
+}
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; min-height: 100vh; line-height: 1.5; display: flex; }
 
-  :root {
-    --bg: #0f1117;
-    --surface: #1a1d27;
-    --surface2: #22263a;
-    --border: #2e3352;
-    --accent: #4f8ef7;
-    --accent-glow: rgba(79,142,247,0.18);
-    --green: #22c55e;
-    --orange: #f59e0b;
-    --red: #ef4444;
-    --text: #e8eaf0;
-    --muted: #7b82a0;
-    --radius: 14px;
-  }
+/* Sidebar */
+.sidebar { width: 240px; background: var(--surface); border-right: 1px solid var(--border); min-height: 100vh; position: fixed; top: 0; left: 0; z-index: 100; display: flex; flex-direction: column; }
+.sidebar-logo { padding: 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+.sidebar-logo .icon { width: 36px; height: 36px; background: linear-gradient(135deg, #4f8ef7, #7c3aed); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+.sidebar-logo h1 { font-size: 1.1rem; font-weight: 700; }
+.sidebar-logo p { font-size: 0.72rem; color: var(--muted); }
+.sidebar-nav { flex: 1; padding: 12px 0; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 20px; cursor: pointer; font-size: 0.88rem; color: var(--muted); transition: all 0.15s; border: none; background: none; width: 100%; text-align: left; font-family: inherit; }
+.nav-item:hover { color: var(--text); background: var(--surface2); }
+.nav-item.active { color: var(--accent); background: var(--accent-glow); border-right: 3px solid var(--accent); }
+.nav-item .nav-icon { width: 20px; text-align: center; font-size: 1rem; }
+.sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--border); }
+.sidebar-footer a { color: var(--accent); text-decoration: none; font-size: 0.82rem; }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    min-height: 100vh;
-    line-height: 1.5;
-  }
+/* Hamburger */
+.hamburger { display: none; position: fixed; top: 14px; left: 14px; z-index: 200; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; cursor: pointer; color: var(--text); font-size: 1.2rem; }
 
-  header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 18px 24px;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-  }
+/* Main */
+.main { margin-left: 240px; flex: 1; padding: 32px 28px 80px; max-width: 1100px; width: 100%; }
+.page-title { font-size: 1.4rem; font-weight: 700; margin-bottom: 24px; }
+.section { display: none; }
+.section.active { display: block; }
 
-  .logo-icon {
-    width: 40px; height: 40px;
-    background: linear-gradient(135deg, #4f8ef7, #7c3aed);
-    border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 20px;
-  }
+/* Cards & Stats */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 24px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+.stat-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+.stat-value { font-size: 1.6rem; font-weight: 700; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; margin-bottom: 18px; }
+.card-title { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
 
-  header h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
-  header p { font-size: 0.82rem; color: var(--muted); }
-  .header-right { margin-left: auto; display: flex; gap: 12px; align-items: center; }
-  .header-right a { color: var(--accent); text-decoration: none; font-size: 0.85rem; }
+/* Tables */
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; padding: 9px 10px; font-size: 0.72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85rem; }
+.clickable-row { cursor: pointer; transition: background 0.15s; }
+.clickable-row:hover { background: var(--accent-glow); }
 
-  .main-wrap {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 32px 20px 80px;
-  }
+/* Pagination */
+.pagination { display: flex; gap: 6px; justify-content: center; margin-top: 18px; }
+.page-btn { padding: 7px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; color: var(--text); cursor: pointer; font-size: 0.82rem; }
+.page-btn:hover { background: var(--accent-glow); border-color: var(--accent); }
+.page-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-  /* Tabs */
-  .tabs {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 24px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 0;
-  }
-  .tab {
-    padding: 10px 20px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    font-weight: 500;
-    color: var(--muted);
-    border-bottom: 2px solid transparent;
-    transition: all 0.2s;
-    background: none;
-    border-top: none; border-left: none; border-right: none;
-  }
-  .tab:hover { color: var(--text); }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .tab-content { display: none; }
-  .tab-content.active { display: block; }
+/* Badges */
+.badge { display: inline-block; padding: 2px 9px; border-radius: 16px; font-size: 0.72rem; font-weight: 600; margin: 1px 3px 1px 0; }
+.badge-condition { background: var(--surface2); border: 1px solid var(--border); }
+.badge-lookup { background: rgba(79,142,247,0.15); color: var(--accent); border: 1px solid rgba(79,142,247,0.3); }
+.badge-redistributed { background: rgba(245,158,11,0.15); color: var(--orange); border: 1px solid rgba(245,158,11,0.3); }
+.badge-ai { background: rgba(124,58,237,0.15); color: #a78bfa; border: 1px solid rgba(124,58,237,0.3); }
+.badge-green { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+.badge-red { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
 
-  /* Stats cards */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 16px;
-    margin-bottom: 28px;
-  }
-  .stat-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-  }
-  .stat-label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
-  .stat-value { font-size: 1.8rem; font-weight: 700; }
+/* Forms */
+.form-group { margin-bottom: 14px; }
+.form-label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+.form-input, .form-select, .form-textarea { width: 100%; padding: 9px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.88rem; font-family: inherit; }
+.form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--accent); }
+.form-textarea { resize: vertical; min-height: 60px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.btn { padding: 9px 18px; border-radius: 8px; border: none; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { opacity: 0.85; }
+.btn-green { background: var(--green); color: #fff; }
+.btn-red { background: var(--red); color: #fff; }
+.btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+.btn-sm { padding: 6px 12px; font-size: 0.78rem; }
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
 
-  /* Card */
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 24px;
-    margin-bottom: 20px;
-  }
-  .card-title {
-    font-size: 0.78rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 16px;
-  }
+/* Modal */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; overflow-y: auto; padding: 40px 20px; }
+.modal-overlay.open { display: flex; justify-content: center; align-items: flex-start; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 800px; margin: 0 auto; }
+.modal-header { padding: 22px 26px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; }
+.modal-header h2 { font-size: 1.15rem; font-weight: 700; }
+.modal-header .meta { font-size: 0.82rem; color: var(--muted); margin-top: 3px; }
+.modal-close { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); width: 34px; height: 34px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.modal-close:hover { background: var(--red); border-color: var(--red); }
+.modal-body { padding: 22px 26px; }
+.modal-section { margin-bottom: 22px; }
+.modal-section-title { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
 
-  /* Table */
-  table { width: 100%; border-collapse: collapse; }
-  th {
-    text-align: left;
-    padding: 10px 12px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    border-bottom: 1px solid var(--border);
-  }
-  td {
-    padding: 12px;
-    border-bottom: 1px solid rgba(46,51,82,0.4);
-    font-size: 0.9rem;
-  }
-  .est-row {
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .est-row:hover {
-    background: var(--accent-glow);
-  }
+/* Photos */
+.photos-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.photo-thumb { width: 130px; height: 130px; object-fit: cover; border-radius: 9px; border: 2px solid var(--border); cursor: pointer; transition: all 0.2s; }
+.photo-thumb:hover { border-color: var(--accent); transform: scale(1.03); }
+.lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 2000; justify-content: center; align-items: center; cursor: pointer; }
+.lightbox.open { display: flex; }
+.lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 12px; object-fit: contain; }
 
-  /* Pagination */
-  .pagination {
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-    margin-top: 20px;
-  }
-  .page-btn {
-    padding: 8px 14px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text);
-    cursor: pointer;
-    font-size: 0.85rem;
-  }
-  .page-btn:hover { background: var(--accent-glow); border-color: var(--accent); }
-  .page-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .page-btn:disabled { opacity: 0.4; cursor: default; }
+/* Summary */
+.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.summary-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 2px; }
+.summary-val { font-size: 1.05rem; font-weight: 600; }
+.price-highlight { font-size: 1.5rem; font-weight: 800; color: var(--green); }
+.confidence-bar-wrap { background: var(--surface2); border-radius: 8px; height: 7px; overflow: hidden; margin-top: 5px; }
+.confidence-bar { height: 100%; border-radius: 8px; }
 
-  /* Modal overlay */
-  .modal-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.7);
-    z-index: 1000;
-    overflow-y: auto;
-    padding: 40px 20px;
-  }
-  .modal-overlay.open { display: flex; justify-content: center; align-items: flex-start; }
+/* Notes & Spatial */
+.notes-block { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 14px; font-size: 0.85rem; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.spatial-math { background: rgba(79,142,247,0.1); border: 1px solid rgba(79,142,247,0.25); border-radius: 9px; padding: 12px 14px; font-family: "SF Mono", "Fira Code", monospace; font-size: 0.85rem; color: var(--accent); margin-bottom: 10px; }
+.recycling-warning { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25); border-radius: 9px; padding: 12px 14px; font-size: 0.85rem; }
 
-  .modal {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    width: 100%;
-    max-width: 800px;
-    margin: 0 auto;
-    position: relative;
-  }
-  .modal-header {
-    padding: 24px 28px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-  }
-  .modal-header h2 { font-size: 1.2rem; font-weight: 700; }
-  .modal-header .meta { font-size: 0.85rem; color: var(--muted); margin-top: 4px; }
-  .modal-close {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text);
-    width: 36px; height: 36px;
-    cursor: pointer;
-    font-size: 1.1rem;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-  }
-  .modal-close:hover { background: var(--red); border-color: var(--red); }
-  .modal-body { padding: 24px 28px; }
-  .modal-section { margin-bottom: 24px; }
-  .modal-section-title {
-    font-size: 0.78rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 12px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid var(--border);
-  }
+/* Items table */
+.items-table th { font-size: 0.68rem; }
+.items-table td { font-size: 0.82rem; padding: 7px 8px; }
 
-  /* Photos grid */
-  .photos-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  .photo-thumb {
-    width: 140px;
-    height: 140px;
-    object-fit: cover;
-    border-radius: 10px;
-    border: 2px solid var(--border);
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  .photo-thumb:hover {
-    border-color: var(--accent);
-    transform: scale(1.03);
-  }
+/* Accuracy */
+.accuracy-result { font-size: 0.85rem; margin-top: 8px; padding: 9px 12px; border-radius: 8px; }
+.accuracy-hit { background: rgba(34,197,94,0.12); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+.accuracy-miss { background: rgba(239,68,68,0.12); color: var(--red); border: 1px solid rgba(239,68,68,0.25); }
 
-  /* Lightbox */
-  .lightbox {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.92);
-    z-index: 2000;
-    justify-content: center;
-    align-items: center;
-    cursor: pointer;
-  }
-  .lightbox.open { display: flex; }
-  .lightbox img {
-    max-width: 90vw;
-    max-height: 90vh;
-    border-radius: 12px;
-    object-fit: contain;
-  }
+/* Plan cards */
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.plan-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.plan-card h3 { font-size: 1rem; margin-bottom: 12px; }
 
-  /* Summary row */
-  .summary-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
-  .summary-item { }
-  .summary-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 2px; }
-  .summary-val { font-size: 1.1rem; font-weight: 600; }
-  .price-highlight {
-    font-size: 1.6rem;
-    font-weight: 800;
-    color: var(--green);
-  }
+/* Toast */
+.toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 10px; font-size: 0.88rem; font-weight: 500; z-index: 3000; opacity: 0; transform: translateY(10px); transition: all 0.3s; pointer-events: none; }
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast-success { background: var(--green); color: #fff; }
+.toast-error { background: var(--red); color: #fff; }
 
-  /* Badges */
-  .badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    margin: 2px 4px 2px 0;
-  }
-  .badge-condition {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-  }
-  .badge-lookup {
-    background: rgba(79,142,247,0.15);
-    color: var(--accent);
-    border: 1px solid rgba(79,142,247,0.3);
-  }
-  .badge-redistributed {
-    background: rgba(245,158,11,0.15);
-    color: var(--orange);
-    border: 1px solid rgba(245,158,11,0.3);
-  }
-  .badge-ai {
-    background: rgba(124,58,237,0.15);
-    color: #a78bfa;
-    border: 1px solid rgba(124,58,237,0.3);
-  }
+/* Search */
+.search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+.search-bar input { flex: 1; }
 
-  /* Confidence bar */
-  .confidence-bar-wrap {
-    background: var(--surface2);
-    border-radius: 8px;
-    height: 8px;
-    overflow: hidden;
-    margin-top: 6px;
-  }
-  .confidence-bar {
-    height: 100%;
-    border-radius: 8px;
-    transition: width 0.3s;
-  }
+/* Env status */
+.env-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(46,51,82,0.3); font-size: 0.88rem; }
 
-  /* Notes */
-  .notes-block {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px;
-    font-size: 0.88rem;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
+.loading { text-align: center; padding: 36px; color: var(--muted); }
+.empty { text-align: center; padding: 36px; color: var(--muted); font-size: 0.88rem; }
 
-  /* Spatial math highlight */
-  .spatial-math {
-    background: rgba(79,142,247,0.1);
-    border: 1px solid rgba(79,142,247,0.25);
-    border-radius: 10px;
-    padding: 14px 16px;
-    font-family: "SF Mono", "Fira Code", monospace;
-    font-size: 0.88rem;
-    color: var(--accent);
-    margin-bottom: 12px;
-  }
+/* Back link in detail views */
+.back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); cursor: pointer; font-size: 0.85rem; margin-bottom: 18px; background: none; border: none; font-family: inherit; }
+.back-link:hover { text-decoration: underline; }
 
-  /* Recycling warning */
-  .recycling-warning {
-    background: rgba(245,158,11,0.1);
-    border: 1px solid rgba(245,158,11,0.25);
-    border-radius: 10px;
-    padding: 14px 16px;
-    font-size: 0.88rem;
-  }
-
-  /* Accuracy tracking */
-  .accuracy-wrap {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-  }
-  .accuracy-input {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 14px;
-    color: var(--text);
-    font-size: 0.95rem;
-    width: 160px;
-  }
-  .accuracy-input:focus { outline: none; border-color: var(--accent); }
-  .btn {
-    padding: 10px 20px;
-    border-radius: 8px;
-    border: none;
-    font-weight: 600;
-    font-size: 0.88rem;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .btn-primary { background: var(--accent); color: #fff; }
-  .btn-primary:hover { opacity: 0.85; }
-  .btn-sm { padding: 6px 14px; font-size: 0.82rem; }
-  .accuracy-result {
-    font-size: 0.88rem;
-    margin-top: 10px;
-    padding: 10px 14px;
-    border-radius: 8px;
-  }
-  .accuracy-hit { background: rgba(34,197,94,0.12); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
-  .accuracy-miss { background: rgba(239,68,68,0.12); color: var(--red); border: 1px solid rgba(239,68,68,0.25); }
-
-  /* Items table in modal */
-  .items-table th { font-size: 0.72rem; }
-  .items-table td { font-size: 0.85rem; padding: 8px 10px; }
-
-  .loading { text-align: center; padding: 40px; color: var(--muted); }
-  .empty { text-align: center; padding: 40px; color: var(--muted); font-size: 0.9rem; }
-
-  @media (max-width: 600px) {
-    .stats-grid { grid-template-columns: 1fr 1fr; }
-    .summary-grid { grid-template-columns: 1fr; }
-    .photo-thumb { width: 100px; height: 100px; }
-    .modal-body { padding: 16px; }
-    .modal-header { padding: 16px; }
-    td, th { padding: 8px 6px; font-size: 0.8rem; }
-  }
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); transition: transform 0.25s; }
+  .sidebar.open { transform: translateX(0); }
+  .hamburger { display: block; }
+  .main { margin-left: 0; padding: 60px 16px 80px; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .summary-grid { grid-template-columns: 1fr; }
+  .form-row { grid-template-columns: 1fr; }
+  .photo-thumb { width: 90px; height: 90px; }
+  .plan-grid { grid-template-columns: 1fr; }
+  td, th { padding: 7px 5px; font-size: 0.78rem; }
+}
 </style>
 </head>
 <body>
 
-<header>
-  <div class="logo-icon">&#x1f4ca;</div>
-  <div>
-    <h1>WSIC Admin</h1>
-    <p>Dashboard &amp; Analytics</p>
-  </div>
-  <div class="header-right">
-    <a href="/estimate">Back to App</a>
-  </div>
-</header>
+<button class="hamburger" id="hamburger" onclick="document.querySelector('.sidebar').classList.toggle('open')">&#9776;</button>
 
-<div class="main-wrap">
-  <div class="tabs">
-    <button class="tab active" data-tab="analytics">Analytics</button>
-    <button class="tab" data-tab="estimates">Estimates</button>
-    <button class="tab" data-tab="users">Users</button>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="icon">&#x1f4ca;</div>
+    <div><h1>WSIC Admin</h1><p>Dashboard</p></div>
   </div>
+  <nav class="sidebar-nav">
+    <button class="nav-item active" data-section="dashboard"><span class="nav-icon">&#x1f4ca;</span> Dashboard</button>
+    <button class="nav-item" data-section="clients"><span class="nav-icon">&#x1f465;</span> Clients</button>
+    <button class="nav-item" data-section="estimates"><span class="nav-icon">&#x1f4cb;</span> Estimates</button>
+    <button class="nav-item" data-section="plans"><span class="nav-icon">&#x1f4b3;</span> Plans & Pricing</button>
+    <button class="nav-item" data-section="promos"><span class="nav-icon">&#x1f3ab;</span> Promo Codes</button>
+    <button class="nav-item" data-section="accuracy"><span class="nav-icon">&#x1f3af;</span> Accuracy</button>
+    <button class="nav-item" data-section="settings"><span class="nav-icon">&#x2699;&#xfe0f;</span> Site Settings</button>
+  </nav>
+  <div class="sidebar-footer"><a href="/estimate">Back to App</a></div>
+</aside>
 
-  <!-- Analytics Tab -->
-  <div class="tab-content active" id="tab-analytics">
-    <div class="stats-grid" id="stats-grid">
-      <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value" id="stat-users">--</div></div>
-      <div class="stat-card"><div class="stat-label">Paid Users</div><div class="stat-value" id="stat-paid">--</div></div>
-      <div class="stat-card"><div class="stat-label">Total Estimates</div><div class="stat-value" id="stat-estimates">--</div></div>
-      <div class="stat-card"><div class="stat-label">Today</div><div class="stat-value" id="stat-today">--</div></div>
-      <div class="stat-card"><div class="stat-label">This Week</div><div class="stat-value" id="stat-week">--</div></div>
-      <div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value" id="stat-month">--</div></div>
+<div class="main">
+
+<!-- ============ DASHBOARD ============ -->
+<div class="section active" id="sec-dashboard">
+  <div class="page-title">Dashboard</div>
+  <div class="stats-grid" id="stats-grid">
+    <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value" id="stat-users">--</div></div>
+    <div class="stat-card"><div class="stat-label">Paid Users</div><div class="stat-value" id="stat-paid">--</div></div>
+    <div class="stat-card"><div class="stat-label">Total Estimates</div><div class="stat-value" id="stat-estimates">--</div></div>
+    <div class="stat-card"><div class="stat-label">Today</div><div class="stat-value" id="stat-today">--</div></div>
+    <div class="stat-card"><div class="stat-label">This Week</div><div class="stat-value" id="stat-week">--</div></div>
+    <div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value" id="stat-month">--</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Averages</div>
+    <p style="font-size:0.88rem;color:var(--muted)">Avg Volume: <strong id="stat-avg-cy">--</strong> &nbsp;&middot;&nbsp; Avg Price: <strong id="stat-avg-price">--</strong></p>
+  </div>
+  <div class="card">
+    <div class="card-title">Recent Users</div>
+    <table><thead><tr><th>Email</th><th>Company</th><th>Tier</th><th>Joined</th></tr></thead><tbody id="recent-users-body"></tbody></table>
+  </div>
+</div>
+
+<!-- ============ CLIENTS ============ -->
+<div class="section" id="sec-clients">
+  <div id="clients-list-view">
+    <div class="page-title">Clients</div>
+    <div class="search-bar">
+      <input class="form-input" id="client-search" placeholder="Search by email or company..." onkeydown="if(event.key==='Enter')loadClients(1)">
+      <button class="btn btn-primary" onclick="loadClients(1)">Search</button>
     </div>
     <div class="card">
-      <div class="card-title">Averages</div>
-      <p style="font-size:0.9rem;color:var(--muted)">Avg Volume: <strong id="stat-avg-cy">--</strong> CY &nbsp;&middot;&nbsp; Avg Price: <strong id="stat-avg-price">--</strong></p>
-    </div>
-    <div class="card">
-      <div class="card-title">Recent Users</div>
       <table>
-        <thead><tr><th>Email</th><th>Company</th><th>Tier</th><th>Joined</th></tr></thead>
-        <tbody id="recent-users-body"></tbody>
+        <thead><tr><th>ID</th><th>Email</th><th>Company</th><th>Location</th><th>Tier</th><th>Pricing</th><th>Estimates</th><th>Joined</th></tr></thead>
+        <tbody id="clients-body"></tbody>
       </table>
+      <div class="pagination" id="clients-pagination"></div>
     </div>
   </div>
+  <div id="client-detail-view" style="display:none"></div>
+</div>
 
-  <!-- Estimates Tab -->
-  <div class="tab-content" id="tab-estimates">
-    <div class="card">
-      <div class="card-title">All Estimates</div>
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Date</th>
-            <th>User</th>
-            <th>Photos</th>
-            <th>CY</th>
-            <th>Price Range</th>
-          </tr>
-        </thead>
-        <tbody id="estimates-body"></tbody>
-      </table>
-      <div class="pagination" id="estimates-pagination"></div>
-    </div>
+<!-- ============ ESTIMATES ============ -->
+<div class="section" id="sec-estimates">
+  <div class="page-title">Estimates</div>
+  <div class="card">
+    <table>
+      <thead><tr><th>ID</th><th>Date</th><th>User</th><th>Photos</th><th>CY</th><th>Price Range</th></tr></thead>
+      <tbody id="estimates-body"></tbody>
+    </table>
+    <div class="pagination" id="estimates-pagination"></div>
   </div>
+</div>
 
-  <!-- Users Tab -->
-  <div class="tab-content" id="tab-users">
-    <div class="card">
-      <div class="card-title">All Users</div>
-      <table>
-        <thead><tr><th>ID</th><th>Email</th><th>Company</th><th>Tier</th><th>Estimates</th><th>Joined</th></tr></thead>
-        <tbody id="users-body"></tbody>
-      </table>
-      <div class="pagination" id="users-pagination"></div>
+<!-- ============ PLANS & PRICING ============ -->
+<div class="section" id="sec-plans">
+  <div class="page-title">Plans & Pricing</div>
+  <div class="plan-grid" id="plans-grid"></div>
+  <div class="card">
+    <div class="card-title">Global Settings</div>
+    <div id="global-settings-form">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">PPU Rate (cents)</label><input class="form-input" id="gs-ppu_rate" value="20"></div>
+        <div class="form-group"><label class="form-label">Extra Photo Fee (cents)</label><input class="form-input" id="gs-extra_photo_fee" value="2"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Photos Included Per Estimate</label><input class="form-input" id="gs-photos_included" value="5"></div>
+        <div class="form-group"><label class="form-label">Default Packing Factor</label><input class="form-input" id="gs-packing_factor" value="0.7"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Price Range Low Multiplier</label><input class="form-input" id="gs-price_range_low_mult" value="0.9"></div>
+        <div class="form-group"><label class="form-label">Price Range High Multiplier</label><input class="form-input" id="gs-price_range_high_mult" value="1.2"></div>
+      </div>
+      <button class="btn btn-primary" onclick="saveGlobalSettings()">Save Global Settings</button>
     </div>
   </div>
 </div>
+
+<!-- ============ PROMO CODES ============ -->
+<div class="section" id="sec-promos">
+  <div class="page-title">Promo Codes</div>
+  <div class="card" id="promo-form-card" style="display:none">
+    <div class="card-title" id="promo-form-title">Create Promo Code</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Code</label><div style="display:flex;gap:6px"><input class="form-input" id="promo-code" placeholder="LAUNCH20" style="margin:0"><button class="btn btn-outline btn-sm" onclick="document.getElementById('promo-code').value=autoCode()">Auto</button></div></div>
+      <div class="form-group"><label class="form-label">Discount Type</label><select class="form-select" id="promo-type"><option value="percentage">Percentage</option><option value="fixed">Fixed Amount</option></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Discount Value</label><input class="form-input" type="number" id="promo-value" placeholder="20"></div>
+      <div class="form-group"><label class="form-label">Usage Limit (0 = unlimited)</label><input class="form-input" type="number" id="promo-limit" value="0"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Expiration Date (optional)</label><input class="form-input" type="date" id="promo-expires"></div>
+    <div class="btn-group"><button class="btn btn-primary" onclick="savePromo()">Save</button><button class="btn btn-outline" onclick="hidePromoForm()">Cancel</button></div>
+    <input type="hidden" id="promo-edit-id" value="">
+  </div>
+  <div style="margin-bottom:14px"><button class="btn btn-primary" onclick="showPromoForm()">+ Create Promo Code</button></div>
+  <div class="card">
+    <table>
+      <thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Expires</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="promos-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ============ ACCURACY ============ -->
+<div class="section" id="sec-accuracy">
+  <div class="page-title">Accuracy Tracking</div>
+  <div class="stats-grid" id="acc-stats"></div>
+  <div class="card">
+    <div class="card-title">Accuracy by Company</div>
+    <table><thead><tr><th>Company</th><th># With Actuals</th><th>Avg Price Accuracy</th><th>Avg CY Accuracy</th></tr></thead><tbody id="acc-company-body"></tbody></table>
+  </div>
+  <div class="card">
+    <div class="card-title">Needs Actual Data (older than 7 days)</div>
+    <table><thead><tr><th>ID</th><th>Date</th><th>User</th><th>CY</th><th>Price Range</th></tr></thead><tbody id="acc-needs-body"></tbody></table>
+  </div>
+</div>
+
+<!-- ============ SITE SETTINGS ============ -->
+<div class="section" id="sec-settings">
+  <div class="page-title">Site Settings</div>
+  <div class="card">
+    <div class="card-title">API Key Status</div>
+    <div id="env-status"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Site Configuration</div>
+    <div id="site-config-form"></div>
+    <button class="btn btn-primary" style="margin-top:12px" onclick="saveSiteConfig()">Save Site Config</button>
+  </div>
+</div>
+
+</div><!-- /main -->
 
 <!-- Estimate Detail Modal -->
 <div class="modal-overlay" id="estimate-modal">
   <div class="modal">
     <div class="modal-header">
-      <div>
-        <h2 id="modal-title">Estimate #--</h2>
-        <div class="meta" id="modal-meta"></div>
-      </div>
+      <div><h2 id="modal-title">Estimate #--</h2><div class="meta" id="modal-meta"></div></div>
       <button class="modal-close" onclick="closeModal()">&times;</button>
     </div>
-    <div class="modal-body" id="modal-body">
-      <div class="loading">Loading estimate details...</div>
-    </div>
+    <div class="modal-body" id="modal-body"><div class="loading">Loading...</div></div>
   </div>
 </div>
 
-<!-- Photo Lightbox -->
-<div class="lightbox" id="lightbox" onclick="closeLightbox()">
-  <img id="lightbox-img" src="" alt="Full size photo">
-</div>
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()"><img id="lightbox-img" src="" alt="Full size"></div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
 
 <script>
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
-// ── Tabs ──
-$$('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    $$('.tab').forEach(t => t.classList.remove('active'));
-    $$('.tab-content').forEach(c => c.classList.remove('active'));
-    tab.classList.add('active');
-    const target = tab.dataset.tab;
-    $(`#tab-${target}`).classList.add('active');
-    if (target === 'analytics' && !analyticsLoaded) loadAnalytics();
-    if (target === 'estimates' && !estimatesLoaded) loadEstimates(1);
-    if (target === 'users' && !usersLoaded) loadUsers(1);
+// ── Toast ──
+function toast(msg, type='success') {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'toast toast-' + type + ' show';
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── Navigation ──
+$$('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    $$('.nav-item').forEach(n => n.classList.remove('active'));
+    $$('.section').forEach(s => s.classList.remove('active'));
+    item.classList.add('active');
+    const sec = item.dataset.section;
+    $(`#sec-${sec}`).classList.add('active');
+    // Close mobile sidebar
+    $('#sidebar').classList.remove('open');
+    // Load data on first visit
+    if (sec === 'dashboard' && !loaded.dashboard) loadDashboard();
+    if (sec === 'clients' && !loaded.clients) loadClients(1);
+    if (sec === 'estimates' && !loaded.estimates) loadEstimates(1);
+    if (sec === 'plans' && !loaded.plans) loadPlans();
+    if (sec === 'promos' && !loaded.promos) loadPromos();
+    if (sec === 'accuracy' && !loaded.accuracy) loadAccuracy();
+    if (sec === 'settings' && !loaded.settings) loadSettings();
   });
 });
 
-let analyticsLoaded = false;
-let estimatesLoaded = false;
-let usersLoaded = false;
+const loaded = { dashboard: false, clients: false, estimates: false, plans: false, promos: false, accuracy: false, settings: false };
 
 async function apiFetch(url, opts) {
   const res = await fetch(url, { credentials: 'include', ...opts });
-  if (res.status === 401 || res.status === 403) {
-    window.location.href = '/login';
-    throw new Error('Not authorized');
-  }
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (res.status === 401 || res.status === 403) { window.location.href = '/login'; throw new Error('Not authorized'); }
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `Error ${res.status}`); }
   return res.json();
 }
 
-// ── Analytics ──
-async function loadAnalytics() {
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function fmtDate(iso) { if (!iso) return '--'; return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+function fmtShortDate(iso) { if (!iso) return '--'; return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+
+// ── Dashboard ──
+async function loadDashboard() {
   try {
     const d = await apiFetch('/api/admin/analytics');
     $('#stat-users').textContent = d.total_users;
@@ -541,18 +396,141 @@ async function loadAnalytics() {
     $('#stat-month').textContent = d.estimates_month;
     $('#stat-avg-cy').textContent = d.avg_cy + ' CY';
     $('#stat-avg-price').textContent = '$' + d.avg_price;
+    $('#recent-users-body').innerHTML = d.recent_users.map(u => `<tr><td>${esc(u.email)}</td><td>${esc(u.company_name||'--')}</td><td><span class="badge badge-condition">${esc(u.tier)}</span></td><td>${fmtShortDate(u.created_at)}</td></tr>`).join('');
+    loaded.dashboard = true;
+  } catch(e) { console.error(e); }
+}
 
-    const tbody = $('#recent-users-body');
-    tbody.innerHTML = d.recent_users.map(u => `
-      <tr>
-        <td>${esc(u.email)}</td>
-        <td>${esc(u.company_name || '--')}</td>
+// ── Clients ──
+async function loadClients(page) {
+  const q = ($('#client-search') || {}).value || '';
+  const tbody = $('#clients-body');
+  tbody.innerHTML = '<tr><td colspan="8" class="loading">Loading...</td></tr>';
+  // Show list view, hide detail
+  $('#clients-list-view').style.display = '';
+  $('#client-detail-view').style.display = 'none';
+  try {
+    const d = await apiFetch(`/api/admin/users?page=${page}&q=${encodeURIComponent(q)}`);
+    if (!d.users.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">No clients</td></tr>'; }
+    else {
+      tbody.innerHTML = d.users.map(u => `<tr class="clickable-row" onclick="loadClientDetail(${u.id})">
+        <td>#${u.id}</td><td>${esc(u.email)}</td><td>${esc(u.company_name||'--')}</td>
+        <td>${esc((u.company_city||'')+(u.company_state?', '+u.company_state:''))}</td>
         <td><span class="badge badge-condition">${esc(u.tier)}</span></td>
-        <td>${fmtDate(u.created_at)}</td>
-      </tr>
-    `).join('');
-    analyticsLoaded = true;
-  } catch(e) { console.error('Analytics load error:', e); }
+        <td>${u.pricing_setup?'<span class="badge badge-green">Setup</span>':'<span class="badge badge-red">Not Set</span>'}</td>
+        <td>${u.estimates_used}/${u.estimates_limit}</td>
+        <td>${fmtShortDate(u.created_at)}</td>
+      </tr>`).join('');
+    }
+    renderPagination('#clients-pagination', d.page, d.pages, 'loadClients');
+    loaded.clients = true;
+  } catch(e) { console.error(e); tbody.innerHTML = '<tr><td colspan="8" class="empty">Error loading clients</td></tr>'; }
+}
+
+async function loadClientDetail(userId) {
+  $('#clients-list-view').style.display = 'none';
+  const dv = $('#client-detail-view');
+  dv.style.display = 'block';
+  dv.innerHTML = '<div class="loading">Loading client...</div>';
+  try {
+    const u = await apiFetch(`/api/admin/users/${userId}`);
+    let html = `<button class="back-link" onclick="loadClients(1)">&larr; Back to Clients</button>`;
+    html += `<div class="page-title">${esc(u.company_name||u.email)}</div>`;
+
+    // Info card
+    html += `<div class="card"><div class="card-title">Client Info</div>
+      <div class="form-row"><div><span class="form-label">Email</span><div>${esc(u.email)}</div></div><div><span class="form-label">Phone</span><div>${esc(u.company_phone||'--')}</div></div></div>
+      <div class="form-row" style="margin-top:10px"><div><span class="form-label">Location</span><div>${esc(u.company_city||'')}${u.company_state?', '+esc(u.company_state):''}</div></div><div><span class="form-label">Slug</span><div>${esc(u.company_slug||'--')}</div></div></div>
+      <div class="form-row" style="margin-top:10px"><div><span class="form-label">Plan</span><div><span class="badge badge-condition">${esc(u.subscription_tier)}</span></div></div><div><span class="form-label">Joined</span><div>${fmtShortDate(u.created_at)}</div></div></div>
+    </div>`;
+
+    // Pricing card
+    html += `<div class="card"><div class="card-title">Pricing Setup</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">$/CY Standard</label><input class="form-input" id="cu-standard" value="${u.price_per_cy_standard||''}"></div>
+        <div class="form-group"><label class="form-label">$/CY Heavy</label><input class="form-input" id="cu-heavy" value="${u.price_per_cy_heavy||''}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">$/CY Low</label><input class="form-input" id="cu-low" value="${u.price_per_cy_low||''}"></div>
+        <div class="form-group"><label class="form-label">$/CY High</label><input class="form-input" id="cu-high" value="${u.price_per_cy_high||''}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">$/CY Premium</label><input class="form-input" id="cu-premium" value="${u.price_per_cy_premium||''}"></div>
+        <div class="form-group"><label class="form-label">Min Charge</label><input class="form-input" id="cu-mincharge" value="${u.min_charge||''}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Truck Capacity (CY)</label><input class="form-input" id="cu-truckcap" value="${u.truck_capacity_cy||''}" style="max-width:200px"></div>
+      <button class="btn btn-primary btn-sm" onclick="saveClientPricing(${u.id})">Save Pricing</button>
+    </div>`;
+
+    // Account actions
+    html += `<div class="card"><div class="card-title">Account Actions</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Change Plan</label><select class="form-select" id="cu-tier"><option ${u.subscription_tier==='free'?'selected':''}>free</option><option ${u.subscription_tier==='starter'?'selected':''}>starter</option><option ${u.subscription_tier==='pro'?'selected':''}>pro</option><option ${u.subscription_tier==='agency'?'selected':''}>agency</option></select></div>
+        <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="cu-active"><option value="true" ${u.is_active!==false?'selected':''}>Active</option><option value="false" ${u.is_active===false?'selected':''}>Inactive</option></select></div>
+      </div>
+      <div class="btn-group" style="margin-bottom:14px">
+        <button class="btn btn-primary btn-sm" onclick="saveClientAccount(${u.id})">Save Account</button>
+        <button class="btn btn-red btn-sm" onclick="resetClientPassword(${u.id})">Reset Password</button>
+      </div>
+      <div id="reset-pw-result"></div>
+      <div class="form-group"><label class="form-label">Admin Notes</label><textarea class="form-textarea" id="cu-notes">${esc(u.admin_notes||'')}</textarea></div>
+      <button class="btn btn-outline btn-sm" onclick="saveClientNotes(${u.id})">Save Notes</button>
+    </div>`;
+
+    // Estimates
+    html += `<div class="card"><div class="card-title">Estimates (${u.estimates.length})</div>`;
+    if (u.estimates.length) {
+      html += `<table><thead><tr><th>ID</th><th>Date</th><th>CY</th><th>Price</th><th>Actual</th></tr></thead><tbody>`;
+      html += u.estimates.map(e => `<tr class="clickable-row" onclick="openEstimate(${e.id})"><td>#${e.id}</td><td>${fmtShortDate(e.created_at)}</td><td>${e.cy_estimate?e.cy_estimate.toFixed(1):'--'}</td><td>$${e.price_low?Math.round(e.price_low):'--'}&ndash;$${e.price_high?Math.round(e.price_high):'--'}</td><td>${e.actual_price?'$'+Math.round(e.actual_price):'--'}</td></tr>`).join('');
+      html += `</tbody></table>`;
+    } else { html += '<div class="empty">No estimates yet</div>'; }
+    html += '</div>';
+
+    dv.innerHTML = html;
+  } catch(e) { console.error(e); dv.innerHTML = '<div class="empty">Error loading client</div>'; }
+}
+
+async function saveClientPricing(userId) {
+  try {
+    await apiFetch(`/api/admin/users/${userId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({
+      price_per_cy_standard: $('#cu-standard').value || null,
+      price_per_cy_heavy: $('#cu-heavy').value || null,
+      price_per_cy_low: $('#cu-low').value || null,
+      price_per_cy_high: $('#cu-high').value || null,
+      price_per_cy_premium: $('#cu-premium').value || null,
+      min_charge: $('#cu-mincharge').value || null,
+      truck_capacity_cy: $('#cu-truckcap').value || null,
+    })});
+    toast('Pricing saved');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function saveClientAccount(userId) {
+  try {
+    await apiFetch(`/api/admin/users/${userId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({
+      subscription_tier: $('#cu-tier').value,
+      is_active: $('#cu-active').value === 'true',
+    })});
+    toast('Account updated');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function saveClientNotes(userId) {
+  try {
+    await apiFetch(`/api/admin/users/${userId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({
+      admin_notes: $('#cu-notes').value,
+    })});
+    toast('Notes saved');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function resetClientPassword(userId) {
+  if (!confirm('Generate a new random password for this user?')) return;
+  try {
+    const d = await apiFetch(`/api/admin/users/${userId}/reset-password`, { method: 'POST' });
+    $('#reset-pw-result').innerHTML = `<div class="accuracy-result accuracy-hit" style="margin-top:8px">New password: <strong>${esc(d.new_password)}</strong> — copy this now, it won't be shown again.</div>`;
+    toast('Password reset');
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 // ── Estimates ──
@@ -561,73 +539,16 @@ async function loadEstimates(page) {
   tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading...</td></tr>';
   try {
     const d = await apiFetch(`/api/admin/estimates?page=${page}`);
-    if (!d.estimates.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="empty">No estimates yet</td></tr>';
-    } else {
-      tbody.innerHTML = d.estimates.map(e => `
-        <tr class="est-row" onclick="openEstimate(${e.id})">
-          <td>#${e.id}</td>
-          <td>${fmtDate(e.created_at)}</td>
-          <td>${esc(e.user_email)}</td>
-          <td>${e.photos_count || 0}</td>
-          <td>${e.cy_estimate ? e.cy_estimate.toFixed(1) : '--'}</td>
-          <td>$${e.price_low ? Math.round(e.price_low) : '--'} &ndash; $${e.price_high ? Math.round(e.price_high) : '--'}</td>
-        </tr>
-      `).join('');
+    if (!d.estimates.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No estimates</td></tr>'; }
+    else {
+      tbody.innerHTML = d.estimates.map(e => `<tr class="clickable-row" onclick="openEstimate(${e.id})">
+        <td>#${e.id}</td><td>${fmtDate(e.created_at)}</td><td>${esc(e.user_email)}</td><td>${e.photos_count||0}</td>
+        <td>${e.cy_estimate?e.cy_estimate.toFixed(1):'--'}</td><td>$${e.price_low?Math.round(e.price_low):'--'} &ndash; $${e.price_high?Math.round(e.price_high):'--'}</td>
+      </tr>`).join('');
     }
-
-    // Pagination
-    const pagDiv = $('#estimates-pagination');
-    if (d.pages > 1) {
-      let html = '';
-      if (page > 1) html += `<button class="page-btn" onclick="loadEstimates(${page-1})">&laquo; Prev</button>`;
-      for (let i = 1; i <= d.pages; i++) {
-        if (d.pages > 10 && Math.abs(i - page) > 2 && i !== 1 && i !== d.pages) {
-          if (i === page - 3 || i === page + 3) html += '<span style="color:var(--muted);padding:8px">...</span>';
-          continue;
-        }
-        html += `<button class="page-btn${i===page?' active':''}" onclick="loadEstimates(${i})">${i}</button>`;
-      }
-      if (page < d.pages) html += `<button class="page-btn" onclick="loadEstimates(${page+1})">Next &raquo;</button>`;
-      pagDiv.innerHTML = html;
-    } else {
-      pagDiv.innerHTML = '';
-    }
-    estimatesLoaded = true;
-  } catch(e) { console.error('Estimates load error:', e); tbody.innerHTML = '<tr><td colspan="6" class="empty">Error loading estimates</td></tr>'; }
-}
-
-// ── Users ──
-async function loadUsers(page) {
-  const tbody = $('#users-body');
-  tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading...</td></tr>';
-  try {
-    const d = await apiFetch(`/api/admin/users?page=${page}`);
-    tbody.innerHTML = d.users.map(u => `
-      <tr>
-        <td>#${u.id}</td>
-        <td>${esc(u.email)}</td>
-        <td>${esc(u.company_name || '--')}</td>
-        <td><span class="badge badge-condition">${esc(u.tier)}</span></td>
-        <td>${u.estimates_used}/${u.estimates_limit}</td>
-        <td>${fmtDate(u.created_at)}</td>
-      </tr>
-    `).join('');
-
-    const pagDiv = $('#users-pagination');
-    if (d.pages > 1) {
-      let html = '';
-      if (page > 1) html += `<button class="page-btn" onclick="loadUsers(${page-1})">&laquo; Prev</button>`;
-      for (let i = 1; i <= d.pages; i++) {
-        html += `<button class="page-btn${i===page?' active':''}" onclick="loadUsers(${i})">${i}</button>`;
-      }
-      if (page < d.pages) html += `<button class="page-btn" onclick="loadUsers(${page+1})">Next &raquo;</button>`;
-      pagDiv.innerHTML = html;
-    } else {
-      pagDiv.innerHTML = '';
-    }
-    usersLoaded = true;
-  } catch(e) { console.error('Users load error:', e); }
+    renderPagination('#estimates-pagination', d.page, d.pages, 'loadEstimates');
+    loaded.estimates = true;
+  } catch(e) { console.error(e); }
 }
 
 // ── Estimate Detail Modal ──
@@ -638,278 +559,307 @@ async function openEstimate(id) {
   document.body.style.overflow = 'hidden';
   $('#modal-title').textContent = `Estimate #${id}`;
   $('#modal-meta').textContent = 'Loading...';
-  body.innerHTML = '<div class="loading">Loading estimate details...</div>';
-
+  body.innerHTML = '<div class="loading">Loading...</div>';
   try {
     const d = await apiFetch(`/api/admin/estimates/${id}`);
-    $('#modal-meta').textContent = `${fmtDate(d.created_at)} \u00b7 ${esc(d.user_email)}${d.company_name ? ' \u00b7 ' + esc(d.company_name) : ''}${d.company_city ? ', ' + esc(d.company_city) : ''}${d.company_state ? ' ' + esc(d.company_state) : ''}`;
-
-    const result = d.result || {};
-    const items = result.items || [];
-    const totals = result.totals || {};
-    const notes = result.notes || '';
-    const confidence = result.confidence || 0;
-    const conditions = result.conditions || [];
-    const refPoints = result.reference_points || result.reference_items || [];
-    const jobType = result.job_type || 'standard';
-
+    $('#modal-meta').textContent = `${fmtDate(d.created_at)} \u00b7 ${esc(d.user_email)}${d.company_name?' \u00b7 '+esc(d.company_name):''}${d.company_city?', '+esc(d.company_city):''}${d.company_state?' '+esc(d.company_state):''}`;
+    const result = d.result||{}, items = result.items||[], totals = result.totals||{}, notes = result.notes||'';
+    const confidence = result.confidence||0, conditions = result.conditions||[], refPoints = result.reference_points||result.reference_items||[];
+    const jobType = result.job_type||'standard';
     let html = '';
 
-    // ── Photos ──
-    if (d.photos && d.photos.length > 0) {
-      html += `<div class="modal-section">
-        <div class="modal-section-title">Photos (${d.photos.length})</div>
-        <div class="photos-grid">
-          ${d.photos.map(p => `<img class="photo-thumb" src="${p.data_url}" alt="Photo ${p.index+1}" onclick="openLightbox('${p.data_url}')">`).join('')}
-        </div>
-      </div>`;
+    // Photos
+    if (d.photos && d.photos.length) {
+      html += `<div class="modal-section"><div class="modal-section-title">Photos (${d.photos.length})</div><div class="photos-grid">${d.photos.map(p => `<img class="photo-thumb" src="${p.data_url}" alt="Photo ${p.index+1}" onclick="openLightbox(this.src)">`).join('')}</div></div>`;
     }
 
-    // ── Estimate Summary ──
-    const confColor = confidence >= 80 ? 'var(--green)' : confidence >= 60 ? 'var(--orange)' : 'var(--red)';
-    html += `<div class="modal-section">
-      <div class="modal-section-title">Estimate Results</div>
-      <div class="summary-grid">
-        <div class="summary-item">
-          <div class="summary-label">Total Volume</div>
-          <div class="summary-val">${d.cy_estimate ? d.cy_estimate.toFixed(1) : '--'} CY</div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-label">Price Range</div>
-          <div class="price-highlight">$${d.price_low ? Math.round(d.price_low) : '--'} &ndash; $${d.price_high ? Math.round(d.price_high) : '--'}</div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-label">Job Type</div>
-          <div class="summary-val">${esc(jobType)}</div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-label">AI Confidence</div>
-          <div class="summary-val" style="color:${confColor}">${confidence}%</div>
-          <div class="confidence-bar-wrap">
-            <div class="confidence-bar" style="width:${confidence}%;background:${confColor}"></div>
-          </div>
-        </div>
-      </div>
-    </div>`;
+    // Summary
+    const confColor = confidence>=80?'var(--green)':confidence>=60?'var(--orange)':'var(--red)';
+    html += `<div class="modal-section"><div class="modal-section-title">Estimate Results</div><div class="summary-grid">
+      <div><div class="summary-label">Total Volume</div><div class="summary-val">${d.cy_estimate?d.cy_estimate.toFixed(1):'--'} CY</div></div>
+      <div><div class="summary-label">Price Range</div><div class="price-highlight">$${d.price_low?Math.round(d.price_low):'--'} &ndash; $${d.price_high?Math.round(d.price_high):'--'}</div></div>
+      <div><div class="summary-label">Job Type</div><div class="summary-val">${esc(jobType)}</div></div>
+      <div><div class="summary-label">AI Confidence</div><div class="summary-val" style="color:${confColor}">${confidence}%</div><div class="confidence-bar-wrap"><div class="confidence-bar" style="width:${confidence}%;background:${confColor}"></div></div></div>
+    </div></div>`;
 
-    // ── Conditions ──
-    if (conditions.length > 0) {
-      const condEmoji = {
-        'premium': '\u26a1', 'outdoor': '\ud83c\udf33', 'hazardous': '\u2623\ufe0f', 'hoarder': '\ud83c\udfe0',
-        'stairs': '\ud83e\udea8', 'heavy_items': '\ud83c\udfcb\ufe0f', 'construction': '\ud83d\udea7',
-        'tight_access': '\ud83d\udeaa', 'demo_required': '\ud83d\udca5'
-      };
-      html += `<div class="modal-section">
-        <div class="modal-section-title">Conditions</div>
-        <div>${conditions.map(c => `<span class="badge badge-condition">${condEmoji[c] || '\ud83d\udccc'} ${esc(c.replace(/_/g, ' '))}</span>`).join('')}</div>
-      </div>`;
+    // Conditions
+    if (conditions.length) {
+      const ce = {'premium':'\u26a1','outdoor':'\ud83c\udf33','hazardous':'\u2623\ufe0f','hoarder':'\ud83c\udfe0','stairs':'\ud83e\udea8','heavy_items':'\ud83c\udfcb\ufe0f','construction':'\ud83d\udea7','tight_access':'\ud83d\udeaa','demo_required':'\ud83d\udca5'};
+      html += `<div class="modal-section"><div class="modal-section-title">Conditions</div><div>${conditions.map(c => `<span class="badge badge-condition">${ce[c]||'\ud83d\udccc'} ${esc(c.replace(/_/g,' '))}</span>`).join('')}</div></div>`;
     }
 
-    // ── Spatial Math ──
-    const spatialMatch = notes.match(/(?:pile|area|space|room|load|stack|heap)[\s\S]*?(?:\d+(?:\.\d+)?\s*(?:ft|feet|foot|inch|in|x|×|by)\s*[\s\S]*?(?:CY|cubic\s*yard))/i);
-    if (spatialMatch) {
-      html += `<div class="modal-section">
-        <div class="modal-section-title">Spatial Math</div>
-        <div class="spatial-math">${esc(spatialMatch[0])}</div>
-      </div>`;
+    // Spatial Math
+    const sm = notes.match(/(?:pile|area|space|room|load|stack|heap)[\s\S]*?(?:\d+(?:\.\d+)?\s*(?:ft|feet|foot|inch|in|x|\u00d7|by)\s*[\s\S]*?(?:CY|cubic\s*yard))/i);
+    if (sm) html += `<div class="modal-section"><div class="modal-section-title">Spatial Math</div><div class="spatial-math">${esc(sm[0])}</div></div>`;
+
+    // Reference Points
+    if (refPoints.length) {
+      html += `<div class="modal-section"><div class="modal-section-title">Spatial Reference Points</div><div style="font-size:0.85rem">${refPoints.map(rp => { const n = typeof rp==='string'?rp:(rp.name||rp.item||''); const desc = typeof rp==='object'?(rp.description||rp.note||''):''; return `<div style="padding:3px 0;color:var(--muted)">\u2022 <span style="color:var(--text)">${esc(n)}</span>${desc?' \u2014 '+esc(desc):''}</div>`; }).join('')}</div></div>`;
     }
 
-    // ── Reference Points ──
-    if (refPoints.length > 0) {
-      html += `<div class="modal-section">
-        <div class="modal-section-title">Spatial Reference Points</div>
-        <div style="font-size:0.88rem">
-          ${refPoints.map(rp => {
-            const name = typeof rp === 'string' ? rp : (rp.name || rp.item || '');
-            const desc = typeof rp === 'object' ? (rp.description || rp.note || '') : '';
-            return `<div style="padding:4px 0;color:var(--muted)">\u2022 <span style="color:var(--text)">${esc(name)}</span>${desc ? ' \u2014 ' + esc(desc) : ''}</div>`;
-          }).join('')}
-        </div>
-      </div>`;
+    // Item Breakdown
+    if (items.length) {
+      html += `<div class="modal-section"><div class="modal-section-title">Item Breakdown</div><table class="items-table"><thead><tr><th>Item</th><th>Qty</th><th>CY/unit</th><th>Total CY</th><th>Source</th></tr></thead><tbody>`;
+      html += items.map(it => {
+        const qty=it.quantity||1, cy=it.cubic_yards||0, total=(cy*qty).toFixed(2);
+        let src = it.looked_up||it.volume_lookup_applied?'<span class="badge badge-lookup">lookup</span>':it.volume_redistributed?'<span class="badge badge-redistributed">redistributed</span>':'<span class="badge badge-ai">AI</span>';
+        return `<tr><td>${esc(it.name||'Unknown')}${it.is_special?' \u267b\ufe0f':''}</td><td style="text-align:center">${qty}</td><td style="text-align:right">${cy.toFixed(2)}</td><td style="text-align:right">${total}</td><td>${src}</td></tr>`;
+      }).join('');
+      html += `</tbody></table><div style="margin-top:8px;font-size:0.72rem;color:var(--muted)"><span class="badge badge-lookup">lookup</span> = reference library &nbsp;<span class="badge badge-redistributed">redistributed</span> = adjusted to spatial total &nbsp;<span class="badge badge-ai">AI</span> = AI estimate</div></div>`;
     }
 
-    // ── Item Breakdown ──
-    if (items.length > 0) {
-      html += `<div class="modal-section">
-        <div class="modal-section-title">Item Breakdown</div>
-        <table class="items-table">
-          <thead><tr><th>Item</th><th>Qty</th><th>CY/unit</th><th>Total CY</th><th>Source</th></tr></thead>
-          <tbody>
-            ${items.map(it => {
-              const qty = it.quantity || 1;
-              const cy = it.cubic_yards || 0;
-              const total = (cy * qty).toFixed(2);
-              let source = '';
-              if (it.looked_up || it.volume_lookup_applied) {
-                source = '<span class="badge badge-lookup">lookup</span>';
-              } else if (it.volume_redistributed) {
-                source = '<span class="badge badge-redistributed">redistributed</span>';
-              } else {
-                source = '<span class="badge badge-ai">AI</span>';
-              }
-              const special = it.is_special ? ' \u267b\ufe0f' : '';
-              return `<tr>
-                <td>${esc(it.name || 'Unknown')}${special}</td>
-                <td style="text-align:center">${qty}</td>
-                <td style="text-align:right">${cy.toFixed(2)}</td>
-                <td style="text-align:right">${total}</td>
-                <td>${source}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-        <div style="margin-top:10px;font-size:0.78rem;color:var(--muted)">
-          <span class="badge badge-lookup">lookup</span> = volume from reference library &nbsp;
-          <span class="badge badge-redistributed">redistributed</span> = adjusted to match spatial total &nbsp;
-          <span class="badge badge-ai">AI</span> = AI estimate kept as-is
-        </div>
-      </div>`;
-    }
-
-    // ── Recycling Warnings ──
+    // Recycling
     const recyclingItems = items.filter(it => it.is_special);
-    const recyclingFromResult = result.recycling_items || [];
-    if (recyclingItems.length > 0 || recyclingFromResult.length > 0) {
-      const allRecycling = recyclingItems.map(it => `${it.name || 'Unknown'} x${it.quantity || 1}`);
-      recyclingFromResult.forEach(r => {
-        const name = typeof r === 'string' ? r : r.name || '';
-        if (name && !allRecycling.some(a => a.toLowerCase().includes(name.toLowerCase()))) {
-          allRecycling.push(name);
-        }
-      });
-      html += `<div class="modal-section">
-        <div class="modal-section-title">\u267b\ufe0f Recycling Fee Items</div>
-        <div class="recycling-warning">
-          ${allRecycling.map(r => `<div>\u2022 ${esc(r)}</div>`).join('')}
-          <div style="margin-top:8px;font-size:0.78rem;color:var(--muted)">These items may require separate disposal fees not included in the estimate.</div>
-        </div>
-      </div>`;
+    const recyclingFromResult = result.recycling_items||[];
+    if (recyclingItems.length || recyclingFromResult.length) {
+      const all = recyclingItems.map(it => `${it.name||'Unknown'} x${it.quantity||1}`);
+      recyclingFromResult.forEach(r => { const n = typeof r==='string'?r:r.name||''; if (n && !all.some(a => a.toLowerCase().includes(n.toLowerCase()))) all.push(n); });
+      html += `<div class="modal-section"><div class="modal-section-title">\u267b\ufe0f Recycling Fee Items</div><div class="recycling-warning">${all.map(r => `<div>\u2022 ${esc(r)}</div>`).join('')}<div style="margin-top:6px;font-size:0.72rem;color:var(--muted)">May require separate disposal fees.</div></div></div>`;
     }
 
-    // ── Lookups (volume corrections) ──
-    if (d.lookups && d.lookups.length > 0) {
-      html += `<div class="modal-section">
-        <div class="modal-section-title">Volume Corrections Applied</div>
-        <div style="font-size:0.88rem">
-          ${d.lookups.map(l => `<div style="padding:3px 0">\u2022 <strong>${esc(l.item_name)}</strong>: corrected to ${l.cubic_yards} CY ${l.source_note ? '(' + esc(l.source_note) + ')' : ''}</div>`).join('')}
-        </div>
-      </div>`;
+    // Lookups
+    if (d.lookups && d.lookups.length) {
+      html += `<div class="modal-section"><div class="modal-section-title">Volume Corrections Applied</div><div style="font-size:0.85rem">${d.lookups.map(l => `<div style="padding:2px 0">\u2022 <strong>${esc(l.item_name)}</strong>: corrected to ${l.cubic_yards} CY ${l.source_note?'('+esc(l.source_note)+')':''}</div>`).join('')}</div></div>`;
     }
 
-    // ── Notes ──
+    // Notes
     if (notes) {
-      // Extract volume corrections section
       const corrMatch = notes.match(/Volume corrections?:[\s\S]*/i);
       const mainNotes = corrMatch ? notes.replace(corrMatch[0], '').trim() : notes;
-
-      html += `<div class="modal-section">
-        <div class="modal-section-title">Estimator Notes</div>
-        <div class="notes-block">${esc(mainNotes)}</div>
-      </div>`;
-
-      if (corrMatch) {
-        html += `<div class="modal-section">
-          <div class="modal-section-title">Volume Correction Notes</div>
-          <div class="notes-block">${esc(corrMatch[0])}</div>
-        </div>`;
-      }
+      html += `<div class="modal-section"><div class="modal-section-title">Estimator Notes</div><div class="notes-block">${esc(mainNotes)}</div></div>`;
+      if (corrMatch) html += `<div class="modal-section"><div class="modal-section-title">Volume Correction Notes</div><div class="notes-block">${esc(corrMatch[0])}</div></div>`;
     }
 
-    // ── Accuracy Tracking ──
-    html += `<div class="modal-section">
-      <div class="modal-section-title">Accuracy Tracking</div>
-      <div class="accuracy-wrap">
-        <span style="color:var(--muted);font-size:0.88rem">Actual job price: $</span>
-        <input type="number" class="accuracy-input" id="actual-price-input" placeholder="0.00" step="0.01" value="${d.actual_price || ''}">
-        <button class="btn btn-primary btn-sm" onclick="saveActualPrice(${d.id})">Save</button>
+    // Accuracy Tracking
+    html += `<div class="modal-section"><div class="modal-section-title">Accuracy Tracking</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Actual Job Price ($)</label><input class="form-input" type="number" id="actual-price-input" step="0.01" value="${d.actual_price||''}"></div>
+        <div class="form-group"><label class="form-label">Actual CY</label><input class="form-input" type="number" id="actual-cy-input" step="0.1" value="${d.actual_cy||''}"></div>
       </div>
-      <div id="accuracy-result-${d.id}">
-        ${d.actual_price ? buildAccuracyResult(d.actual_price, d.price_low, d.price_high) : '<div style="margin-top:8px;font-size:0.78rem;color:var(--muted)">Enter what the job actually sold for to track estimate accuracy over time.</div>'}
-      </div>
+      <div class="form-group"><label class="form-label">Accuracy Notes</label><textarea class="form-textarea" id="accuracy-notes-input">${esc(d.accuracy_notes||'')}</textarea></div>
+      <button class="btn btn-primary btn-sm" onclick="saveActualData(${d.id})">Save</button>
+      <div id="accuracy-result-${d.id}">${d.actual_price?buildAccuracyResult(d.actual_price,d.price_low,d.price_high):''}</div>
     </div>`;
 
     body.innerHTML = html;
-  } catch(e) {
-    console.error('Error loading estimate detail:', e);
-    body.innerHTML = '<div class="empty">Error loading estimate details. Please try again.</div>';
-  }
+  } catch(e) { console.error(e); body.innerHTML = '<div class="empty">Error loading estimate</div>'; }
 }
 
 function buildAccuracyResult(actual, low, high) {
   if (!actual || !low || !high) return '';
   const inRange = actual >= low && actual <= high;
-  const mid = (low + high) / 2;
-  const pctOff = Math.abs((actual - mid) / mid * 100).toFixed(0);
-  if (inRange) {
-    return `<div class="accuracy-result accuracy-hit" style="margin-top:10px">Estimated $${Math.round(low)}\u2013$${Math.round(high)}, Actual $${Math.round(actual)} \u2014 Within range!</div>`;
-  } else {
-    const dir = actual < low ? 'below' : 'above';
-    return `<div class="accuracy-result accuracy-miss" style="margin-top:10px">Estimated $${Math.round(low)}\u2013$${Math.round(high)}, Actual $${Math.round(actual)} \u2014 ${pctOff}% ${dir} midpoint</div>`;
-  }
+  const mid = (low+high)/2, pctOff = Math.abs((actual-mid)/mid*100).toFixed(0);
+  if (inRange) return `<div class="accuracy-result accuracy-hit" style="margin-top:8px">Estimated $${Math.round(low)}\u2013$${Math.round(high)}, Actual $${Math.round(actual)} \u2014 Within range!</div>`;
+  const dir = actual < low ? 'below' : 'above';
+  return `<div class="accuracy-result accuracy-miss" style="margin-top:8px">Estimated $${Math.round(low)}\u2013$${Math.round(high)}, Actual $${Math.round(actual)} \u2014 ${pctOff}% ${dir} midpoint</div>`;
 }
 
-async function saveActualPrice(estId) {
-  const input = $('#actual-price-input');
-  const val = parseFloat(input.value);
-  if (isNaN(val) || val < 0) { alert('Enter a valid price'); return; }
+async function saveActualData(estId) {
   try {
-    const res = await apiFetch(`/api/admin/estimates/${estId}/actual-price`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ actual_price: val })
+    await apiFetch(`/api/admin/estimates/${estId}/actual-price`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        actual_price: $('#actual-price-input').value || null,
+        actual_cy: $('#actual-cy-input').value || null,
+        accuracy_notes: $('#accuracy-notes-input').value || '',
+      })
     });
-    // Find price_low/high from current modal data — re-fetch
     const d = await apiFetch(`/api/admin/estimates/${estId}`);
-    $(`#accuracy-result-${estId}`).innerHTML = buildAccuracyResult(val, d.price_low, d.price_high);
-  } catch(e) {
-    alert('Error saving actual price');
-    console.error(e);
+    const el = $(`#accuracy-result-${estId}`);
+    if (el && d.actual_price) el.innerHTML = buildAccuracyResult(d.actual_price, d.price_low, d.price_high);
+    toast('Accuracy data saved');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function closeModal() { $('#estimate-modal').classList.remove('open'); document.body.style.overflow = ''; }
+$('#estimate-modal').addEventListener('click', e => { if (e.target === $('#estimate-modal')) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { if ($('#lightbox').classList.contains('open')) closeLightbox(); else closeModal(); } });
+function openLightbox(src) { $('#lightbox-img').src = src; $('#lightbox').classList.add('open'); }
+function closeLightbox() { $('#lightbox').classList.remove('open'); $('#lightbox-img').src = ''; }
+
+// ── Plans & Pricing ──
+async function loadPlans() {
+  try {
+    const plans = await apiFetch('/api/admin/plans');
+    $('#plans-grid').innerHTML = plans.map(p => `<div class="plan-card">
+      <h3>${esc(p.display_name)} <span class="badge badge-condition">${esc(p.tier_name)}</span></h3>
+      <div class="form-group"><label class="form-label">Display Name</label><input class="form-input" id="plan-name-${p.id}" value="${esc(p.display_name)}"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Price (cents)</label><input class="form-input" type="number" id="plan-price-${p.id}" value="${p.price_cents}"><div style="font-size:0.72rem;color:var(--muted);margin-top:2px">= $${(p.price_cents/100).toFixed(2)}</div></div>
+        <div class="form-group"><label class="form-label">Estimate Limit</label><input class="form-input" type="number" id="plan-limit-${p.id}" value="${p.estimate_limit}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Features (comma-separated)</label><input class="form-input" id="plan-features-${p.id}" value="${esc(p.features.join(', '))}"></div>
+      <div class="form-group"><label class="form-label">Stripe Price ID</label><input class="form-input" id="plan-stripe-${p.id}" value="${esc(p.stripe_price_id||'')}"></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><label style="font-size:0.82rem;display:flex;align-items:center;gap:6px"><input type="checkbox" id="plan-active-${p.id}" ${p.is_active?'checked':''}> Active</label></div>
+      <button class="btn btn-primary btn-sm" onclick="savePlan(${p.id})">Save Plan</button>
+    </div>`).join('');
+
+    // Load global settings
+    const config = await apiFetch('/api/admin/site-config');
+    const gsKeys = ['ppu_rate','extra_photo_fee','photos_included','packing_factor','price_range_low_mult','price_range_high_mult'];
+    const defaults = {ppu_rate:'20',extra_photo_fee:'2',photos_included:'5',packing_factor:'0.7',price_range_low_mult:'0.9',price_range_high_mult:'1.2'};
+    gsKeys.forEach(k => { const el = $(`#gs-${k}`); if (el) el.value = config[k] || defaults[k]; });
+    loaded.plans = true;
+  } catch(e) { console.error(e); }
+}
+
+async function savePlan(planId) {
+  try {
+    const features = $(`#plan-features-${planId}`).value.split(',').map(f => f.trim()).filter(Boolean);
+    await apiFetch(`/api/admin/plans/${planId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({
+      display_name: $(`#plan-name-${planId}`).value,
+      price_cents: parseInt($(`#plan-price-${planId}`).value),
+      estimate_limit: parseInt($(`#plan-limit-${planId}`).value),
+      features: features,
+      stripe_price_id: $(`#plan-stripe-${planId}`).value,
+      is_active: $(`#plan-active-${planId}`).checked,
+    })});
+    toast('Plan saved');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function saveGlobalSettings() {
+  try {
+    const body = {};
+    ['ppu_rate','extra_photo_fee','photos_included','packing_factor','price_range_low_mult','price_range_high_mult'].forEach(k => { body[k] = $(`#gs-${k}`).value; });
+    await apiFetch('/api/admin/site-config', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    toast('Global settings saved');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Promo Codes ──
+async function loadPromos() {
+  try {
+    const promos = await apiFetch('/api/admin/promos');
+    const tbody = $('#promos-body');
+    if (!promos.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No promo codes</td></tr>'; }
+    else {
+      tbody.innerHTML = promos.map(p => `<tr>
+        <td><strong>${esc(p.code)}</strong></td>
+        <td>${p.discount_type==='percentage'?p.discount_value+'%':'$'+p.discount_value}</td>
+        <td>${p.times_used}${p.usage_limit>0?'/'+p.usage_limit:'/\u221e'}</td>
+        <td>${p.expires_at?fmtShortDate(p.expires_at):'Never'}</td>
+        <td>${p.is_active?'<span class="badge badge-green">Active</span>':'<span class="badge badge-red">Inactive</span>'}</td>
+        <td><div class="btn-group"><button class="btn btn-outline btn-sm" onclick="editPromo(${p.id},'${esc(p.code)}','${p.discount_type}',${p.discount_value},${p.usage_limit},'${p.expires_at||''}')">Edit</button><button class="btn btn-outline btn-sm" onclick="togglePromo(${p.id},${!p.is_active})">${p.is_active?'Disable':'Enable'}</button><button class="btn btn-red btn-sm" onclick="deletePromo(${p.id},'${esc(p.code)}')">Delete</button></div></td>
+      </tr>`).join('');
+    }
+    loaded.promos = true;
+  } catch(e) { console.error(e); }
+}
+
+function autoCode() { return Array.from(crypto.getRandomValues(new Uint8Array(4))).map(b => b.toString(36).toUpperCase().slice(-1)).join('') + Math.random().toString(36).slice(2,6).toUpperCase(); }
+
+function showPromoForm(editId) {
+  $('#promo-form-card').style.display = '';
+  if (!editId) {
+    $('#promo-form-title').textContent = 'Create Promo Code';
+    $('#promo-code').value = ''; $('#promo-type').value = 'percentage'; $('#promo-value').value = ''; $('#promo-limit').value = '0'; $('#promo-expires').value = '';
+    $('#promo-edit-id').value = '';
   }
 }
+function hidePromoForm() { $('#promo-form-card').style.display = 'none'; }
 
-function closeModal() {
-  $('#estimate-modal').classList.remove('open');
-  document.body.style.overflow = '';
+function editPromo(id, code, type, value, limit, expires) {
+  showPromoForm(id);
+  $('#promo-form-title').textContent = 'Edit Promo Code';
+  $('#promo-code').value = code; $('#promo-type').value = type; $('#promo-value').value = value; $('#promo-limit').value = limit;
+  $('#promo-expires').value = expires ? expires.split('T')[0] : '';
+  $('#promo-edit-id').value = id;
 }
 
-// Close modal on overlay click
-$('#estimate-modal').addEventListener('click', e => {
-  if (e.target === $('#estimate-modal')) closeModal();
-});
+async function savePromo() {
+  const editId = $('#promo-edit-id').value;
+  const body = {
+    code: $('#promo-code').value, discount_type: $('#promo-type').value,
+    discount_value: parseFloat($('#promo-value').value), usage_limit: parseInt($('#promo-limit').value)||0,
+    expires_at: $('#promo-expires').value || null,
+  };
+  try {
+    if (editId) { await apiFetch(`/api/admin/promos/${editId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }); }
+    else { await apiFetch('/api/admin/promos', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }); }
+    hidePromoForm();
+    toast(editId ? 'Promo updated' : 'Promo created');
+    loadPromos();
+  } catch(e) { toast(e.message, 'error'); }
+}
 
-// Close on Escape
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
-    if ($('#lightbox').classList.contains('open')) closeLightbox();
-    else closeModal();
+async function togglePromo(id, active) {
+  try {
+    await apiFetch(`/api/admin/promos/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ is_active: active }) });
+    toast(active ? 'Promo enabled' : 'Promo disabled');
+    loadPromos();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deletePromo(id, code) {
+  if (!confirm(`Delete promo code "${code}"?`)) return;
+  try {
+    await apiFetch(`/api/admin/promos/${id}`, { method: 'DELETE' });
+    toast('Promo deleted');
+    loadPromos();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Accuracy ──
+async function loadAccuracy() {
+  try {
+    const d = await apiFetch('/api/admin/accuracy');
+    $('#acc-stats').innerHTML = `
+      <div class="stat-card"><div class="stat-label">Estimates w/ Actuals</div><div class="stat-value">${d.total_with_actuals}</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Price Accuracy</div><div class="stat-value" style="color:${d.avg_price_accuracy>=80?'var(--green)':d.avg_price_accuracy>=60?'var(--orange)':'var(--red)'}">${d.avg_price_accuracy}%</div></div>
+      <div class="stat-card"><div class="stat-label">Avg CY Accuracy</div><div class="stat-value" style="color:${d.avg_cy_accuracy>=80?'var(--green)':d.avg_cy_accuracy>=60?'var(--orange)':'var(--red)'}">${d.avg_cy_accuracy}%</div></div>
+      <div class="stat-card"><div class="stat-label">Overestimate Rate</div><div class="stat-value">${d.overestimate_rate}%</div></div>
+      <div class="stat-card"><div class="stat-label">Underestimate Rate</div><div class="stat-value">${d.underestimate_rate}%</div></div>
+    `;
+    $('#acc-company-body').innerHTML = d.by_company.length ? d.by_company.map(c => `<tr><td>${esc(c.company)}</td><td>${c.count}</td><td>${c.avg_price_accuracy}%</td><td>${c.avg_cy_accuracy}%</td></tr>`).join('') : '<tr><td colspan="4" class="empty">No accuracy data yet</td></tr>';
+    $('#acc-needs-body').innerHTML = d.needs_data.length ? d.needs_data.map(e => `<tr class="clickable-row" onclick="openEstimate(${e.id})"><td>#${e.id}</td><td>${fmtShortDate(e.created_at)}</td><td>${esc(e.user_email)}</td><td>${e.cy_estimate?e.cy_estimate.toFixed(1):'--'}</td><td>$${e.price_low?Math.round(e.price_low):'--'}&ndash;$${e.price_high?Math.round(e.price_high):'--'}</td></tr>`).join('') : '<tr><td colspan="5" class="empty">All caught up!</td></tr>';
+    loaded.accuracy = true;
+  } catch(e) { console.error(e); }
+}
+
+// ── Site Settings ──
+async function loadSettings() {
+  try {
+    const [config, env] = await Promise.all([apiFetch('/api/admin/site-config'), apiFetch('/api/admin/env-status')]);
+    // Env status
+    const envKeys = {'ANTHROPIC_API_KEY':'Anthropic API Key','STRIPE_SECRET_KEY':'Stripe Secret Key','STRIPE_WEBHOOK_SECRET':'Stripe Webhook Secret','TAVILY_API_KEY':'Tavily API Key (optional)','SENDGRID_API_KEY':'SendGrid API Key (optional)'};
+    $('#env-status').innerHTML = Object.entries(envKeys).map(([k,label]) => `<div class="env-row"><span>${label}</span><span>${env[k]?'<span class="badge badge-green">Configured</span>':'<span class="badge badge-red">Not Set</span>'}</span></div>`).join('');
+    // Site config
+    const entries = Object.entries(config);
+    if (entries.length) {
+      $('#site-config-form').innerHTML = entries.map(([k,v]) => `<div class="form-group"><label class="form-label">${esc(k)}</label><input class="form-input site-cfg" data-key="${esc(k)}" value="${esc(v)}"></div>`).join('');
+    } else {
+      $('#site-config-form').innerHTML = '<div class="empty">No config entries yet</div>';
+    }
+    loaded.settings = true;
+  } catch(e) { console.error(e); }
+}
+
+async function saveSiteConfig() {
+  const body = {};
+  $$('.site-cfg').forEach(el => { body[el.dataset.key] = el.value; });
+  try {
+    await apiFetch('/api/admin/site-config', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    toast('Site config saved');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Pagination helper ──
+function renderPagination(sel, page, pages, fn) {
+  const el = $(sel);
+  if (pages <= 1) { el.innerHTML = ''; return; }
+  let html = '';
+  if (page > 1) html += `<button class="page-btn" onclick="${fn}(${page-1})">&laquo;</button>`;
+  for (let i = 1; i <= pages; i++) {
+    if (pages > 10 && Math.abs(i-page)>2 && i!==1 && i!==pages) { if (i===page-3||i===page+3) html += '<span style="color:var(--muted);padding:6px">...</span>'; continue; }
+    html += `<button class="page-btn${i===page?' active':''}" onclick="${fn}(${i})">${i}</button>`;
   }
-});
-
-// ── Lightbox ──
-function openLightbox(src) {
-  $('#lightbox-img').src = src;
-  $('#lightbox').classList.add('open');
-}
-function closeLightbox() {
-  $('#lightbox').classList.remove('open');
-  $('#lightbox-img').src = '';
-}
-
-// ── Helpers ──
-function esc(s) {
-  if (!s) return '';
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-function fmtDate(iso) {
-  if (!iso) return '--';
-  const d = new Date(iso);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  if (page < pages) html += `<button class="page-btn" onclick="${fn}(${page+1})">&raquo;</button>`;
+  el.innerHTML = html;
 }
 
 // ── Init ──
-loadAnalytics();
+loadDashboard();
 </script>
 </body>
 </html>

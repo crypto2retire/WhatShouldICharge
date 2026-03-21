@@ -267,6 +267,62 @@ STATE_TIMEZONE_MAP = {
 }
 
 
+PLAN_CALL_LIMITS = {"free": 3, "solo": 150, "team": 750, "enterprise": 2500, "custom": 999}
+OVERAGE_RATE_CENTS = {"solo": 10, "team": 10, "enterprise": 8, "custom": 10}
+
+
+def _reset_billing_cycle_if_needed(user):
+    """Reset monthly usage if billing cycle has elapsed. Returns True if reset."""
+    today = datetime.utcnow()
+    if user.billing_cycle_start is None or (today - user.billing_cycle_start).days >= 30:
+        user.monthly_calls_used = 0
+        user.overage_charges_cents = 0
+        user.billing_cycle_start = today
+        return True
+    return False
+
+
+def _check_usage_limit(user):
+    """Check if user can make an estimate. Returns (allowed, error_response_dict_or_None)."""
+    _reset_billing_cycle_if_needed(user)
+    limit = user.monthly_call_limit or PLAN_CALL_LIMITS.get(user.subscription_tier, 3)
+    used = user.monthly_calls_used or 0
+
+    if used < limit:
+        return True, None
+
+    # Over limit — check overage mode
+    mode = getattr(user, 'overage_mode', 'warn_and_charge') or 'warn_and_charge'
+
+    if mode == 'hard_stop':
+        return False, {
+            "detail": "monthly_limit_reached",
+            "message": "You've reached your monthly estimate limit. An owner or manager can add more funds or change your overage settings.",
+            "used": used, "limit": limit
+        }
+
+    if mode == 'capped':
+        cap = getattr(user, 'overage_cap_cents', 0) or 0
+        charged = getattr(user, 'overage_charges_cents', 0) or 0
+        if charged >= cap:
+            return False, {
+                "detail": "overage_cap_reached",
+                "message": f"You've reached your ${cap/100:.2f} overage cap. An owner or manager can increase the cap or add funds.",
+                "used": used, "limit": limit, "overage_spent": charged
+            }
+
+    return True, None
+
+
+def _record_usage(user):
+    """Increment usage and add overage charge if over limit."""
+    user.monthly_calls_used = (user.monthly_calls_used or 0) + 1
+    limit = user.monthly_call_limit or PLAN_CALL_LIMITS.get(user.subscription_tier, 3)
+    if user.monthly_calls_used > limit:
+        rate = OVERAGE_RATE_CENTS.get(user.subscription_tier, 10)
+        user.overage_charges_cents = (user.overage_charges_cents or 0) + rate
+
+
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
@@ -295,6 +351,13 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     admin_notes = Column(Text, default="")
     timezone = Column(String, default="America/Chicago")
+    monthly_call_limit = Column(Integer, default=150)
+    monthly_calls_used = Column(Integer, default=0)
+    billing_cycle_start = Column(DateTime, default=None)
+    overage_mode = Column(String, default="warn_and_charge")
+    overage_cap_cents = Column(Integer, default=0)
+    overage_charges_cents = Column(Integer, default=0)
+    role = Column(String, default="owner")
 
 
 class TeamMember(Base):
@@ -458,6 +521,13 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_notes TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(50) DEFAULT 'America/Chicago'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_call_limit INTEGER DEFAULT 150",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_calls_used INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS billing_cycle_start TIMESTAMP DEFAULT NULL",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS overage_mode VARCHAR(20) DEFAULT 'warn_and_charge'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS overage_cap_cents INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS overage_charges_cents INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'owner'",
         ]
     else:
         alter_statements = [
@@ -485,6 +555,13 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1",
             "ALTER TABLE users ADD COLUMN admin_notes TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN timezone TEXT DEFAULT 'America/Chicago'",
+            "ALTER TABLE users ADD COLUMN monthly_call_limit INTEGER DEFAULT 150",
+            "ALTER TABLE users ADD COLUMN monthly_calls_used INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN billing_cycle_start TIMESTAMP DEFAULT NULL",
+            "ALTER TABLE users ADD COLUMN overage_mode TEXT DEFAULT 'warn_and_charge'",
+            "ALTER TABLE users ADD COLUMN overage_cap_cents INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN overage_charges_cents INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'owner'",
         ]
 
     async with engine.begin() as conn:
@@ -1845,8 +1922,19 @@ async def public_create_estimate(
         company_user = result.scalar_one_or_none()
     if not company_user:
         raise HTTPException(status_code=404, detail="Company not found")
-    if company_user.estimates_used >= company_user.estimates_limit:
-        raise HTTPException(status_code=403, detail="This company has reached their estimate limit. Please contact them directly.")
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == company_user.id))
+        cu = result.scalar_one_or_none()
+        if cu:
+            _reset_billing_cycle_if_needed(cu)
+            allowed, err = _check_usage_limit(cu)
+            if not allowed:
+                await db.commit()
+                raise HTTPException(status_code=403, detail="This estimator is temporarily unavailable. Please contact the company directly.")
+            _record_usage(cu)
+            cu.estimates_used = (cu.estimates_used or 0) + 1
+            await db.commit()
+            company_user = cu
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -2179,6 +2267,10 @@ async def auth_me(request: Request):
         "company_phone": user.company_phone or "",
         "company_logo_url": user.company_logo_url or "",
         "timezone": getattr(user, 'timezone', None) or "America/Chicago",
+        "monthly_call_limit": getattr(user, 'monthly_call_limit', 150) or 150,
+        "monthly_calls_used": getattr(user, 'monthly_calls_used', 0) or 0,
+        "overage_mode": getattr(user, 'overage_mode', 'warn_and_charge') or 'warn_and_charge',
+        "role": getattr(user, 'role', 'owner') or 'owner',
     }
 
 
@@ -3019,8 +3111,16 @@ async def create_estimate(
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.id == user.id))
         fresh_user = result.scalar_one_or_none()
-        if not fresh_user or fresh_user.estimates_used >= fresh_user.estimates_limit:
+        if not fresh_user:
             raise HTTPException(status_code=403, detail="estimate_limit_reached")
+        _reset_billing_cycle_if_needed(fresh_user)
+        allowed, err = _check_usage_limit(fresh_user)
+        if not allowed:
+            await db.commit()
+            return JSONResponse(status_code=429, content=err)
+        _record_usage(fresh_user)
+        fresh_user.estimates_used = (fresh_user.estimates_used or 0) + 1
+        await db.commit()
         user = fresh_user
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -3344,14 +3444,6 @@ async def run_estimate(
                 await db.refresh(est)
                 logger.warning(f"[run_estimate] Job {job_id}: saved without photos as fallback, ID {est.id}")
             estimate_id = est.id
-
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(User).where(User.id == user.id))
-            u = result.scalar_one_or_none()
-            if u:
-                u.estimates_used = u.estimates_used + 1
-                await db.commit()
-                user = u
 
         try:
             await update_library_from_estimate(result_data.get("items", []))
@@ -3716,6 +3808,77 @@ async def get_estimate_photo_image(request: Request, estimate_id: int, photo_ind
         return Response(content=image_bytes, media_type="image/jpeg")
 
 
+# ============== USAGE API ==============
+
+
+@app.get("/api/usage")
+async def get_usage(request: Request):
+    user = await require_user(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == user.id))
+        u = result.scalar_one_or_none()
+        if not u:
+            raise HTTPException(status_code=404)
+        _reset_billing_cycle_if_needed(u)
+        await db.commit()
+        limit = u.monthly_call_limit or PLAN_CALL_LIMITS.get(u.subscription_tier, 3)
+        used = u.monthly_calls_used or 0
+        pct = round(used / limit * 100, 1) if limit > 0 else 0
+        overage_calls = max(0, used - limit)
+        cycle_start = u.billing_cycle_start
+        cycle_resets = (cycle_start + timedelta(days=30)).isoformat() if cycle_start else None
+        return {
+            "used": used, "limit": limit, "percent": pct,
+            "overage_calls": overage_calls,
+            "overage_charges_cents": u.overage_charges_cents or 0,
+            "overage_mode": u.overage_mode or "warn_and_charge",
+            "overage_cap_cents": u.overage_cap_cents or 0,
+            "billing_cycle_start": cycle_start.isoformat() if cycle_start else None,
+            "billing_cycle_resets": cycle_resets,
+            "role": getattr(u, 'role', 'owner') or "owner",
+        }
+
+
+@app.put("/api/usage/settings")
+async def update_usage_settings(request: Request):
+    user = await require_user(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == user.id))
+        u = result.scalar_one_or_none()
+        if not u:
+            raise HTTPException(status_code=404)
+        role = getattr(u, 'role', 'owner') or 'owner'
+        if role not in ('owner', 'manager'):
+            raise HTTPException(status_code=403, detail="Only owners and managers can change overage settings")
+        body = await request.json()
+        if "overage_mode" in body:
+            if body["overage_mode"] in ('warn_and_charge', 'hard_stop', 'capped'):
+                u.overage_mode = body["overage_mode"]
+        if "overage_cap_cents" in body:
+            u.overage_cap_cents = int(body["overage_cap_cents"])
+        await db.commit()
+        return {"ok": True}
+
+
+@app.post("/api/usage/add-funds")
+async def add_usage_funds(request: Request):
+    user = await require_user(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == user.id))
+        u = result.scalar_one_or_none()
+        if not u:
+            raise HTTPException(status_code=404)
+        role = getattr(u, 'role', 'owner') or 'owner'
+        if role not in ('owner', 'manager'):
+            raise HTTPException(status_code=403, detail="Only owners and managers can add funds")
+        body = await request.json()
+        additional = int(body.get("additional_cents", 0))
+        if additional > 0:
+            u.overage_cap_cents = (u.overage_cap_cents or 0) + additional
+        await db.commit()
+        return {"ok": True, "new_cap_cents": u.overage_cap_cents}
+
+
 # ============== ADMIN API ==============
 
 
@@ -4032,6 +4195,12 @@ async def admin_user_detail(request: Request, user_id: int):
             "is_active": getattr(u, 'is_active', True),
             "admin_notes": getattr(u, 'admin_notes', '') or "",
             "timezone": getattr(u, 'timezone', None) or "America/Chicago",
+            "monthly_call_limit": u.monthly_call_limit or PLAN_CALL_LIMITS.get(u.subscription_tier, 3),
+            "monthly_calls_used": u.monthly_calls_used or 0,
+            "overage_mode": u.overage_mode or "warn_and_charge",
+            "overage_charges_cents": u.overage_charges_cents or 0,
+            "overage_cap_cents": u.overage_cap_cents or 0,
+            "role": getattr(u, 'role', 'owner') or "owner",
             "price_per_cy_low": u.price_per_cy_low, "price_per_cy_high": u.price_per_cy_high,
             "price_per_cy_premium": u.price_per_cy_premium,
             "price_per_cy_standard": getattr(u, 'price_per_cy_standard', None),
@@ -4312,6 +4481,58 @@ async def admin_env_status(request: Request):
     return {k: bool(os.environ.get(k, "")) for k in keys}
 
 
+@app.get("/api/admin/usage")
+async def admin_usage_overview(request: Request):
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        users_result = await db.execute(select(User))
+        users = users_result.scalars().all()
+        total_calls = 0
+        total_overage_cents = 0
+        approaching = []
+        hard_stopped = []
+        for u in users:
+            used = u.monthly_calls_used or 0
+            limit = u.monthly_call_limit or PLAN_CALL_LIMITS.get(u.subscription_tier, 3)
+            total_calls += used
+            total_overage_cents += (u.overage_charges_cents or 0)
+            pct = (used / limit * 100) if limit > 0 else 0
+            if pct >= 75 and pct < 100:
+                approaching.append({"id": u.id, "email": u.email, "company": u.company_name or "", "used": used, "limit": limit, "percent": round(pct, 1)})
+            mode = getattr(u, 'overage_mode', 'warn_and_charge') or 'warn_and_charge'
+            if mode == 'hard_stop' and used >= limit:
+                hard_stopped.append({"id": u.id, "email": u.email, "company": u.company_name or "", "used": used, "limit": limit})
+            elif mode == 'capped' and used >= limit and (u.overage_charges_cents or 0) >= (u.overage_cap_cents or 0):
+                hard_stopped.append({"id": u.id, "email": u.email, "company": u.company_name or "", "used": used, "limit": limit})
+        return {
+            "total_calls": total_calls,
+            "total_overage_cents": total_overage_cents,
+            "approaching_limit": approaching,
+            "hard_stopped": hard_stopped,
+        }
+
+
+@app.get("/api/admin/users/{user_id}/usage")
+async def admin_user_usage(request: Request, user_id: int):
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == user_id))
+        u = result.scalar_one_or_none()
+        if not u:
+            raise HTTPException(status_code=404)
+        limit = u.monthly_call_limit or PLAN_CALL_LIMITS.get(u.subscription_tier, 3)
+        used = u.monthly_calls_used or 0
+        return {
+            "used": used, "limit": limit,
+            "percent": round(used / limit * 100, 1) if limit > 0 else 0,
+            "overage_calls": max(0, used - limit),
+            "overage_charges_cents": u.overage_charges_cents or 0,
+            "overage_mode": u.overage_mode or "warn_and_charge",
+            "overage_cap_cents": u.overage_cap_cents or 0,
+            "billing_cycle_start": u.billing_cycle_start.isoformat() if u.billing_cycle_start else None,
+        }
+
+
 # ============== TEAM API ==============
 
 
@@ -4497,8 +4718,16 @@ async def team_create_estimate(
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.id == owner.id))
         fresh_owner = result.scalar_one_or_none()
-        if not fresh_owner or fresh_owner.estimates_used >= fresh_owner.estimates_limit:
+        if not fresh_owner:
             raise HTTPException(status_code=403, detail="estimate_limit_reached")
+        _reset_billing_cycle_if_needed(fresh_owner)
+        allowed, err = _check_usage_limit(fresh_owner)
+        if not allowed:
+            await db.commit()
+            return JSONResponse(status_code=429, content=err)
+        _record_usage(fresh_owner)
+        fresh_owner.estimates_used = (fresh_owner.estimates_used or 0) + 1
+        await db.commit()
         user = fresh_owner
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")

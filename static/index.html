@@ -756,6 +756,9 @@
 
 <main class="main-wrap">
 
+  <!-- Usage Warning Banner -->
+  <div id="usage-banner" style="display:none;padding:12px 16px;border-radius:8px;margin-bottom:14px;font-size:0.85rem;font-weight:500;"></div>
+
   <!-- Upload Card -->
   <div class="card" id="upload-card">
     <div class="card-title">Upload Photos</div>
@@ -955,6 +958,11 @@
         <div style="font-size:0.85rem;color:var(--text);font-weight:600;margin-bottom:8px;">Account</div>
         <div style="font-size:0.82rem;color:var(--muted);margin-bottom:4px;">Logged in as: <span id="set-user-email" style="color:var(--text);"></span></div>
         <div style="font-size:0.82rem;color:var(--muted);margin-bottom:10px;">Plan: <span id="set-user-plan" style="color:var(--green);font-weight:600;"></span></div>
+        <div id="usage-section" style="margin-bottom:10px;">
+          <div style="font-size:0.82rem;color:var(--muted);margin-bottom:4px;">Usage: <span id="usage-text" style="color:var(--text);font-weight:600;"></span></div>
+          <div style="background:var(--surface);border-radius:6px;height:8px;overflow:hidden;margin-bottom:4px;"><div id="usage-bar" style="height:100%;border-radius:6px;background:var(--green);width:0%;transition:width 0.3s;"></div></div>
+          <div id="usage-overage" style="font-size:0.75rem;color:var(--muted);display:none;"></div>
+        </div>
         <div id="password-section">
           <div style="display:flex;gap:8px;margin-bottom:6px;">
             <input type="password" id="set-new-password" placeholder="New password (min 6 chars)" minlength="6" style="flex:1;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;">
@@ -1038,6 +1046,28 @@
 
       <button id="settings-save" style="width:100%;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-weight:700;font-size:0.9rem;cursor:pointer;">Save Settings</button>
       <div id="settings-msg" style="text-align:center;font-size:0.8rem;margin-top:8px;color:var(--accent);display:none;"></div>
+
+      <hr style="border-color:var(--border);margin:24px 0;">
+      <div style="font-size:0.85rem;color:var(--text);font-weight:600;margin-bottom:8px;">Usage & Billing</div>
+      <div id="usage-settings-section" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:18px;">
+        <div style="font-size:0.82rem;color:var(--muted);margin-bottom:8px;">Estimates this month: <strong id="us-used" style="color:var(--text);">0</strong> / <strong id="us-limit" style="color:var(--text);">150</strong></div>
+        <div style="background:var(--surface);border-radius:6px;height:8px;overflow:hidden;margin-bottom:8px;"><div id="us-bar" style="height:100%;border-radius:6px;background:var(--green);width:0%;transition:width 0.3s;"></div></div>
+        <div style="font-size:0.78rem;color:var(--muted);margin-bottom:6px;">Overage charges: $<span id="us-overage-amt">0.00</span></div>
+        <div style="font-size:0.78rem;color:var(--muted);margin-bottom:12px;">Cycle resets: <span id="us-cycle-resets">--</span></div>
+        <div id="overage-controls" style="display:none;">
+          <div style="font-size:0.82rem;font-weight:600;color:var(--text);margin-bottom:8px;">Overage Mode</div>
+          <label style="display:block;font-size:0.78rem;color:var(--muted);margin-bottom:6px;cursor:pointer;"><input type="radio" name="overage_mode" value="warn_and_charge" style="accent-color:var(--green);"> Charge overages (no limit)</label>
+          <label style="display:block;font-size:0.78rem;color:var(--muted);margin-bottom:6px;cursor:pointer;"><input type="radio" name="overage_mode" value="capped" style="accent-color:var(--green);"> Set a monthly cap: $<input type="number" id="us-cap-input" style="width:70px;padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:0.78rem;" step="1" min="0"></label>
+          <label style="display:block;font-size:0.78rem;color:var(--muted);margin-bottom:10px;cursor:pointer;"><input type="radio" name="overage_mode" value="hard_stop" style="accent-color:var(--green);"> Hard stop at plan limit (no overages)</label>
+          <button onclick="saveOverageSettings()" style="padding:7px 14px;background:var(--accent);color:#000;border:none;border-radius:6px;font-weight:600;font-size:0.78rem;cursor:pointer;">Save Overage Settings</button>
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+            <span style="font-size:0.78rem;color:var(--muted);">Add funds: $</span>
+            <input type="number" id="us-add-funds" style="width:70px;padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:0.78rem;" step="1" min="1" value="10">
+            <button onclick="addUsageFunds()" style="padding:5px 12px;background:var(--border);color:var(--text);border:none;border-radius:6px;font-size:0.78rem;cursor:pointer;">Add</button>
+          </div>
+          <div id="us-save-msg" style="font-size:0.75rem;margin-top:6px;display:none;color:var(--green);"></div>
+        </div>
+      </div>
 
       <hr style="border-color:var(--border);margin:24px 0;">
       <div style="font-size:0.85rem;color:var(--text);font-weight:600;margin-bottom:8px;">Team Members</div>
@@ -2194,6 +2224,76 @@ async function detailPDF(id) {
     console.error('PDF download failed:', e);
   }
 }
+
+// ── Usage tracking ──
+async function loadUsageData() {
+  try {
+    var resp = await fetch('/api/usage', { credentials: 'include' });
+    if (!resp.ok) return;
+    var d = await resp.json();
+    var pct = d.percent || 0;
+    var used = d.used || 0;
+    var limit = d.limit || 150;
+    // Settings panel usage display
+    var ut = document.getElementById('usage-text');
+    if (ut) ut.textContent = used + ' of ' + limit + ' estimates (' + Math.round(pct) + '%)';
+    var ub = document.getElementById('usage-bar');
+    if (ub) { ub.style.width = Math.min(pct, 100) + '%'; ub.style.background = pct >= 90 ? '#ef4444' : pct >= 75 ? '#f59e0b' : 'var(--green)'; }
+    var ov = document.getElementById('usage-overage');
+    if (ov && d.overage_charges_cents > 0) { ov.textContent = 'Overage charges: $' + (d.overage_charges_cents / 100).toFixed(2); ov.style.display = ''; }
+    // Settings usage section
+    var su = document.getElementById('us-used'); if (su) su.textContent = used;
+    var sl = document.getElementById('us-limit'); if (sl) sl.textContent = limit;
+    var sb = document.getElementById('us-bar'); if (sb) { sb.style.width = Math.min(pct, 100) + '%'; sb.style.background = pct >= 90 ? '#ef4444' : pct >= 75 ? '#f59e0b' : 'var(--green)'; }
+    var so = document.getElementById('us-overage-amt'); if (so) so.textContent = (d.overage_charges_cents / 100).toFixed(2);
+    var sr = document.getElementById('us-cycle-resets'); if (sr) sr.textContent = d.billing_cycle_resets ? new Date(d.billing_cycle_resets).toLocaleDateString() : '--';
+    // Overage controls (owner/manager only)
+    var oc = document.getElementById('overage-controls');
+    if (oc && (d.role === 'owner' || d.role === 'manager')) {
+      oc.style.display = '';
+      var radios = document.querySelectorAll('input[name="overage_mode"]');
+      radios.forEach(function(r) { r.checked = r.value === d.overage_mode; });
+      var capInput = document.getElementById('us-cap-input');
+      if (capInput) capInput.value = Math.round((d.overage_cap_cents || 0) / 100);
+    }
+    // Warning banner
+    var banner = document.getElementById('usage-banner');
+    if (banner) {
+      if (pct >= 100) {
+        var msg = d.overage_mode === 'hard_stop' ? 'Monthly limit reached. Contact your account owner to continue.' : d.overage_mode === 'capped' ? 'You\'ve exceeded your included estimates. Overages capped at $' + ((d.overage_cap_cents||0)/100).toFixed(2) + '.' : 'You\'ve exceeded your included estimates. Additional estimates are $0.10 each.';
+        banner.style.display = ''; banner.style.background = 'rgba(239,68,68,0.12)'; banner.style.border = '1px solid rgba(239,68,68,0.3)'; banner.style.color = '#ef4444'; banner.textContent = msg;
+      } else if (pct >= 90) {
+        banner.style.display = ''; banner.style.background = 'rgba(245,158,11,0.12)'; banner.style.border = '1px solid rgba(245,158,11,0.3)'; banner.style.color = '#f59e0b'; banner.textContent = 'You\'re approaching your monthly limit (' + used + ' of ' + limit + '). Overages will be billed at $0.10/estimate.';
+      } else if (pct >= 75) {
+        banner.style.display = ''; banner.style.background = 'rgba(245,158,11,0.08)'; banner.style.border = '1px solid rgba(245,158,11,0.2)'; banner.style.color = '#f59e0b'; banner.textContent = 'You\'ve used ' + used + ' of ' + limit + ' estimates this month.';
+      } else { banner.style.display = 'none'; }
+    }
+  } catch (e) { console.error('Usage load error:', e); }
+}
+
+async function saveOverageSettings() {
+  var mode = document.querySelector('input[name="overage_mode"]:checked');
+  if (!mode) return;
+  var capCents = mode.value === 'capped' ? Math.round(parseFloat(document.getElementById('us-cap-input').value || 0) * 100) : 0;
+  try {
+    await fetch('/api/usage/settings', { method: 'PUT', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ overage_mode: mode.value, overage_cap_cents: capCents }) });
+    var msg = document.getElementById('us-save-msg'); msg.textContent = 'Settings saved'; msg.style.display = ''; setTimeout(function() { msg.style.display = 'none'; }, 3000);
+    loadUsageData();
+  } catch (e) { alert('Error saving: ' + e.message); }
+}
+
+async function addUsageFunds() {
+  var amt = parseFloat(document.getElementById('us-add-funds').value || 0);
+  if (amt <= 0) return;
+  try {
+    await fetch('/api/usage/add-funds', { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ additional_cents: Math.round(amt * 100) }) });
+    var msg = document.getElementById('us-save-msg'); msg.textContent = '$' + amt.toFixed(2) + ' added to cap'; msg.style.display = ''; setTimeout(function() { msg.style.display = 'none'; }, 3000);
+    loadUsageData();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+// Load usage on page load
+loadUsageData();
 </script>
 </body>
 </html>

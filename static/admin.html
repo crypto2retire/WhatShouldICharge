@@ -205,6 +205,15 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
     <p style="font-size:0.88rem;color:var(--muted)">Avg Volume: <strong id="stat-avg-cy">--</strong> &nbsp;&middot;&nbsp; Avg Price: <strong id="stat-avg-price">--</strong></p>
   </div>
   <div class="card">
+    <div class="card-title">System Usage (This Month)</div>
+    <div class="stats-grid" id="usage-stats-grid">
+      <div class="stat-card"><div class="stat-label">Total API Calls</div><div class="stat-value" id="stat-usage-calls">--</div></div>
+      <div class="stat-card"><div class="stat-label">Overage Revenue</div><div class="stat-value" id="stat-usage-overage">--</div></div>
+      <div class="stat-card"><div class="stat-label">Approaching Limit</div><div class="stat-value" id="stat-usage-approaching">--</div></div>
+      <div class="stat-card"><div class="stat-label">Hard-Stopped</div><div class="stat-value" id="stat-usage-stopped">--</div></div>
+    </div>
+  </div>
+  <div class="card">
     <div class="card-title">Recent Users</div>
     <table><thead><tr><th>Email</th><th>Company</th><th>Tier</th><th>Joined</th></tr></thead><tbody id="recent-users-body"></tbody></table>
   </div>
@@ -397,6 +406,14 @@ async function loadDashboard() {
     $('#stat-avg-cy').textContent = d.avg_cy + ' CY';
     $('#stat-avg-price').textContent = '$' + d.avg_price;
     $('#recent-users-body').innerHTML = d.recent_users.map(u => `<tr><td>${esc(u.email)}</td><td>${esc(u.company_name||'--')}</td><td><span class="badge badge-condition">${esc(u.tier)}</span></td><td>${fmtShortDate(u.created_at)}</td></tr>`).join('');
+    // Load usage stats
+    try {
+      const u = await apiFetch('/api/admin/usage');
+      $('#stat-usage-calls').textContent = u.total_calls;
+      $('#stat-usage-overage').textContent = '$' + (u.total_overage_cents / 100).toFixed(2);
+      $('#stat-usage-approaching').textContent = u.approaching_limit.length;
+      $('#stat-usage-stopped').textContent = u.hard_stopped.length;
+    } catch(e) { console.error('Usage stats error:', e); }
     loaded.dashboard = true;
   } catch(e) { console.error(e); }
 }
@@ -453,6 +470,22 @@ async function loadClientDetail(userId) {
       </select></div>
       <button class="btn btn-outline btn-sm" onclick="saveClientTimezone(${u.id})">Save Timezone</button>
     </div>\`;
+
+    // Usage card
+    const usLimit = u.monthly_call_limit || 150;
+    const usUsed = u.monthly_calls_used || 0;
+    const usPct = usLimit > 0 ? Math.round(usUsed / usLimit * 100) : 0;
+    const usColor = usPct >= 90 ? 'var(--red)' : usPct >= 75 ? 'var(--orange)' : 'var(--green)';
+    html += `<div class="card"><div class="card-title">Usage This Month</div>
+      <div class="summary-grid">
+        <div><div class="summary-label">Estimates Used</div><div class="summary-val">${usUsed} / ${usLimit}</div></div>
+        <div><div class="summary-label">Overage Calls</div><div class="summary-val">${Math.max(0, usUsed - usLimit)}</div></div>
+        <div><div class="summary-label">Overage Charges</div><div class="summary-val">$${((u.overage_charges_cents||0)/100).toFixed(2)}</div></div>
+        <div><div class="summary-label">Overage Mode</div><div class="summary-val">${esc(u.overage_mode||'warn_and_charge')}</div></div>
+      </div>
+      <div class="confidence-bar-wrap" style="margin-top:10px"><div class="confidence-bar" style="width:${Math.min(usPct,100)}%;background:${usColor}"></div></div>
+      <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">${usPct}% of plan limit</div>
+    </div>`;
 
     // Pricing card
     html += `<div class="card"><div class="card-title">Pricing Setup</div>

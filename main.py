@@ -28,6 +28,7 @@ import io
 from cryptography.fernet import Fernet, InvalidToken
 
 from services.volume_lookup import validate_estimate
+from services.industry_config import get_industry_config, get_system_prompt, get_calibration_items, get_business_rules
 
 _encryption_key = os.environ.get("ENCRYPTION_KEY")
 _fernet = Fernet(_encryption_key.encode()) if _encryption_key else None
@@ -358,6 +359,7 @@ class User(Base):
     overage_cap_cents = Column(Integer, default=0)
     overage_charges_cents = Column(Integer, default=0)
     role = Column(String, default="owner")
+    industry = Column(String, default="junk_removal")
 
 
 class TeamMember(Base):
@@ -528,6 +530,7 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS overage_cap_cents INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS overage_charges_cents INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'owner'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS industry VARCHAR DEFAULT 'junk_removal'",
         ]
     else:
         alter_statements = [
@@ -562,6 +565,7 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN overage_cap_cents INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN overage_charges_cents INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'owner'",
+            "ALTER TABLE users ADD COLUMN industry TEXT DEFAULT 'junk_removal'",
         ]
 
     async with engine.begin() as conn:
@@ -997,6 +1001,12 @@ async def health_check():
         "user_count": user_count,
         "env_keys": [k for k in ("DATABASE_PRIVATE_URL", "DATABASE_PUBLIC_URL", "DATABASE_URL") if os.environ.get(k)],
     }
+
+
+@app.get("/api/industries")
+async def list_available_industries():
+    from services.industry_config import list_industries
+    return {"industries": list_industries()}
 
 
 @app.get("/robots.txt")
@@ -2074,6 +2084,7 @@ async def auth_signup(request: Request):
     price_per_cy_standard = body.get("price_per_cy_standard")
     price_per_cy_heavy = body.get("price_per_cy_heavy")
     min_charge = body.get("min_charge")
+    industry = body.get("industry", "junk_removal")
 
     if not email or not password:
         raise HTTPException(status_code=400, detail="Email and password are required.")
@@ -2109,6 +2120,7 @@ async def auth_signup(request: Request):
             price_per_cy_standard=float(price_per_cy_standard) if price_per_cy_standard else None,
             price_per_cy_heavy=float(price_per_cy_heavy) if price_per_cy_heavy else None,
             min_charge=float(min_charge) if min_charge else 75.0,
+            industry=industry,
         )
         db.add(user)
         await db.commit()
@@ -2791,89 +2803,9 @@ async def get_market_rates(city: str, state: str) -> dict:
     return default
 
 
-SYSTEM_PROMPT_BASE = """You are a junk removal estimator. Return ONLY valid JSON — no markdown, no explanation, no code blocks.
-
-YOUR METHOD — DO THIS IN ORDER:
-
-STEP 1: Find 2-3 ANCHOR ITEMS with known real-world dimensions:
-- 5-gallon bucket: 14.5"H × 12" diameter
-- Standard door: 80"H × 36"W
-- Pallet: 48" × 40" × 6"
-- Electrical outlet height from floor: 12-16"
-- Light switch height from floor: 48"
-- Ceiling height: 96" (standard 8ft)
-- Standard trash can (32 gal): 22" × 27"
-
-STEP 2: MEASURE THE PILE/AREA — this is your primary estimate.
-Using the anchor items as rulers, measure the total footprint:
-- Length (ft) × Width (ft) × Height (ft) = cubic feet
-- Cubic feet ÷ 27 = cubic yards
-- PACKING FACTOR RULES:
-  * Default packing factor = 1.0 (NO adjustment). Use the raw spatial measurement as the CY estimate.
-  * Example: 8ft x 6ft x 4ft = 192 cu ft / 27 = 7.1 CY. Report 7.1 CY.
-  * ONLY apply a packing factor ABOVE 1.0 (use 1.2-1.3) for: hoarding with compressed soft goods (clothing, paper, trash bags, linens that settled), large piles of bagged garbage or clothing compacted under own weight, or piles of compressed/settled soft materials. WHY: these compress over time and EXPAND when loaded into a truck, taking 20-30% MORE space.
-  * Example: Hoarding pile 6ft x 5ft x 4ft = 120 cu ft / 27 = 4.4 CY x 1.25 packing = 5.6 CY (items expand when loaded).
-  * NEVER apply a packing factor to: construction debris, furniture, appliances, mixed junk, yard waste, electronics, boxes, or general household items. The spatial measurement IS the volume.
-  * NEVER use a packing factor below 1.0. A factor like 0.7 SHRINKS the estimate, which undercharges.
-  * Do NOT adjust for "loosely stacked" piles. The spatial measurement IS the estimate.
-- WRITE THIS MATH in your "notes" field: "Pile approx Xft × Yft × Zft = A cu ft ÷ 27 = B CY" (add "× 1.25 packing = C CY" ONLY for hoarding/compressed soft goods)
-- This calculated number IS your cubic_yards_mid.
-
-STEP 3: List individual items you can CLEARLY see. Their CY values MUST add up to your Step 2 total. If they don't, adjust individual item CY values — the spatial total from Step 2 is always correct.
-
-RULES:
-- List ONLY items you can clearly see. Never guess or infer hidden items.
-- A dark rectangle in a basement is a WINDOW SCREEN, not a TV, unless you see a brand logo, power cord, AND attached stand.
-- Customers uncheck items they're keeping — list everything visible.
-- Set is_special: true for: TVs, mattresses, tires, propane tanks, refrigerators, AC units, paint/chemicals, e-waste.
-- Outdoor piles LOOK bigger than they are. Do the math — don't guess.
-
-If you notice colored annotations (circles, rectangles, arrows) drawn on the photos, mention this in your notes but still list all items. The customer-side UI handles selection.
-
-JOB TYPES: standard (easy access, <8 CY), premium (stairs/heavy/outdoor/10+ CY), hoarder (floor-to-ceiling, multiply CY by 1.5x), truck_load (photo of loaded truck).
-
-REQUIRED JSON FORMAT:
-{
-  "reference_points": [
-    {
-      "name": "item or fixture used as reference",
-      "known_dimensions": "80in x 32in",
-      "cubic_yards": 0.0,
-      "location_in_photo": "left foreground",
-      "photo_number": 1
-    }
-  ],
-  "items": [
-    {
-      "name": "specific item name",
-      "quantity": 1,
-      "category": "furniture|appliance|electronics|debris|hazardous|other",
-      "cubic_yards": 0.5,
-      "is_special": false,
-      "photo_sources": [1],
-      "dedup_note": ""
-    }
-  ],
-  "potential_duplicates": [
-    {
-      "item_a": "item name (photo X, location description)",
-      "item_b": "item name (photo Y, location description)",
-      "reason": "why these might be the same item"
-    }
-  ],
-  "totals": {
-    "cubic_yards_low": 3.0,
-    "cubic_yards_mid": 4.0,
-    "cubic_yards_high": 5.0
-  },
-  "job_type": "standard|premium|hoarder|truck_load",
-  "conditions": [],
-  "confidence": 75,
-  "notes": "Brief job description for the crew"
-}
-
-CONDITIONS: stairs, heavy_items, outdoor, hoarder, disassembly_needed, multiple_floors, elevator_available, long_carry, truck_load, hazardous_materials, electronics, donation_possible
-"""
+# System prompt now loaded from services/industry_config.py via get_system_prompt()
+# Kept as a fallback in case config loading fails
+SYSTEM_PROMPT_BASE = get_system_prompt("junk_removal")
 
 
 
@@ -3228,7 +3160,8 @@ async def run_estimate(
 
     try:
         library_context = await get_library_context()
-        system_prompt = SYSTEM_PROMPT_BASE
+        industry_id = getattr(user, "industry", "junk_removal") or "junk_removal"
+        system_prompt = get_system_prompt(industry_id)
         if library_context:
             system_prompt += "\n" + library_context
 

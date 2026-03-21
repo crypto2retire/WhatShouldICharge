@@ -442,7 +442,17 @@ async function loadClientDetail(userId) {
       <div class="form-row"><div><span class="form-label">Email</span><div>${esc(u.email)}</div></div><div><span class="form-label">Phone</span><div>${esc(u.company_phone||'--')}</div></div></div>
       <div class="form-row" style="margin-top:10px"><div><span class="form-label">Location</span><div>${esc(u.company_city||'')}${u.company_state?', '+esc(u.company_state):''}</div></div><div><span class="form-label">Slug</span><div>${esc(u.company_slug||'--')}</div></div></div>
       <div class="form-row" style="margin-top:10px"><div><span class="form-label">Plan</span><div><span class="badge badge-condition">${esc(u.subscription_tier)}</span></div></div><div><span class="form-label">Joined</span><div>${fmtShortDate(u.created_at)}</div></div></div>
+      <div class="form-row" style="margin-top:10px"><div><span class="form-label">Timezone</span><div>${esc(u.timezone||'America/Chicago')}</div></div><div></div></div>
     </div>`;
+
+    // Timezone override
+    html += \`<div class="card"><div class="card-title">Timezone</div>
+      <div class="form-group"><label class="form-label">IANA Timezone (auto-detected from state)</label>
+      <select class="form-select" id="cu-timezone">
+        \${['America/New_York','America/Chicago','America/Denver','America/Phoenix','America/Boise','America/Los_Angeles','America/Anchorage','Pacific/Honolulu'].map(tz => \`<option value="\${tz}" \${(u.timezone||'America/Chicago')===tz?'selected':''}>\${tz}</option>\`).join('')}
+      </select></div>
+      <button class="btn btn-outline btn-sm" onclick="saveClientTimezone(${u.id})">Save Timezone</button>
+    </div>\`;
 
     // Pricing card
     html += `<div class="card"><div class="card-title">Pricing Setup</div>
@@ -521,6 +531,15 @@ async function saveClientNotes(userId) {
       admin_notes: $('#cu-notes').value,
     })});
     toast('Notes saved');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function saveClientTimezone(userId) {
+  try {
+    await apiFetch(`/api/admin/users/${userId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({
+      timezone: $('#cu-timezone').value,
+    })});
+    toast('Timezone saved');
   } catch(e) { toast(e.message, 'error'); }
 }
 

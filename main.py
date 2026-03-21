@@ -239,6 +239,28 @@ TIER_LIMITS = {
     "agency": 999,
 }
 
+STATE_TIMEZONE_MAP = {
+    "CT": "America/New_York", "DE": "America/New_York", "GA": "America/New_York",
+    "MA": "America/New_York", "MD": "America/New_York", "ME": "America/New_York",
+    "NC": "America/New_York", "NH": "America/New_York", "NJ": "America/New_York",
+    "NY": "America/New_York", "OH": "America/New_York", "PA": "America/New_York",
+    "RI": "America/New_York", "SC": "America/New_York", "VA": "America/New_York",
+    "VT": "America/New_York", "WV": "America/New_York", "DC": "America/New_York",
+    "MI": "America/New_York", "FL": "America/New_York",
+    "AL": "America/Chicago", "AR": "America/Chicago", "IA": "America/Chicago",
+    "IL": "America/Chicago", "KS": "America/Chicago", "KY": "America/Chicago",
+    "LA": "America/Chicago", "MN": "America/Chicago", "MO": "America/Chicago",
+    "MS": "America/Chicago", "OK": "America/Chicago", "TN": "America/Chicago",
+    "TX": "America/Chicago", "WI": "America/Chicago", "IN": "America/Chicago",
+    "ND": "America/Chicago", "NE": "America/Chicago", "SD": "America/Chicago",
+    "AZ": "America/Phoenix", "CO": "America/Denver", "MT": "America/Denver",
+    "NM": "America/Denver", "UT": "America/Denver", "WY": "America/Denver",
+    "ID": "America/Boise",
+    "CA": "America/Los_Angeles", "NV": "America/Los_Angeles",
+    "OR": "America/Los_Angeles", "WA": "America/Los_Angeles",
+    "AK": "America/Anchorage", "HI": "Pacific/Honolulu",
+}
+
 
 class User(Base):
     __tablename__ = "users"
@@ -267,6 +289,7 @@ class User(Base):
     price_per_cy_heavy = Column(Float, default=None)
     is_active = Column(Boolean, default=True)
     admin_notes = Column(Text, default="")
+    timezone = Column(String, default="America/Chicago")
 
 
 class TeamMember(Base):
@@ -429,6 +452,7 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS accuracy_notes TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_notes TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(50) DEFAULT 'America/Chicago'",
         ]
     else:
         alter_statements = [
@@ -455,6 +479,7 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN accuracy_notes TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1",
             "ALTER TABLE users ADD COLUMN admin_notes TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN timezone TEXT DEFAULT 'America/Chicago'",
         ]
 
     async with engine.begin() as conn:
@@ -746,6 +771,9 @@ async def ensure_admin_user():
             if user.estimates_limit < 999:
                 user.estimates_limit = 999
                 user.estimates_used = 0
+                changed = True
+            if not getattr(user, 'timezone', None):
+                user.timezone = "America/Chicago"
                 changed = True
             if changed:
                 await db.commit()
@@ -1756,6 +1784,7 @@ async def public_company_info(slug: str):
         "company_city": u.company_city or "",
         "company_state": u.company_state or "",
         "slug": u.company_slug,
+        "timezone": getattr(u, 'timezone', None) or "America/Chicago",
     }
 
 
@@ -1960,12 +1989,14 @@ async def auth_signup(request: Request):
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="An account with this email already exists.")
 
+        detected_tz = STATE_TIMEZONE_MAP.get(company_state.upper(), "America/Chicago")
         user = User(
             email=email,
             password_hash=pw_hash,
             company_name=company_name,
             company_city=company_city,
             company_state=company_state,
+            timezone=detected_tz,
             subscription_tier="free",
             estimates_used=0,
             estimates_limit=3,
@@ -2129,6 +2160,7 @@ async def auth_me(request: Request):
         "company_slug": user.company_slug or "",
         "company_phone": user.company_phone or "",
         "company_logo_url": user.company_logo_url or "",
+        "timezone": getattr(user, 'timezone', None) or "America/Chicago",
     }
 
 
@@ -2188,7 +2220,15 @@ async def update_settings(request: Request):
         "company_logo_url": str,
         "price_per_cy_standard": float,
         "price_per_cy_heavy": float,
+        "timezone": str,
     }
+
+    # Auto-detect timezone from state if state is being updated and timezone isn't explicitly set
+    if "company_state" in body and "timezone" not in body:
+        state_upper = str(body["company_state"]).strip().upper()
+        detected_tz = STATE_TIMEZONE_MAP.get(state_upper)
+        if detected_tz:
+            body["timezone"] = detected_tz
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.id == user.id))
@@ -2249,7 +2289,7 @@ async def update_settings(request: Request):
 
         # Read back the saved values via raw SQL
         verify = await db.execute(
-            text("SELECT company_name, company_city, company_state, company_phone, company_slug, company_logo_url, price_per_cy_low, price_per_cy_high, price_per_cy_premium, min_charge, truck_capacity_cy, price_per_cy_standard, price_per_cy_heavy FROM users WHERE id = :uid"),
+            text("SELECT company_name, company_city, company_state, company_phone, company_slug, company_logo_url, price_per_cy_low, price_per_cy_high, price_per_cy_premium, min_charge, truck_capacity_cy, price_per_cy_standard, price_per_cy_heavy, timezone FROM users WHERE id = :uid"),
             {"uid": user.id}
         )
         row = verify.mappings().first()
@@ -3855,6 +3895,7 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
         company_name = ""
         company_city = ""
         company_state = ""
+        company_timezone = "America/Chicago"
         if e.user_id:
             u_result = await db.execute(select(User).where(User.id == e.user_id))
             u = u_result.scalar_one_or_none()
@@ -3863,6 +3904,7 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
                 company_name = u.company_name or ""
                 company_city = u.company_city or ""
                 company_state = u.company_state or ""
+                company_timezone = getattr(u, 'timezone', None) or "America/Chicago"
 
         # Parse result JSON
         result_data = {}
@@ -3908,6 +3950,7 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
             "actual_price": e.actual_price,
             "actual_cy": getattr(e, 'actual_cy', None),
             "accuracy_notes": getattr(e, 'accuracy_notes', '') or "",
+            "company_timezone": company_timezone,
         }
 
 
@@ -3958,6 +4001,7 @@ async def admin_user_detail(request: Request, user_id: int):
             "is_admin": u.is_admin,
             "is_active": getattr(u, 'is_active', True),
             "admin_notes": getattr(u, 'admin_notes', '') or "",
+            "timezone": getattr(u, 'timezone', None) or "America/Chicago",
             "price_per_cy_low": u.price_per_cy_low, "price_per_cy_high": u.price_per_cy_high,
             "price_per_cy_premium": u.price_per_cy_premium,
             "price_per_cy_standard": getattr(u, 'price_per_cy_standard', None),
@@ -3985,7 +4029,7 @@ async def admin_update_user(request: Request, user_id: int):
         if not u:
             raise HTTPException(status_code=404, detail="User not found.")
         for field in ["subscription_tier", "company_name", "company_city", "company_state",
-                      "company_slug", "company_phone", "admin_notes"]:
+                      "company_slug", "company_phone", "admin_notes", "timezone"]:
             if field in body:
                 setattr(u, field, body[field])
         for field in ["price_per_cy_standard", "price_per_cy_heavy", "price_per_cy_low",

@@ -123,7 +123,7 @@ def _parse_spatial_total_cy(notes: str) -> Optional[float]:
     if not notes or not str(notes).strip():
         return None
     text = str(notes)
-    # Prefer the last "= … CY" in chains like: … = 11.9 CY × 0.7 packing = 8.3 CY
+    # Prefer the last "= … CY" in chains like: … = 7.1 CY or … = 4.4 CY × 1.25 packing = 5.6 CY
     eq_matches = re.findall(
         r"=\s*(\d+(?:\.\d+)?)\s*(?:CY|cubic\s*yards?)\b",
         text,

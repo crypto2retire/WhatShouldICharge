@@ -254,7 +254,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Photos Included Per Estimate</label><input class="form-input" id="gs-photos_included" value="5"></div>
-        <div class="form-group"><label class="form-label">Default Packing Factor</label><input class="form-input" id="gs-packing_factor" value="0.7"></div>
+        <div class="form-group"><label class="form-label">Default Packing Factor</label><input class="form-input" id="gs-packing_factor" value="1.0"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Price Range Low Multiplier</label><input class="form-input" id="gs-price_range_low_mult" value="0.9"></div>
@@ -716,7 +716,7 @@ async function loadPlans() {
     // Load global settings
     const config = await apiFetch('/api/admin/site-config');
     const gsKeys = ['ppu_rate','extra_photo_fee','photos_included','packing_factor','price_range_low_mult','price_range_high_mult'];
-    const defaults = {ppu_rate:'20',extra_photo_fee:'2',photos_included:'5',packing_factor:'0.7',price_range_low_mult:'0.9',price_range_high_mult:'1.2'};
+    const defaults = {ppu_rate:'20',extra_photo_fee:'2',photos_included:'5',packing_factor:'1.0',price_range_low_mult:'0.9',price_range_high_mult:'1.2'};
     gsKeys.forEach(k => { const el = $(`#gs-${k}`); if (el) el.value = config[k] || defaults[k]; });
     loaded.plans = true;
   } catch(e) { console.error(e); }

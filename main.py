@@ -2698,8 +2698,15 @@ STEP 2: MEASURE THE PILE/AREA — this is your primary estimate.
 Using the anchor items as rulers, measure the total footprint:
 - Length (ft) × Width (ft) × Height (ft) = cubic feet
 - Cubic feet ÷ 27 = cubic yards
-- Apply packing factor: loose pile = ×0.55, mixed = ×0.70, tight/solid = ×0.80
-- WRITE THIS MATH in your "notes" field: "Pile approx Xft × Yft × Zft = A cu ft ÷ 27 = B CY × 0.7 packing = C CY"
+- PACKING FACTOR RULES:
+  * Default packing factor = 1.0 (NO adjustment). Use the raw spatial measurement as the CY estimate.
+  * Example: 8ft x 6ft x 4ft = 192 cu ft / 27 = 7.1 CY. Report 7.1 CY.
+  * ONLY apply a packing factor ABOVE 1.0 (use 1.2-1.3) for: hoarding with compressed soft goods (clothing, paper, trash bags, linens that settled), large piles of bagged garbage or clothing compacted under own weight, or piles of compressed/settled soft materials. WHY: these compress over time and EXPAND when loaded into a truck, taking 20-30% MORE space.
+  * Example: Hoarding pile 6ft x 5ft x 4ft = 120 cu ft / 27 = 4.4 CY x 1.25 packing = 5.6 CY (items expand when loaded).
+  * NEVER apply a packing factor to: construction debris, furniture, appliances, mixed junk, yard waste, electronics, boxes, or general household items. The spatial measurement IS the volume.
+  * NEVER use a packing factor below 1.0. A factor like 0.7 SHRINKS the estimate, which undercharges.
+  * Do NOT adjust for "loosely stacked" piles. The spatial measurement IS the estimate.
+- WRITE THIS MATH in your "notes" field: "Pile approx Xft × Yft × Zft = A cu ft ÷ 27 = B CY" (add "× 1.25 packing = C CY" ONLY for hoarding/compressed soft goods)
 - This calculated number IS your cubic_yards_mid.
 
 STEP 3: List individual items you can CLEARLY see. Their CY values MUST add up to your Step 2 total. If they don't, adjust individual item CY values — the spatial total from Step 2 is always correct.

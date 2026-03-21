@@ -1907,6 +1907,9 @@ async def auth_signup(request: Request):
     company_name = body.get("company_name", "").strip()
     company_city = body.get("company_city", "").strip()
     company_state = body.get("company_state", "").strip()
+    price_per_cy_standard = body.get("price_per_cy_standard")
+    price_per_cy_heavy = body.get("price_per_cy_heavy")
+    min_charge = body.get("min_charge")
 
     if not email or not password:
         raise HTTPException(status_code=400, detail="Email and password are required.")
@@ -1937,6 +1940,9 @@ async def auth_signup(request: Request):
             subscription_tier="free",
             estimates_used=0,
             estimates_limit=3,
+            price_per_cy_standard=float(price_per_cy_standard) if price_per_cy_standard else None,
+            price_per_cy_heavy=float(price_per_cy_heavy) if price_per_cy_heavy else None,
+            min_charge=float(min_charge) if min_charge else 75.0,
         )
         db.add(user)
         await db.commit()
@@ -1960,7 +1966,11 @@ async def auth_signup(request: Request):
         "<p>— The WhatShouldICharge Team</p>"
     )
 
-    response = JSONResponse({"success": True, "redirect": "/estimate"})
+    # Send to settings first if pricing not set during signup
+    has_pricing = bool(price_per_cy_standard and price_per_cy_heavy)
+    redirect_url = "/estimate" if has_pricing else "/admin#my-settings"
+
+    response = JSONResponse({"success": True, "redirect": redirect_url, "needs_pricing": not has_pricing})
     response.set_cookie(
         "session_token", token, httponly=True, samesite="lax", secure=True,
         max_age=30 * 24 * 3600, path="/"
@@ -2233,6 +2243,14 @@ async def update_settings(request: Request):
             "price_per_cy_standard": row["price_per_cy_standard"],
             "price_per_cy_heavy": row["price_per_cy_heavy"],
         }
+
+
+@app.post("/api/settings/check-market-rates")
+async def check_market_rates(request: Request):
+    """On-demand market rate lookup via Tavily — not used in estimates."""
+    user = await require_user(request)
+    rates = await get_market_rates(user.company_city, user.company_state)
+    return rates
 
 
 @app.put("/api/settings/password")
@@ -3175,30 +3193,15 @@ async def run_estimate(
             market_context = {"source": "custom_company_rate", "rate": rate, "is_heavy": is_heavy}
             logger.info(f"[run_estimate] Job {job_id}: custom rate ${rate}/CY ({'heavy' if is_heavy else 'standard'}) → ${price_low}-${price_high}")
         else:
-            # Fall back to Tavily market rates + existing pricing logic
+            # Fall back to user's stored rates (no Tavily — users set their own rates)
             market_context = None
-            market_rates = None
-            try:
-                market_rates = await get_market_rates(user.company_city, user.company_state)
-                if market_rates.get("source") == "live_market_search":
-                    market_context = {
-                        "city": user.company_city,
-                        "state": user.company_state,
-                        "market_avg": market_rates.get("market_avg"),
-                        "market_low": market_rates.get("low"),
-                        "market_high": market_rates.get("high"),
-                        "samples": market_rates.get("samples", 0),
-                    }
-            except Exception:
-                pass
-
             price_low, price_high, cy_mid, special_items, min_charge_applied = calculate_price(
                 result_data,
                 rate_low=user.price_per_cy_low or 35.0,
                 rate_high=user.price_per_cy_high or 40.0,
                 rate_premium=user.price_per_cy_premium or 55.0,
                 min_charge=user.min_charge or 75.0,
-                market_rates=market_rates,
+                market_rates=None,
             )
 
         # Serialize stored photos for DB persistence

@@ -371,13 +371,21 @@
         <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Standard Rate ($/CY)</label><input type="number" id="ms-rate-standard" step="0.01" min="0" placeholder="e.g. 35.00"></div>
         <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Heavy/Hoarding Rate ($/CY)</label><input type="number" id="ms-rate-heavy" step="0.01" min="0" placeholder="e.g. 50.00"></div>
       </div>
-      <div style="font-size:0.75rem;color:var(--muted);margin-bottom:12px;">Set your own per-cubic-yard rates. Estimates use -10%/+20% for the price range. Leave blank to use market rates from web search.</div>
+      <div style="font-size:0.75rem;color:var(--muted);margin-bottom:12px;">Your per-cubic-yard rates. Estimates use -10%/+20% for the price range. If blank, fallback rates below are used.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
         <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Minimum Charge ($)</label><input type="number" id="ms-min-charge" step="0.01" min="0"></div>
         <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Truck Capacity (CY)</label><input type="number" id="ms-truck" step="0.1" min="1"></div>
       </div>
       <div style="font-size:0.75rem;color:var(--muted);margin-bottom:12px;">Estimates will never quote below the minimum charge amount.</div>
-      <details style="margin-top:8px;">
+      <div style="margin-top:12px;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-size:0.8rem;font-weight:600;">Check Market Rates</span>
+          <button class="btn btn-sm btn-primary" id="ms-check-market" style="font-size:0.75rem;padding:5px 12px;">Look Up Rates</button>
+        </div>
+        <div style="font-size:0.75rem;color:var(--muted);">Search what competitors in your area charge per cubic yard. Use this to inform your pricing — it does not affect your estimates.</div>
+        <div id="ms-market-result" style="display:none;margin-top:10px;padding:10px;background:var(--surface);border-radius:6px;font-size:0.8rem;"></div>
+      </div>
+      <details style="margin-top:12px;">
         <summary style="font-size:0.78rem;color:var(--muted);cursor:pointer;">Advanced: Fallback Rates (used when custom rates are blank)</summary>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px;">
           <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">$/CY (Low)</label><input type="number" id="ms-rate-low" step="0.01" min="0"></div>
@@ -385,6 +393,21 @@
           <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Premium $/CY</label><input type="number" id="ms-rate-premium" step="0.01" min="0"></div>
         </div>
       </details>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Profitability Calculator</div>
+      <div style="font-size:0.75rem;color:var(--muted);margin-bottom:12px;">Estimate your profit per job. Adjust costs to find the right $/CY rate for your business.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Dump/Disposal Fee ($)</label><input type="number" id="pc-dump-fee" step="1" min="0" value="50"></div>
+        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Fuel Cost Per Job ($)</label><input type="number" id="pc-fuel" step="1" min="0" value="25"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Labor Cost Per Job ($)</label><input type="number" id="pc-labor" step="1" min="0" value="60"></div>
+        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Job Size (CY)</label><input type="number" id="pc-cy" step="0.5" min="0.5" value="5"></div>
+      </div>
+      <button class="btn btn-sm btn-primary" id="pc-calc" style="margin-bottom:12px;">Calculate</button>
+      <div id="pc-result" style="display:none;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:0.85rem;"></div>
     </div>
 
     <div class="card">
@@ -766,6 +789,63 @@ document.getElementById('ms-save').addEventListener('click', async function() {
   }
   btn.disabled = false;
   btn.textContent = 'Save All Settings';
+});
+
+document.getElementById('ms-check-market').addEventListener('click', async function() {
+  var btn = this;
+  var resultDiv = document.getElementById('ms-market-result');
+  btn.disabled = true;
+  btn.textContent = 'Searching...';
+  resultDiv.style.display = 'none';
+  try {
+    var resp = await fetch('/api/settings/check-market-rates', { method: 'POST', headers: csrfHeaders() });
+    var data = await resp.json();
+    if (data.source === 'live_market_search') {
+      resultDiv.innerHTML = '<div style="color:var(--green);font-weight:600;margin-bottom:6px;">Market rates for ' + esc(data.city) + ', ' + esc(data.state) + '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">' +
+        '<div>Low: <strong>$' + data.low.toFixed(2) + '/CY</strong></div>' +
+        '<div>Avg: <strong>$' + data.market_avg.toFixed(2) + '/CY</strong></div>' +
+        '<div>High: <strong>$' + data.high.toFixed(2) + '/CY</strong></div>' +
+        '</div>' +
+        '<div style="font-size:0.7rem;color:var(--muted);margin-top:6px;">Based on ' + data.samples + ' price samples from web search</div>';
+    } else {
+      resultDiv.innerHTML = '<span style="color:var(--muted);">No market data found. Make sure your city and state are set above, then save before checking.</span>';
+    }
+    resultDiv.style.display = 'block';
+  } catch(e) {
+    resultDiv.innerHTML = '<span style="color:var(--red);">Error: ' + e.message + '</span>';
+    resultDiv.style.display = 'block';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Look Up Rates';
+});
+
+document.getElementById('pc-calc').addEventListener('click', function() {
+  var dumpFee = parseFloat(document.getElementById('pc-dump-fee').value) || 0;
+  var fuel = parseFloat(document.getElementById('pc-fuel').value) || 0;
+  var labor = parseFloat(document.getElementById('pc-labor').value) || 0;
+  var cy = parseFloat(document.getElementById('pc-cy').value) || 1;
+  var rate = parseFloat(document.getElementById('ms-rate-standard').value) || 35;
+
+  var totalCost = dumpFee + fuel + labor;
+  var revenue = cy * rate;
+  var profit = revenue - totalCost;
+  var margin = revenue > 0 ? ((profit / revenue) * 100).toFixed(1) : 0;
+  var breakEvenRate = cy > 0 ? (totalCost / cy).toFixed(2) : '—';
+
+  var color = profit > 0 ? 'var(--green)' : 'var(--red)';
+  var resultDiv = document.getElementById('pc-result');
+  resultDiv.innerHTML =
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">' +
+    '<div>Revenue: <strong>$' + revenue.toFixed(2) + '</strong></div>' +
+    '<div>Total Costs: <strong>$' + totalCost.toFixed(2) + '</strong></div>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">' +
+    '<div>Profit: <strong style="color:' + color + ';">$' + profit.toFixed(2) + '</strong></div>' +
+    '<div>Margin: <strong style="color:' + color + ';">' + margin + '%</strong></div>' +
+    '</div>' +
+    '<div style="font-size:0.78rem;color:var(--muted);">Break-even rate: <strong>$' + breakEvenRate + '/CY</strong> — charge above this to profit.</div>';
+  resultDiv.style.display = 'block';
 });
 
 document.getElementById('pw-save').addEventListener('click', async function() {

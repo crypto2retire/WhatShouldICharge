@@ -66,6 +66,24 @@
         <input type="text" id="company_state" placeholder="TX" maxlength="2">
       </div>
     </div>
+    <div style="border-top:1px solid var(--border);margin:20px 0 16px;padding-top:16px;">
+      <div style="font-size:0.9rem;font-weight:700;margin-bottom:4px;">Your Pricing</div>
+      <div style="font-size:0.78rem;color:var(--muted);margin-bottom:12px;">What do you charge per cubic yard? This sets your estimate pricing. You can change it later in settings.</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="price_standard">Standard $/CY</label>
+          <input type="number" id="price_standard" step="0.01" min="1" placeholder="35.00">
+        </div>
+        <div class="form-group">
+          <label for="price_heavy">Heavy/Hoarding $/CY</label>
+          <input type="number" id="price_heavy" step="0.01" min="1" placeholder="50.00">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="min_charge">Minimum Job Price ($)</label>
+        <input type="number" id="min_charge" step="1" min="0" placeholder="75" style="max-width:200px;">
+      </div>
+    </div>
     <div class="form-group" style="margin-top:8px;">
       <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;color:var(--text);font-weight:400;">
         <input type="checkbox" id="tos-agree" style="width:auto;margin:3px 0 0;accent-color:var(--green);">
@@ -102,6 +120,9 @@ form.addEventListener('submit', async (e) => {
         company_name: document.getElementById('company_name').value,
         company_city: document.getElementById('company_city').value,
         company_state: document.getElementById('company_state').value,
+        price_per_cy_standard: document.getElementById('price_standard').value ? parseFloat(document.getElementById('price_standard').value) : null,
+        price_per_cy_heavy: document.getElementById('price_heavy').value ? parseFloat(document.getElementById('price_heavy').value) : null,
+        min_charge: document.getElementById('min_charge').value ? parseFloat(document.getElementById('min_charge').value) : null,
       }),
     });
     const data = await resp.json();

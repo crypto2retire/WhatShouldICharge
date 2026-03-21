@@ -13,18 +13,22 @@
     --accent: #4f8ef7;
   }
   body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-  .auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 36px; width: 100%; max-width: 480px; }
+  .auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 36px; width: 100%; max-width: 440px; }
   .logo { text-align: center; margin-bottom: 24px; }
   .logo-dot { display: inline-block; width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 8px var(--green); margin-right: 8px; vertical-align: middle; }
   .logo-text { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.03em; }
   .auth-title { font-size: 1.4rem; font-weight: 800; text-align: center; margin-bottom: 6px; }
   .auth-sub { text-align: center; color: var(--muted); font-size: 0.88rem; margin-bottom: 24px; }
+  .free-badge { display: inline-block; background: rgba(22,163,74,0.12); border: 1px solid rgba(22,163,74,0.3); color: var(--green-light); padding: 6px 14px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; margin-bottom: 20px; text-align: center; width: 100%; }
   .form-group { margin-bottom: 14px; }
   .form-group label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
-  .form-group input, .form-group select { width: 100%; padding: 10px 13px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.92rem; font-family: inherit; transition: border-color 0.15s; }
-  .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--green); }
+  .form-group input { width: 100%; padding: 10px 13px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.92rem; font-family: inherit; transition: border-color 0.15s; }
+  .form-group input:focus { outline: none; border-color: var(--green); }
   .form-row { display: flex; gap: 12px; }
   .form-row .form-group { flex: 1; }
+  .divider { border-top: 1px solid var(--border); margin: 18px 0 14px; padding-top: 14px; }
+  .divider-label { font-size: 0.9rem; font-weight: 700; margin-bottom: 4px; }
+  .divider-sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; }
   .btn-submit { width: 100%; padding: 13px; border-radius: 10px; border: none; background: var(--green); color: #fff; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.15s; margin-top: 8px; }
   .btn-submit:hover { background: var(--green-light); }
   .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -33,28 +37,14 @@
   .auth-footer a:hover { text-decoration: underline; }
   .error-msg { display: none; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; color: var(--red); font-size: 0.85rem; margin-bottom: 14px; }
   .error-msg.visible { display: block; }
-
-  /* Plan selection */
-  .plan-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 18px; }
-  .plan-option { background: var(--bg); border: 2px solid var(--border); border-radius: 10px; padding: 14px; cursor: pointer; transition: all 0.15s; text-align: center; }
-  .plan-option:hover { border-color: rgba(22,163,74,0.5); }
-  .plan-option.selected { border-color: var(--green); background: rgba(22,163,74,0.06); }
-  .plan-option input { display: none; }
-  .plan-name { font-size: 0.95rem; font-weight: 700; margin-bottom: 2px; }
-  .plan-price { font-size: 1.3rem; font-weight: 800; color: var(--green-light); }
-  .plan-detail { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
-  .cost-summary { background: rgba(22,163,74,0.06); border: 1px solid rgba(22,163,74,0.2); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 0.82rem; line-height: 1.6; }
-  .cost-summary strong { color: var(--green-light); }
-  .divider { border-top: 1px solid var(--border); margin: 18px 0 14px; padding-top: 14px; }
-  .divider-label { font-size: 0.9rem; font-weight: 700; margin-bottom: 4px; }
-  .divider-sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; }
 </style>
 </head>
 <body>
 <main class="auth-card">
   <div class="logo"><span class="logo-dot"></span><span class="logo-text">WhatShouldICharge</span></div>
   <div class="auth-title">Create your account</div>
-  <div class="auth-sub">Get 3 free estimates to try the platform</div>
+  <div class="auth-sub">Start estimating junk removal jobs with AI</div>
+  <div class="free-badge">2 free estimates included &mdash; no credit card needed</div>
   <div class="error-msg" id="error-msg" role="alert"></div>
   <form id="signup-form">
     <div class="form-group">
@@ -63,7 +53,7 @@
     </div>
     <div class="form-group">
       <label for="password">Password</label>
-      <input type="password" id="password" required autocomplete="new-password" placeholder="At least 6 characters" minlength="6">
+      <input type="password" id="password" required autocomplete="new-password" placeholder="At least 8 characters" minlength="8">
     </div>
     <div class="form-group">
       <label for="company_name">Company Name</label>
@@ -78,41 +68,6 @@
         <label for="company_state">State</label>
         <input type="text" id="company_state" placeholder="TX" maxlength="2">
       </div>
-    </div>
-
-    <div class="divider">
-      <div class="divider-label">Choose Your Plan</div>
-      <div class="divider-sub">Start with 3 free estimates. Purchase a plan when you're ready.</div>
-    </div>
-    <div class="plan-grid">
-      <label class="plan-option" onclick="selectPlan(this)">
-        <input type="radio" name="plan" value="solo">
-        <div class="plan-name">Solo</div>
-        <div class="plan-price">$149</div>
-        <div class="plan-detail">1 user &middot; 150 est/mo &middot; $19/mo hosting</div>
-      </label>
-      <label class="plan-option selected" onclick="selectPlan(this)">
-        <input type="radio" name="plan" value="team" checked>
-        <div class="plan-name">Team</div>
-        <div class="plan-price">$299</div>
-        <div class="plan-detail">3-9 users &middot; 750 est/mo &middot; $49/mo &middot; widget</div>
-      </label>
-      <label class="plan-option" onclick="selectPlan(this)">
-        <input type="radio" name="plan" value="enterprise">
-        <div class="plan-name">Enterprise</div>
-        <div class="plan-price">$499</div>
-        <div class="plan-detail">Unlimited &middot; 2,500 est/mo &middot; $99/mo &middot; branding</div>
-      </label>
-      <label class="plan-option" onclick="selectPlan(this)">
-        <input type="radio" name="plan" value="custom">
-        <div class="plan-name">Custom</div>
-        <div class="plan-price">$999+</div>
-        <div class="plan-detail">Fully customized solution</div>
-      </label>
-    </div>
-    <div class="cost-summary" id="cost-summary">
-      <strong>One-time software:</strong> $299 &nbsp;+&nbsp; <strong>Monthly hosting:</strong> $49/mo (includes 750 estimates)<br>
-      <span style="font-size:0.78rem;color:var(--muted);">You'll set up billing for hosting after your free trial.</span>
     </div>
 
     <div class="divider">
@@ -144,27 +99,6 @@
   <div class="auth-footer">Already have an account? <a href="/login">Log in</a></div>
 </main>
 <script>
-const planInfo = {
-  solo: { price: '$149', hosting: '$19/mo', est: '150 estimates/mo' },
-  team: { price: '$299', hosting: '$49/mo', est: '750 estimates/mo' },
-  enterprise: { price: '$499', hosting: '$99/mo', est: '2,500 estimates/mo' },
-  custom: { price: '$999+', hosting: 'Set per client', est: 'Custom' },
-};
-
-function selectPlan(el) {
-  document.querySelectorAll('.plan-option').forEach(p => p.classList.remove('selected'));
-  el.classList.add('selected');
-  el.querySelector('input').checked = true;
-  const plan = el.querySelector('input').value;
-  const summary = document.getElementById('cost-summary');
-  const p = planInfo[plan];
-  if (plan === 'custom') {
-    summary.innerHTML = '<strong>Custom solution starting at $999.</strong> Contact us to discuss your needs.<br><span style="font-size:0.78rem;color:var(--muted);">kevin@cleartheclutter.net</span>';
-  } else {
-    summary.innerHTML = `<strong>One-time software:</strong> ${p.price} &nbsp;+&nbsp; <strong>Monthly hosting:</strong> ${p.hosting} (includes ${p.est})<br><span style="font-size:0.78rem;color:var(--muted);">You'll set up billing for hosting after your free trial.</span>`;
-  }
-}
-
 const form = document.getElementById('signup-form');
 const errorMsg = document.getElementById('error-msg');
 const submitBtn = document.getElementById('submit-btn');

@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WhatShouldICharge — AI-Assisted Junk Removal Pricing Estimator</title>
-<meta name="description" content="AI-powered junk removal pricing — upload photos, get instant cubic yard estimates and price ranges. One-time purchase, own your software. Built for new and established junk removal businesses.">
+<title>WhatShouldICharge — AI-Powered Junk Removal Estimates from Photos</title>
+<meta name="description" content="AI-powered junk removal estimates from photos. Snap photos, get cubic yard estimates in seconds. Pay per estimate — $10 each or save up to 80% with credit packs. No subscriptions.">
 <meta name="keywords" content="junk removal pricing, junk removal estimator, how to price junk removal jobs, what to charge for junk removal, junk removal calculator, starting a junk removal business, AI junk removal estimates">
 <meta name="robots" content="index, follow, max-snippet:150, max-image-preview:large">
 <link rel="canonical" href="https://whatshouldicharge.app/">
@@ -12,13 +12,13 @@
 <link rel="apple-touch-icon" href="/static/favicon.svg">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://whatshouldicharge.app/">
-<meta property="og:title" content="WhatShouldICharge — AI-Assisted Junk Removal Pricing">
-<meta property="og:description" content="AI-powered junk removal pricing — upload photos, get instant cubic yard estimates and price ranges. One-time purchase, own your software. Built for new and established junk removal businesses.">
+<meta property="og:title" content="WhatShouldICharge — AI-Powered Junk Removal Estimates from Photos">
+<meta property="og:description" content="AI-powered junk removal estimates from photos. Pay per estimate — $10 each or save up to 80% with credit packs. No subscriptions, no contracts.">
 <meta property="og:site_name" content="WhatShouldICharge">
 <meta property="og:locale" content="en_US">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="WhatShouldICharge — AI-Assisted Junk Removal Pricing">
-<meta name="twitter:description" content="AI-powered junk removal pricing — upload photos, get instant cubic yard estimates and price ranges. One-time purchase, own your software. Built for new and established junk removal businesses.">
+<meta name="twitter:title" content="WhatShouldICharge — AI-Powered Junk Removal Estimates from Photos">
+<meta name="twitter:description" content="AI-powered junk removal estimates from photos. Pay per estimate — $10 each or save up to 80% with credit packs. No subscriptions, no contracts.">
 <meta name="theme-color" content="#16a34a">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/landing.css">
@@ -29,12 +29,14 @@
   "name": "WhatShouldICharge",
   "applicationCategory": "BusinessApplication",
   "operatingSystem": "Web",
-  "description": "AI-assisted junk removal pricing tool for business owners. Upload customer photos to get cubic yard estimates, price ranges, and job assessments without site visits.",
+  "description": "AI-powered junk removal photo estimator. Upload photos, get cubic yard estimates and price ranges in seconds. Pay per estimate with credit packs.",
   "offers": [
-    {"@type": "Offer", "name": "Solo", "price": "149.00", "priceCurrency": "USD", "priceValidUntil": "2027-12-31", "availability": "https://schema.org/InStock"},
-    {"@type": "Offer", "name": "Team", "price": "299.00", "priceCurrency": "USD", "priceValidUntil": "2027-12-31", "availability": "https://schema.org/InStock"},
-    {"@type": "Offer", "name": "Enterprise", "price": "499.00", "priceCurrency": "USD", "priceValidUntil": "2027-12-31", "availability": "https://schema.org/InStock"},
-    {"@type": "Offer", "name": "Custom", "price": "999.00", "priceCurrency": "USD", "priceValidUntil": "2027-12-31", "availability": "https://schema.org/InStock"}
+    {"@type": "Offer", "name": "Single Estimate", "price": "10.00", "priceCurrency": "USD", "availability": "https://schema.org/InStock"},
+    {"@type": "Offer", "name": "10-Pack", "price": "60.00", "priceCurrency": "USD", "availability": "https://schema.org/InStock"},
+    {"@type": "Offer", "name": "25-Pack", "price": "125.00", "priceCurrency": "USD", "availability": "https://schema.org/InStock"},
+    {"@type": "Offer", "name": "50-Pack", "price": "200.00", "priceCurrency": "USD", "availability": "https://schema.org/InStock"},
+    {"@type": "Offer", "name": "100-Pack", "price": "300.00", "priceCurrency": "USD", "availability": "https://schema.org/InStock"},
+    {"@type": "Offer", "name": "250-Pack", "price": "500.00", "priceCurrency": "USD", "availability": "https://schema.org/InStock"}
   ],
   "url": "https://whatshouldicharge.app"
 }
@@ -46,50 +48,50 @@
   "mainEntity": [
     {
       "@type": "Question",
+      "name": "How much does WhatShouldICharge cost?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "$10 per single estimate, or buy packs for up to 80% off. A 50-Pack is $200 ($4/estimate). Credits never expire."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is there a subscription or monthly fee?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. You buy credit packs and use them when you need them. No monthly charges, no contracts, no cancellation fees."
+      }
+    },
+    {
+      "@type": "Question",
       "name": "How accurate are the junk removal estimates?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Our AI-assisted estimates provide a reliable starting point for pricing conversations. Accuracy improves with more photos from different angles and accurate room labels. The tool uses spatial reasoning with known item dimensions to calibrate volume — the more visible reference items, the better the estimate."
+        "text": "The AI uses spatial measurement with real-world reference points. It measures furniture, appliances, and debris against known dimensions. Accuracy improves with more and better photos."
       }
     },
     {
       "@type": "Question",
-      "name": "What types of junk removal jobs does it work for?",
+      "name": "Can I try it before buying?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "It works for all standard junk removal scenarios: household cleanouts, garage cleanouts, furniture removal, appliance hauling, hoarder situations, yard debris, and full truck loads. The AI is purpose-built for junk removal pricing and uses a reference library of 60+ common items with real-world dimensions."
+        "text": "Yes! Create a free account and get 2 free estimates. No credit card needed."
       }
     },
     {
       "@type": "Question",
-      "name": "Do customers upload the photos themselves?",
+      "name": "Do credits expire?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Customers can text or email you the photos, or you can share your estimate link directly with them. Either way, you (or your customer) upload the photos into the tool and get an instant estimate. Most operators text customers a link and have them upload directly."
+        "text": "No. Your credits are available until you use them."
       }
     },
     {
       "@type": "Question",
-      "name": "Can I set my own junk removal pricing rates?",
+      "name": "Can I use it for industries other than junk removal?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes. You can configure your standard rate per cubic yard, premium rate per cubic yard, and minimum charge so you never underquote small jobs. The AI estimates cubic yards and your rates determine the final price. Your market, your numbers."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "Is there a free trial?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "Yes — try the estimator for free, no account needed. When you're ready, purchase the tier that fits your team size. You own the software outright."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "Can the AI see inside piles or behind furniture?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "No. The AI can only estimate what is visible in the photos. Hidden items inside piles, behind furniture, or in closed containers will not be detected. That is why the tool provides a price range instead of an exact number. For large piles, take photos from multiple angles to help the AI see more of the load."
+        "text": "We're expanding to dumpster rental, cleaning, moving, and more. Contact us if you're interested in a specific industry."
       }
     }
   ]
@@ -101,7 +103,7 @@
   "@type": "Organization",
   "name": "WhatShouldICharge",
   "url": "https://whatshouldicharge.app",
-  "description": "AI-assisted pricing tools for junk removal businesses. Helps operators estimate job costs from customer photos using spatial reasoning and a curated reference library of common junk removal items."
+  "description": "AI-powered pricing tools for junk removal businesses. Helps operators estimate job costs from customer photos using spatial reasoning and a curated reference library of common junk removal items."
 }
 </script>
 </head>
@@ -116,22 +118,21 @@
   <ul class="nav-links">
     <li><a href="#how-it-works">How It Works</a></li>
     <li><a href="#features">Features</a></li>
-    <li><a href="#how-ai-works">The AI</a></li>
     <li><a href="#pricing">Pricing</a></li>
     <li><a href="#faq">FAQ</a></li>
   </ul>
-  <a href="/signup" class="btn btn-primary">Try It Free</a>
+  <a href="/signup" class="btn btn-primary">Try 2 Free Estimates</a>
 </nav>
 
 <section class="hero">
   <div class="hero-label">
-    <span aria-hidden="true">&#10022;</span> AI-Assisted Junk Removal Pricing
+    <span aria-hidden="true">&#10022;</span> AI-Powered Junk Removal Pricing
   </div>
-  <h1><span data-config="hero_title">Junk Removal Pricing.</span><br><span class="accent" data-config="hero_subtitle">AI-Assisted Estimates.</span></h1>
-  <p class="hero-sub" data-config="hero_description">Upload customer photos. Get an AI-assisted price range with cubic yard estimates. Close more jobs — without the guesswork.</p>
+  <h1>AI-Powered Junk Removal<br><span class="accent">Estimates from Photos.</span></h1>
+  <p class="hero-sub">Snap photos. Get accurate cubic yard estimates in seconds. Pay only when you use it &mdash; $10 per estimate or save up to 80% with credit packs.</p>
   <div class="hero-ctas">
-    <a href="/signup" class="btn btn-primary btn-lg" data-config="cta_primary">Try It Free &rarr;</a>
-    <a href="#how-it-works" class="btn btn-ghost btn-lg" data-config="cta_secondary">See How It Works</a>
+    <a href="/signup" class="btn btn-primary btn-lg">Try 2 Free Estimates &rarr;</a>
+    <a href="#how-it-works" class="btn btn-ghost btn-lg">See How It Works</a>
   </div>
 
   <div class="mockup-wrap fade-up" role="img" aria-label="Screenshot of the WhatShouldICharge estimator showing photo upload, item detection, and a price result of $280 to $350">
@@ -181,11 +182,37 @@
       <div class="stat-lbl">Site visits required</div>
     </div>
     <div class="stat-item fade-up fade-up-delay-3">
-      <span class="stat-val"><span class="stat-accent">6</span>+</span>
-      <div class="stat-lbl">Job types recognized</div>
+      <span class="stat-val"><span class="stat-accent">$0</span></span>
+      <div class="stat-lbl">Monthly fees</div>
     </div>
   </div>
 </div>
+
+<section id="value-props">
+  <div class="section-wrap">
+    <div style="text-align:center">
+      <span class="section-label fade-up">Why Pay-Per-Use?</span>
+      <h2 class="section-title fade-up">No subscriptions. No contracts. No wasted money.</h2>
+    </div>
+    <div class="problem-grid" style="margin-top:40px">
+      <div class="problem-card fade-up">
+        <span class="problem-icon" aria-hidden="true">&#128176;</span>
+        <h3>Pay only when you estimate</h3>
+        <p>No monthly fees draining your account. Buy credits when you need them, use them when you're ready. Each estimate costs one credit.</p>
+      </div>
+      <div class="problem-card fade-up fade-up-delay-1">
+        <span class="problem-icon" aria-hidden="true">&#9832;</span>
+        <h3>Slow month? Spend nothing.</h3>
+        <p>Your credits never expire. Take a week off, take a month off &mdash; your credits are still there when you get back. No subscription ticking away.</p>
+      </div>
+      <div class="problem-card fade-up fade-up-delay-2">
+        <span class="problem-icon" aria-hidden="true">&#9889;</span>
+        <h3>Busy season? Save more.</h3>
+        <p>Buy bigger packs and pay as little as $2 per estimate. A 50-Pack is $200 &mdash; that's $4 per estimate for your entire summer rush.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
 <section id="problem">
   <div class="section-wrap">
@@ -219,28 +246,35 @@
     <div style="text-align:center">
       <span class="section-label fade-up">How It Works</span>
       <h2 class="section-title fade-up">From photos to price in seconds</h2>
-      <p class="section-sub fade-up" style="margin:0 auto">Three steps. No site visit. No guesswork.</p>
+      <p class="section-sub fade-up" style="margin:0 auto">Four steps. No site visit. No guesswork.</p>
     </div>
     <div class="steps-wrap" style="margin-top:52px">
       <div class="step-card fade-up">
         <div class="step-num">1</div>
-        <span class="step-icon" aria-hidden="true">&#128241;</span>
-        <h3>Customer Sends Photos</h3>
-        <p>Your customer uploads 1&ndash;6 photos of the area. AI identifies all items, then the customer unchecks anything they're keeping and adds items not in the photos. Label each by room for maximum accuracy.</p>
+        <span class="step-icon" aria-hidden="true">&#128248;</span>
+        <h3>Take Photos</h3>
+        <p>Snap 3&ndash;5 photos of the job site from different angles. Label each by room for maximum accuracy.</p>
       </div>
       <div class="steps-connector fade-up" aria-hidden="true">&rarr;</div>
       <div class="step-card fade-up fade-up-delay-1">
         <div class="step-num">2</div>
         <span class="step-icon" aria-hidden="true">&#129302;</span>
-        <h3>AI Analyzes the Job</h3>
-        <p>AI scans the photos, estimates total volume in cubic yards, and flags premium conditions like stairs, hoarder situations, and heavy items.</p>
+        <h3>AI Analyzes</h3>
+        <p>Our AI measures volume using real-world reference points and 60+ item dimensions. It flags special items, detects job type, and calculates cubic yards.</p>
       </div>
       <div class="steps-connector fade-up fade-up-delay-1" aria-hidden="true">&rarr;</div>
       <div class="step-card fade-up fade-up-delay-2">
         <div class="step-num">3</div>
         <span class="step-icon" aria-hidden="true">&#128176;</span>
-        <h3>You Get a Price Range</h3>
-        <p>A detailed price range, cubic yard estimate, and visible-item breakdown lands on your screen in under 30 seconds. Ready to quote.</p>
+        <h3>Get Your Estimate</h3>
+        <p>Receive cubic yard volume, price range, and itemized breakdown in seconds. Review, adjust, and you're ready to quote.</p>
+      </div>
+      <div class="steps-connector fade-up fade-up-delay-2" aria-hidden="true">&rarr;</div>
+      <div class="step-card fade-up fade-up-delay-3">
+        <div class="step-num">4</div>
+        <span class="step-icon" aria-hidden="true">&#128170;</span>
+        <h3>Quote with Confidence</h3>
+        <p>Use the estimate to give your customer an accurate, profitable quote. No more guessing, no more leaving money on the table.</p>
       </div>
     </div>
   </div>
@@ -249,69 +283,41 @@
 <section id="features">
   <div class="section-wrap">
     <div style="text-align:center">
-      <span class="section-label fade-up">Features</span>
-      <h2 class="section-title fade-up">Everything you need to price with confidence</h2>
+      <span class="section-label fade-up">What's Included</span>
+      <h2 class="section-title fade-up">Everything you get with every estimate</h2>
     </div>
     <div class="features-grid">
       <div class="feature-card fade-up">
         <span class="feature-icon" aria-hidden="true">&#128248;</span>
-        <h3 data-config="feature_1_title">Photo-Based Estimates</h3>
-        <p data-config="feature_1_desc">No site visit needed. Upload up to 6 photos and let the AI do the heavy lifting. Works with any phone camera.</p>
+        <h3>AI Cubic Yard Calculation</h3>
+        <p>Spatial measurement using anchor items with known dimensions. The AI measures the pile, not just the items.</p>
       </div>
       <div class="feature-card fade-up fade-up-delay-1">
-        <span class="feature-icon" aria-hidden="true">&#127919;</span>
-        <h3 data-config="feature_2_title">AI-Assisted Pricing</h3>
-        <p data-config="feature_2_desc">Purpose-built for junk removal — not generic object detection. The AI uses a reference library of 60+ items with real dimensions to estimate volume.</p>
+        <span class="feature-icon" aria-hidden="true">&#128203;</span>
+        <h3>Itemized Breakdown</h3>
+        <p>Every visible item detected, categorized, and measured. Uncheck items the customer is keeping &mdash; price recalculates instantly.</p>
       </div>
       <div class="feature-card fade-up fade-up-delay-2">
-        <span class="feature-icon" aria-hidden="true">&#9889;</span>
-        <h3 data-config="feature_3_title">Premium Detection</h3>
-        <p data-config="feature_3_desc">Automatically flags hoarder situations, heavy items, stairs, and outdoor piles — and switches to premium pricing rates.</p>
+        <span class="feature-icon" aria-hidden="true">&#128176;</span>
+        <h3>Price Range (Your Rates)</h3>
+        <p>You set your $/CY for standard and heavy jobs. The AI calculates volume &mdash; your rates determine the price.</p>
       </div>
       <div class="feature-card fade-up fade-up-delay-3">
-        <span class="feature-icon" aria-hidden="true">&#128667;</span>
-        <h3>Truck Load Calculator</h3>
-        <p>Mark a photo as a truck load and use the fill-percentage slider for instant cubic yard calculation. Great for full-truck jobs.</p>
+        <span class="feature-icon" aria-hidden="true">&#9889;</span>
+        <h3>Job Type Classification</h3>
+        <p>Automatically detects standard, premium, hoarder, and truck load jobs. Flags stairs, heavy items, and outdoor conditions.</p>
       </div>
       <div class="feature-card fade-up fade-up-delay-4">
-        <span class="feature-icon" aria-hidden="true">&#128203;</span>
-        <h3>Item Detection</h3>
-        <p>AI detects visible items, estimates their volume, and categorizes them. Special recycling items like TVs, mattresses, and tires are automatically flagged. You can exclude items that aren't part of the job.</p>
+        <span class="feature-icon" aria-hidden="true">&#9888;&#65039;</span>
+        <h3>Special Item Warnings</h3>
+        <p>TVs, mattresses, tires, refrigerants, paint, e-waste &mdash; flagged automatically so you can quote recycling/disposal fees.</p>
       </div>
       <div class="feature-card fade-up fade-up-delay-5">
-        <span class="feature-icon" aria-hidden="true">&#128176;</span>
-        <h3>Your Rates, Your Rules</h3>
-        <p>Set your own price per cubic yard for standard and premium jobs. The AI adapts to your business, not the other way around.</p>
+        <span class="feature-icon" aria-hidden="true">&#127919;</span>
+        <h3>Confidence Score</h3>
+        <p>Every estimate includes a confidence score based on photo quality and visibility. Know when to trust the number and when to verify in person.</p>
       </div>
     </div>
-  </div>
-</section>
-
-<section id="starting">
-  <div class="section-wrap">
-    <div style="text-align:center">
-      <span class="section-label fade-up">For New Operators</span>
-      <h2 class="section-title fade-up">New to junk removal? Start with confidence.</h2>
-      <p class="section-sub fade-up" style="margin:0 auto;max-width:680px;">Pricing is the #1 challenge for new junk removal operators. Quote too high and you lose jobs. Quote too low and you lose money. WhatShouldICharge gives you the same AI-powered estimating that established companies use &mdash; from day one.</p>
-    </div>
-    <div class="problem-grid" style="margin-top:40px">
-      <div class="problem-card fade-up">
-        <span class="problem-icon" aria-hidden="true">&#128248;</span>
-        <h3>Upload a Photo</h3>
-        <p>Get an instant cubic yard estimate and price range. No experience needed. The AI knows the dimensions of 60+ common items and uses spatial reasoning to calculate volume &mdash; so you don't have to learn it the hard way.</p>
-      </div>
-      <div class="problem-card fade-up fade-up-delay-1">
-        <span class="problem-icon" aria-hidden="true">&#128200;</span>
-        <h3>Grow When You're Ready</h3>
-        <p>WhatShouldICharge is part of the DoneLocal ecosystem. When you're ready to level up, add our field service CRM &mdash; scheduling, invoicing, customer management, and more. One-time purchase, same transparent pricing. No monthly software subscriptions, ever.</p>
-      </div>
-      <div class="problem-card fade-up fade-up-delay-2">
-        <span class="problem-icon" aria-hidden="true">&#128176;</span>
-        <h3>Own Your Software</h3>
-        <p>Start with the basics and add capabilities as your business grows &mdash; no expensive monthly subscriptions required. You own the tools you buy.</p>
-      </div>
-    </div>
-    <div style="text-align:center;margin-top:36px"><a href="/signup" class="btn btn-primary btn-lg fade-up">Start Estimating for Free &rarr;</a></div>
   </div>
 </section>
 
@@ -319,116 +325,112 @@
   <div class="section-wrap">
     <div style="text-align:center">
       <span class="section-label fade-up">Pricing</span>
-      <h2 class="section-title fade-up">Simple, transparent pricing</h2>
-      <p class="section-sub fade-up" style="margin:0 auto">Buy it once. Own it forever. No monthly software subscriptions.</p>
+      <h2 class="section-title fade-up">Simple, Transparent Pricing</h2>
+      <p class="section-sub fade-up" style="margin:0 auto">Every estimate uses one credit. Buy single estimates or save with packs.</p>
     </div>
-    <div class="pricing-grid" style="grid-template-columns:repeat(4,1fr)">
+    <div class="pricing-grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
       <div class="pricing-card fade-up">
-        <div class="pricing-tier">Solo</div>
-        <div class="pricing-price"><sup>$</sup>149</div>
-        <div class="pricing-period">one-time</div>
-        <div class="pricing-estimates">1 user &middot; 150 estimates/mo</div>
+        <div class="pricing-tier">Single</div>
+        <div class="pricing-price"><sup>$</sup>10</div>
+        <div class="pricing-period">per estimate</div>
+        <div class="pricing-estimates">1 credit</div>
         <ul class="pricing-features">
-          <li>AI photo estimates (150 included/mo)</li>
-          <li>Item detection &amp; volume calculation</li>
-          <li>Premium job detection (hoarder, heavy, stairs)</li>
-          <li>Customer estimate link</li>
-          <li>Estimate history</li>
-          <li>Email support</li>
-          <li>Hosting: $19/month</li>
-          <li>Optional: Add 2nd user for $49/mo</li>
+          <li>$10.00 per estimate</li>
+          <li>Try before you commit</li>
         </ul>
         <a href="/signup" class="btn-pricing">Get Started</a>
       </div>
-      <div class="pricing-card popular fade-up fade-up-delay-1">
-        <div class="popular-badge">Most Popular</div>
-        <div class="pricing-tier">Team</div>
-        <div class="pricing-price"><sup>$</sup>299</div>
-        <div class="pricing-period">one-time</div>
-        <div class="pricing-estimates">3&ndash;9 users &middot; 750 estimates/mo</div>
+      <div class="pricing-card fade-up fade-up-delay-1">
+        <div class="pricing-tier">10-Pack</div>
+        <div class="pricing-price"><sup>$</sup>60</div>
+        <div class="pricing-period">$6.00 each</div>
+        <div class="pricing-estimates" style="color:#22c55e">Save 40%</div>
         <ul class="pricing-features">
-          <li>Everything in Solo</li>
-          <li>Customer-facing estimate widget for your website</li>
-          <li>750 AI estimates included/month</li>
-          <li>Truck load calculator</li>
-          <li>Custom rate settings</li>
-          <li>Priority support</li>
-          <li>Hosting: $49/month</li>
+          <li>10 estimate credits</li>
+          <li>Great for getting started</li>
         </ul>
-        <a href="/signup" class="btn-pricing">Get Started</a>
+        <a href="/signup" class="btn-pricing">Buy 10-Pack</a>
       </div>
       <div class="pricing-card fade-up fade-up-delay-2">
-        <div class="pricing-tier">Enterprise</div>
-        <div class="pricing-price"><sup>$</sup>499</div>
-        <div class="pricing-period">one-time</div>
-        <div class="pricing-estimates">Unlimited users &middot; 2,500 estimates/mo</div>
+        <div class="pricing-tier">25-Pack</div>
+        <div class="pricing-price"><sup>$</sup>125</div>
+        <div class="pricing-period">$5.00 each</div>
+        <div class="pricing-estimates" style="color:#22c55e">Save 50%</div>
         <ul class="pricing-features">
-          <li>Everything in Team</li>
-          <li>Your business colors &amp; logo on the app</li>
-          <li>2,500 AI estimates included/month</li>
-          <li>API access</li>
-          <li>Dedicated onboarding</li>
-          <li>Phone support</li>
-          <li>Hosting: $99/month</li>
+          <li>25 estimate credits</li>
+          <li>Solid value for regulars</li>
         </ul>
-        <a href="/signup" class="btn-pricing">Get Started</a>
+        <a href="/signup" class="btn-pricing">Buy 25-Pack</a>
       </div>
-      <div class="pricing-card fade-up fade-up-delay-3">
-        <div class="pricing-tier">Custom</div>
-        <div class="pricing-price" style="font-size:2rem;"><sup>$</sup>999<sup style="font-size:0.5em;">+</sup></div>
-        <div class="pricing-period">starting at</div>
-        <div class="pricing-estimates">Fully customized solution</div>
+      <div class="pricing-card popular fade-up fade-up-delay-3">
+        <div class="popular-badge">Most Popular</div>
+        <div class="pricing-tier">50-Pack</div>
+        <div class="pricing-price"><sup>$</sup>200</div>
+        <div class="pricing-period">$4.00 each</div>
+        <div class="pricing-estimates" style="color:#22c55e">Save 60%</div>
         <ul class="pricing-features">
-          <li>Custom integrations</li>
-          <li>White-label options</li>
-          <li>Dedicated support</li>
-          <li>Set per client</li>
+          <li>50 estimate credits</li>
+          <li>Sweet spot for solo operators</li>
         </ul>
-        <a href="mailto:kevin@cleartheclutter.net?subject=WhatShouldICharge%20Custom%20Plan" class="btn-pricing" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);">Contact Us</a>
+        <a href="/signup" class="btn-pricing">Buy 50-Pack</a>
+      </div>
+      <div class="pricing-card fade-up fade-up-delay-4">
+        <div class="pricing-tier">100-Pack</div>
+        <div class="pricing-price"><sup>$</sup>300</div>
+        <div class="pricing-period">$3.00 each</div>
+        <div class="pricing-estimates" style="color:#22c55e">Save 70%</div>
+        <ul class="pricing-features">
+          <li>100 estimate credits</li>
+          <li>For busy operators</li>
+        </ul>
+        <a href="/signup" class="btn-pricing">Buy 100-Pack</a>
+      </div>
+      <div class="pricing-card fade-up fade-up-delay-5">
+        <div class="pricing-tier">250-Pack</div>
+        <div class="pricing-price"><sup>$</sup>500</div>
+        <div class="pricing-period">$2.00 each</div>
+        <div class="pricing-estimates" style="color:#22c55e">Save 80%</div>
+        <ul class="pricing-features">
+          <li>250 estimate credits</li>
+          <li>Best value &mdash; teams &amp; fleets</li>
+        </ul>
+        <a href="/signup" class="btn-pricing">Buy 250-Pack</a>
       </div>
     </div>
-    <p class="fade-up" style="text-align:center;color:var(--muted);font-size:0.85rem;margin-top:18px;max-width:750px;margin-left:auto;margin-right:auto;">Monthly hosting includes AI processing. Need more? Overages are just $0.08&ndash;0.10 per estimate &mdash; and you control your max spend. Compare to competitors charging $49&ndash;398/month for subscriptions with no AI photo estimation.</p>
-  </div>
-</section>
-
-<section id="annual-comparison">
-  <div class="section-wrap">
-    <div style="text-align:center">
-      <span class="section-label fade-up">Annual Cost Comparison</span>
-      <h2 class="section-title fade-up">See what you actually save</h2>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:36px;max-width:700px;margin-left:auto;margin-right:auto;">
-      <div class="card fade-up" style="background:rgba(22,163,74,0.06);border:1px solid rgba(22,163,74,0.25);border-radius:12px;padding:24px;">
-        <div style="font-size:0.82rem;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:14px;">WhatShouldICharge</div>
-        <div style="font-size:0.9rem;line-height:2.2;">
-          <div style="display:flex;justify-content:space-between;">Solo<strong style="color:var(--green-light);">$377/year</strong></div>
-          <div style="display:flex;justify-content:space-between;">Team<strong style="color:var(--green-light);">$887/year</strong></div>
-          <div style="display:flex;justify-content:space-between;">Enterprise<strong style="color:var(--green-light);">$1,687/year</strong></div>
-        </div>
-        <div style="font-size:0.72rem;color:var(--muted);margin-top:8px;">Includes software + hosting + AI estimates</div>
-      </div>
-      <div class="card fade-up fade-up-delay-1" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;">
-        <div style="font-size:0.82rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:14px;">Competitors</div>
-        <div style="font-size:0.9rem;line-height:2.2;color:var(--muted);">
-          <div style="display:flex;justify-content:space-between;">Jobber<strong>$588&ndash;2,988/yr</strong></div>
-          <div style="display:flex;justify-content:space-between;">Workiz<strong>$780&ndash;2,700/yr</strong></div>
-          <div style="display:flex;justify-content:space-between;">Housecall Pro<strong>$588&ndash;2,388/yr</strong></div>
-          <div style="display:flex;justify-content:space-between;">ServiceTitan<strong>$4,776+/yr</strong></div>
-        </div>
-        <div style="font-size:0.72rem;color:var(--muted);margin-top:8px;">Subscriptions forever &mdash; no AI estimation</div>
-      </div>
+    <p class="fade-up" style="text-align:center;color:var(--muted);font-size:0.9rem;margin-top:24px;max-width:600px;margin-left:auto;margin-right:auto;font-weight:500;">Credits never expire. Use them whenever you need them.</p>
+    <div class="fade-up" style="text-align:center;margin-top:16px;background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.2);border-radius:10px;padding:16px 24px;max-width:520px;margin-left:auto;margin-right:auto;">
+      <div style="font-weight:700;margin-bottom:4px;">Try it free &mdash; 2 estimates on us</div>
+      <div style="font-size:0.88rem;color:var(--muted);">No credit card required. Just create an account and start estimating.</div>
+      <a href="/signup" class="btn btn-primary" style="margin-top:12px;display:inline-block;">Create Free Account &rarr;</a>
     </div>
   </div>
 </section>
 
-<section id="self-hosting">
+<section id="seasonal">
   <div class="section-wrap">
     <div style="text-align:center">
-      <span class="section-label fade-up">Full Control</span>
-      <h2 class="section-title fade-up">Want full control? Self-host.</h2>
-      <p class="section-sub fade-up" style="margin:0 auto;max-width:650px;">Host on your own Mac Mini or cloud server with complete privacy &mdash; no data leaves your network. Use open-source Llama AI for fully independent operation, or bring your own Anthropic API key for the full Claude AI experience. Self-hosting is available for all tiers.</p>
+      <span class="section-label fade-up">Seasonal Advantage</span>
+      <h2 class="section-title fade-up">The Tool That Matches Your Business</h2>
+      <p class="section-sub fade-up" style="margin:0 auto;max-width:720px;">Junk removal is seasonal. You're slammed in summer and slow in winter. Subscriptions charge you $69&ndash;149 every month regardless. With WhatShouldICharge, you only pay when you're working.</p>
     </div>
-    <p class="fade-up" style="text-align:center;color:var(--muted);font-size:0.85rem;margin-top:16px;">One-time setup: $300. Optional maintenance: $99/mo. Contact us for details.</p>
+    <p class="fade-up" style="text-align:center;color:var(--muted);font-size:0.95rem;max-width:680px;margin:24px auto 0;line-height:1.7;">Buy a 50-Pack before your busy season. Use them through the summer rush. If you have credits left heading into winter, they're still there &mdash; no expiration, no wasted money.</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:36px;max-width:700px;margin-left:auto;margin-right:auto;">
+      <div class="problem-card fade-up" style="text-align:center;">
+        <span class="problem-icon" aria-hidden="true">&#127774;</span>
+        <h3>Slow month (8 jobs)</h3>
+        <p><strong style="color:var(--green-light);">WSIC: $0</strong><br><span style="color:var(--muted);font-size:0.85rem;">Use existing credits</span><br><span style="font-size:0.82rem;color:var(--muted);">vs. Competitor: $69&ndash;149</span></p>
+      </div>
+      <div class="problem-card fade-up fade-up-delay-1" style="text-align:center;">
+        <span class="problem-icon" aria-hidden="true">&#9889;</span>
+        <h3>Busy month (40 jobs)</h3>
+        <p><strong style="color:var(--green-light);">WSIC: $200</strong><br><span style="color:var(--muted);font-size:0.85rem;">50-Pack covers it</span><br><span style="font-size:0.82rem;color:var(--muted);">vs. Competitor: $69&ndash;149</span></p>
+      </div>
+      <div class="problem-card fade-up fade-up-delay-2" style="text-align:center;">
+        <span class="problem-icon" aria-hidden="true">&#127958;</span>
+        <h3>Vacation</h3>
+        <p><strong style="color:var(--green-light);">WSIC: $0</strong><br><span style="color:var(--muted);font-size:0.85rem;">Credits wait for you</span><br><span style="font-size:0.82rem;color:var(--muted);">vs. Competitor: still paying</span></p>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -448,13 +450,53 @@
       <div class="problem-card fade-up fade-up-delay-2">
         <span class="problem-icon" aria-hidden="true">&#128208;</span>
         <h3>Spatial Calibration</h3>
-        <p>The AI uses known-size objects as rulers — a couch at 84&times;36&times;34 inches, a door at 80&times;32 inches, even electrical outlets and wall studs at 16&quot; spacing. More reference points visible = better calibration.</p>
+        <p>The AI uses known-size objects as rulers &mdash; a couch at 84&times;36&times;34 inches, a door at 80&times;32 inches, even electrical outlets and wall studs at 16&quot; spacing. More reference points visible = better calibration.</p>
       </div>
       <div class="problem-card fade-up fade-up-delay-3">
         <span class="problem-icon" aria-hidden="true">&#9881;&#65039;</span>
         <h3>Your Review, Your Call</h3>
-        <p>Every estimate shows which items were detected. You can uncheck items that stay, adjust the scope, and the price recalculates instantly. The AI assists — you decide.</p>
+        <p>Every estimate shows which items were detected. You can uncheck items that stay, adjust the scope, and the price recalculates instantly. The AI assists &mdash; you decide.</p>
       </div>
+    </div>
+  </div>
+</section>
+
+<section id="starting">
+  <div class="section-wrap">
+    <div style="text-align:center">
+      <span class="section-label fade-up">For New Operators</span>
+      <h2 class="section-title fade-up">Starting a Junk Removal Business?</h2>
+      <p class="section-sub fade-up" style="margin:0 auto;max-width:720px;">Pricing jobs is the #1 challenge for new junk removal operators. Overcharge and you lose the job. Undercharge and you lose money. WhatShouldICharge gives you the confidence of a 10-year veteran from day one.</p>
+    </div>
+    <div class="problem-grid" style="margin-top:40px">
+      <div class="problem-card fade-up">
+        <span class="problem-icon" aria-hidden="true">&#128248;</span>
+        <h3>AI Does the Math</h3>
+        <p>Take photos of the job site, and our AI calculates the volume in cubic yards, identifies items, flags special disposal needs, and gives you a price range based on your rates. No experience needed.</p>
+      </div>
+      <div class="problem-card fade-up fade-up-delay-1">
+        <span class="problem-icon" aria-hidden="true">&#127775;</span>
+        <h3>Start for Free</h3>
+        <p>Start with 2 free estimates to see it in action. When you're ready, a 10-Pack is just $60 &mdash; that's $6 per estimate while you're building your business.</p>
+      </div>
+      <div class="problem-card fade-up fade-up-delay-2">
+        <span class="problem-icon" aria-hidden="true">&#128200;</span>
+        <h3>Grow When You're Ready</h3>
+        <p>As your business scales, move to bigger packs and pay less per estimate. A 250-Pack brings your cost down to $2 each. No commitments &mdash; upgrade at your own pace.</p>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:36px"><a href="/signup" class="btn btn-primary btn-lg fade-up">Try 2 Free Estimates &rarr;</a></div>
+  </div>
+</section>
+
+<section id="widget">
+  <div class="section-wrap">
+    <div style="text-align:center">
+      <span class="section-label fade-up">Customer Widget</span>
+      <h2 class="section-title fade-up">Let Customers Get Quotes From Your Website</h2>
+      <p class="section-sub fade-up" style="margin:0 auto;max-width:680px;">Add our AI estimator to your website. Customers upload photos and submit their contact info. You get the estimate and the lead &mdash; follow up with a professional quote.</p>
+      <p class="fade-up" style="color:var(--muted);font-size:0.9rem;margin-top:16px;">Each customer submission uses one credit from your pack.</p>
+      <a href="mailto:kevin@cleartheclutter.net?subject=WSIC%20Widget%20Pricing" class="btn btn-ghost fade-up" style="margin-top:16px;">Contact Us for Widget Pricing</a>
     </div>
   </div>
 </section>
@@ -468,101 +510,92 @@
     <div class="faq-list">
       <div class="faq-item fade-up">
         <button class="faq-q" aria-expanded="false">
-          How accurate are the estimates?
+          How much does it cost?
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="faq-a" role="region">
-          <div class="faq-a-inner">Our AI-assisted estimates give you a solid starting point for pricing conversations. Accuracy improves with more photos from different angles and accurate room labels. The AI uses spatial reasoning — it recognizes common items with known dimensions and uses them as measuring references to calibrate the rest of the scene.</div>
+          <div class="faq-a-inner">$10 per single estimate, or buy packs for up to 80% off. A 50-Pack is $200 ($4/estimate). Credits never expire.</div>
         </div>
       </div>
       <div class="faq-item fade-up fade-up-delay-1">
         <button class="faq-q" aria-expanded="false">
-          What types of jobs does it work for?
+          Is there a subscription or monthly fee?
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="faq-a" role="region">
-          <div class="faq-a-inner">It works for all standard junk removal scenarios: household cleanouts, garage cleanouts, furniture removal, appliance hauling, hoarder situations, yard debris, and full truck loads. The AI is purpose-built for junk removal pricing with a reference library of 60+ common items and their real-world dimensions.</div>
+          <div class="faq-a-inner">No. You buy credit packs and use them when you need them. No monthly charges, no contracts, no cancellation fees.</div>
         </div>
       </div>
       <div class="faq-item fade-up fade-up-delay-2">
         <button class="faq-q" aria-expanded="false">
-          Do customers upload the photos themselves?
+          What happens if I run out of credits?
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="faq-a" role="region">
-          <div class="faq-a-inner">Customers can text or email you the photos, or you can share your estimate link directly with them. Either way, you (or your customer) upload the photos into the tool and get an instant estimate. Most operators text customers a link and have them upload directly.</div>
+          <div class="faq-a-inner">You can buy more anytime. Just choose a pack size and checkout takes 30 seconds.</div>
         </div>
       </div>
       <div class="faq-item fade-up fade-up-delay-3">
         <button class="faq-q" aria-expanded="false">
-          Can I set my own pricing rates?
+          Do credits expire?
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="faq-a" role="region">
-          <div class="faq-a-inner">Yes. You can configure your standard rate ($/CY), premium rate ($/CY), and minimum charge so you never underquote small jobs. The AI estimates cubic yards — your rates determine the final price. Your market, your numbers.</div>
-        </div>
-      </div>
-      <div class="faq-item fade-up fade-up-delay-4">
-        <button class="faq-q" aria-expanded="false">
-          Can the AI see inside piles or behind furniture?
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="faq-a" role="region">
-          <div class="faq-a-inner">No — the AI can only estimate what's visible in the photos. Hidden items inside piles, behind furniture, or in closed containers won't be detected. That's why we provide a price range rather than an exact number, and why the confidence score reflects how much of the scene is clearly visible. For large piles, take photos from multiple angles to help the AI see more of the load.</div>
-        </div>
-      </div>
-      <div class="faq-item fade-up fade-up-delay-5">
-        <button class="faq-q" aria-expanded="false">
-          Is there a free trial?
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="faq-a" role="region">
-          <div class="faq-a-inner">Yes &mdash; try the estimator for free, no account needed. When you're ready, purchase the tier that fits your team size. You own the software outright.</div>
+          <div class="faq-a-inner">No. Your credits are available until you use them.</div>
         </div>
       </div>
       <div class="faq-item fade-up">
         <button class="faq-q" aria-expanded="false">
-          What does monthly hosting include?
+          What does the AI estimate include?
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="faq-a" role="region">
-          <div class="faq-a-inner">Hosting keeps your app running and includes AI estimate processing. Each plan includes a generous number of monthly estimates &mdash; Solo gets 150, Team gets 750, and Enterprise gets 2,500. If you go over, additional estimates are just $0.08&ndash;0.10 each. You can set a monthly cap so there are never surprise charges.</div>
+          <div class="faq-a-inner">Cubic yard volume, itemized breakdown, price range (based on your rates), job type, special item warnings, and a confidence score. All from photos.</div>
+        </div>
+      </div>
+      <div class="faq-item fade-up fade-up-delay-1">
+        <button class="faq-q" aria-expanded="false">
+          How accurate is it?
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-a" role="region">
+          <div class="faq-a-inner">The AI uses spatial measurement with real-world reference points. It measures furniture, appliances, and debris against known dimensions. Accuracy improves with more and better photos.</div>
+        </div>
+      </div>
+      <div class="faq-item fade-up fade-up-delay-2">
+        <button class="faq-q" aria-expanded="false">
+          Can I use it for industries other than junk removal?
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-a" role="region">
+          <div class="faq-a-inner">We're expanding to dumpster rental, cleaning, moving, and more. Contact us if you're interested in a specific industry.</div>
+        </div>
+      </div>
+      <div class="faq-item fade-up fade-up-delay-3">
+        <button class="faq-q" aria-expanded="false">
+          Can my team members use it?
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-a" role="region">
+          <div class="faq-a-inner">Yes. Add team members who can create estimates under your account. Each estimate uses one credit from your shared balance.</div>
         </div>
       </div>
       <div class="faq-item fade-up">
         <button class="faq-q" aria-expanded="false">
-          Can I control my spending?
+          Can I try it before buying?
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="faq-a" role="region">
-          <div class="faq-a-inner">Yes. You can set a maximum monthly overage cap, or choose to pause estimates when your included amount is reached. Managers and owners can add additional funds at any time. You'll get warnings as you approach your plan limits &mdash; no surprises.</div>
+          <div class="faq-a-inner">Yes! Create a free account and get 2 free estimates. No credit card needed.</div>
         </div>
       </div>
-      <div class="faq-item fade-up">
-        <button class="faq-q" aria-expanded="false">
-          Can I self-host?
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="faq-a" role="region">
-          <div class="faq-a-inner">Yes. Host on your own hardware using Llama AI for complete independence and privacy, or bring your own Anthropic API key. Self-hosting is available for all tiers. Contact us for setup.</div>
-        </div>
-      </div>
-      <div class="faq-item fade-up">
+      <div class="faq-item fade-up fade-up-delay-1">
         <button class="faq-q" aria-expanded="false">
           I'm just starting a junk removal business. Is this for me?
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="faq-a" role="region">
-          <div class="faq-a-inner">Absolutely. Pricing jobs is the hardest part of starting a junk business. Our AI has analyzed thousands of jobs and knows the dimensions of 60+ common items. You get the same estimating capability that experienced operators have &mdash; from your first job.</div>
-        </div>
-      </div>
-      <div class="faq-item fade-up">
-        <button class="faq-q" aria-expanded="false">
-          What about CRM and scheduling?
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="faq-a" role="region">
-          <div class="faq-a-inner">We offer a low-cost field service CRM as a separate product with the same pricing model &mdash; one-time purchase, no subscriptions. It includes scheduling, invoicing, customer management, and route planning with optional add-ons. Start with WhatShouldICharge and add the CRM when your business is ready.</div>
+          <div class="faq-a-inner">Absolutely. Pricing jobs is the hardest part of starting a junk business. Our AI knows the dimensions of 60+ common items. You get the same estimating capability that experienced operators have &mdash; from your first job. Start with 2 free estimates, then a 10-Pack is just $60.</div>
         </div>
       </div>
     </div>
@@ -573,8 +606,8 @@
   <div class="section-wrap" style="text-align:center">
     <span class="section-label fade-up">Get Started</span>
     <h2 class="fade-up">Ready to stop guessing?</h2>
-    <p class="fade-up">Get AI-assisted estimates from customer photos. No site visits. No spreadsheets. Just upload and quote.</p>
-    <a href="/signup" class="btn btn-primary btn-lg fade-up">Start Free Trial &rarr;</a>
+    <p class="fade-up">Get AI-powered estimates from customer photos. No subscriptions. No site visits. Just upload and quote.</p>
+    <a href="/signup" class="btn btn-primary btn-lg fade-up">Try 2 Free Estimates &rarr;</a>
   </div>
 </section>
 
@@ -586,7 +619,6 @@
       <li><a href="/">Home</a></li>
       <li><a href="#how-it-works">How It Works</a></li>
       <li><a href="#features">Features</a></li>
-      <li><a href="#how-ai-works">The AI</a></li>
       <li><a href="#pricing">Pricing</a></li>
       <li><a href="#faq">FAQ</a></li>
       <li><a href="/estimate">Estimator</a></li>

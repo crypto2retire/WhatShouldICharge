@@ -336,6 +336,7 @@ class Estimate(Base):
     pass2_json = Column(Text, default="")
     lookups_json = Column(Text, default="")
     photos_json = Column(Text, default="")
+    actual_price = Column(Float, default=None)
 
 
 class ItemReferenceLibrary(Base):
@@ -405,6 +406,7 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS photos_json TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS price_per_cy_standard DOUBLE PRECISION DEFAULT NULL",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS price_per_cy_heavy DOUBLE PRECISION DEFAULT NULL",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS actual_price DOUBLE PRECISION DEFAULT NULL",
         ]
     else:
         alter_statements = [
@@ -426,6 +428,7 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN photos_json TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN price_per_cy_standard REAL DEFAULT NULL",
             "ALTER TABLE users ADD COLUMN price_per_cy_heavy REAL DEFAULT NULL",
+            "ALTER TABLE estimates ADD COLUMN actual_price REAL DEFAULT NULL",
         ]
 
     async with engine.begin() as conn:
@@ -3808,6 +3811,95 @@ async def admin_estimates(request: Request, page: int = 1, q: str = ""):
             "page": page,
             "pages": max(1, (total + limit - 1) // limit),
         }
+
+
+@app.get("/api/admin/estimates/{estimate_id}")
+async def admin_estimate_detail(request: Request, estimate_id: int):
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Estimate).where(Estimate.id == estimate_id))
+        e = result.scalar_one_or_none()
+        if not e:
+            raise HTTPException(status_code=404, detail="Estimate not found.")
+
+        # Get user info
+        user_email = "Unknown"
+        company_name = ""
+        company_city = ""
+        company_state = ""
+        if e.user_id:
+            u_result = await db.execute(select(User).where(User.id == e.user_id))
+            u = u_result.scalar_one_or_none()
+            if u:
+                user_email = u.email
+                company_name = u.company_name or ""
+                company_city = u.company_city or ""
+                company_state = u.company_state or ""
+
+        # Parse result JSON
+        result_data = {}
+        if e.result_json:
+            try:
+                result_data = json.loads(e.result_json)
+            except Exception:
+                pass
+
+        # Parse lookups
+        lookups = []
+        if e.lookups_json:
+            try:
+                lookups = json.loads(e.lookups_json)
+            except Exception:
+                pass
+
+        # Build photos array with data URLs
+        photos = []
+        if e.photos_json:
+            try:
+                raw_photos = json.loads(e.photos_json)
+                for idx, b64 in enumerate(raw_photos):
+                    photos.append({"index": idx, "data_url": f"data:image/jpeg;base64,{b64}"})
+            except Exception:
+                pass
+
+        return {
+            "id": e.id,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+            "user_email": user_email,
+            "company_name": company_name,
+            "company_city": company_city,
+            "company_state": company_state,
+            "photos": photos,
+            "photos_count": e.photos_count or 0,
+            "result": result_data,
+            "price_low": e.price_low,
+            "price_high": e.price_high,
+            "cy_estimate": e.cy_estimate,
+            "estimate_name": e.estimate_name or "",
+            "lookups": lookups,
+            "actual_price": e.actual_price,
+        }
+
+
+@app.put("/api/admin/estimates/{estimate_id}/actual-price")
+async def admin_update_actual_price(request: Request, estimate_id: int):
+    await require_admin(request)
+    body = await request.json()
+    actual_price = body.get("actual_price")
+    if actual_price is not None:
+        try:
+            actual_price = float(actual_price)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid price value")
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Estimate).where(Estimate.id == estimate_id))
+        e = result.scalar_one_or_none()
+        if not e:
+            raise HTTPException(status_code=404, detail="Estimate not found.")
+        e.actual_price = actual_price
+        await db.commit()
+        return {"ok": True, "actual_price": actual_price}
 
 
 # ============== TEAM API ==============

@@ -3,907 +3,913 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin Dashboard — WhatShouldICharge</title>
+<title>WSIC Admin Dashboard</title>
 <style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
   :root {
     --bg: #0f1117;
     --surface: #1a1d27;
-    --surface2: #242734;
-    --border: #2a2d3a;
-    --text: #e2e8f0;
-    --muted: #8892a4;
+    --surface2: #22263a;
+    --border: #2e3352;
     --accent: #4f8ef7;
-    --green: #16a34a;
+    --accent-glow: rgba(79,142,247,0.18);
+    --green: #22c55e;
+    --orange: #f59e0b;
     --red: #ef4444;
-    --amber: #f59e0b;
+    --text: #e8eaf0;
+    --muted: #7b82a0;
+    --radius: 14px;
   }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-  .top-bar {
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  header {
     background: var(--surface);
     border-bottom: 1px solid var(--border);
-    padding: 14px 24px;
+    padding: 18px 24px;
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 14px;
   }
-  .top-bar h1 { font-size: 1.1rem; font-weight: 700; }
-  .top-bar h1 span { color: var(--green); }
-  .top-bar-links a { color: var(--muted); text-decoration: none; font-size: 0.85rem; margin-left: 16px; }
-  .top-bar-links a:hover { color: var(--text); }
 
+  .logo-icon {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, #4f8ef7, #7c3aed);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+
+  header h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
+  header p { font-size: 0.82rem; color: var(--muted); }
+  .header-right { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+  .header-right a { color: var(--accent); text-decoration: none; font-size: 0.85rem; }
+
+  .main-wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+
+  /* Tabs */
   .tabs {
     display: flex;
-    gap: 0;
-    background: var(--surface);
+    gap: 4px;
+    margin-bottom: 24px;
     border-bottom: 1px solid var(--border);
-    overflow-x: auto;
+    padding-bottom: 0;
   }
   .tab {
-    padding: 12px 24px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--muted);
+    padding: 10px 20px;
     cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--muted);
     border-bottom: 2px solid transparent;
-    white-space: nowrap;
-    transition: all 0.15s;
+    transition: all 0.2s;
+    background: none;
+    border-top: none; border-left: none; border-right: none;
   }
   .tab:hover { color: var(--text); }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
 
-  .content { max-width: 1200px; margin: 0 auto; padding: 24px; }
-  .panel { display: none; }
-  .panel.active { display: block; }
-
-  .stat-grid {
+  /* Stats cards */
+  .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 16px;
-    margin-bottom: 24px;
+    margin-bottom: 28px;
   }
   .stat-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius);
     padding: 20px;
   }
-  .stat-card .label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-  .stat-card .value { font-size: 1.8rem; font-weight: 700; margin-top: 6px; }
-  .stat-card .value.green { color: var(--green); }
-  .stat-card .value.accent { color: var(--accent); }
-  .stat-card .value.amber { color: var(--amber); }
+  .stat-label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .stat-value { font-size: 1.8rem; font-weight: 700; }
 
+  /* Card */
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: var(--radius);
+    padding: 24px;
     margin-bottom: 20px;
   }
-  .card-title { font-size: 0.95rem; font-weight: 700; margin-bottom: 16px; }
-
-  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  th { text-align: left; padding: 10px 12px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); font-size: 0.78rem; text-transform: uppercase; }
-  td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
-  tr:hover td { background: var(--surface2); }
-
-  .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 0.72rem;
+  .card-title {
+    font-size: 0.78rem;
     font-weight: 600;
-  }
-  .badge-free { background: rgba(255,255,255,0.06); color: var(--muted); }
-  .badge-starter { background: rgba(79,142,247,0.15); color: var(--accent); }
-  .badge-pro { background: rgba(168,85,247,0.15); color: #a855f7; }
-  .badge-agency { background: rgba(22,163,106,0.15); color: var(--green); }
-
-  .tier-bar {
-    display: flex;
-    gap: 4px;
-    height: 24px;
-    border-radius: 6px;
-    overflow: hidden;
-    margin-top: 8px;
-  }
-  .tier-bar-seg { height: 100%; min-width: 2px; transition: width 0.3s; }
-
-  input[type="text"], input[type="number"], input[type="email"], textarea, select {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 8px 12px;
-    color: var(--text);
-    font-size: 0.85rem;
-    width: 100%;
-  }
-  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
-
-  .btn {
-    display: inline-block;
-    padding: 8px 16px;
-    border-radius: 8px;
-    border: none;
-    font-size: 0.83rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity 0.15s;
-  }
-  .btn:hover { opacity: 0.85; }
-  .btn-primary { background: var(--accent); color: #fff; }
-  .btn-green { background: var(--green); color: #fff; }
-  .btn-red { background: var(--red); color: #fff; }
-  .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
-
-  .search-box {
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
     margin-bottom: 16px;
   }
-  .search-box input {
-    max-width: 320px;
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 12px;
+    border-bottom: 1px solid rgba(46,51,82,0.4);
+    font-size: 0.9rem;
+  }
+  .est-row {
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .est-row:hover {
+    background: var(--accent-glow);
   }
 
-  .plan-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
-  }
-  .plan-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-  }
-  .plan-card h3 { font-size: 1rem; margin-bottom: 12px; }
-  .plan-field { margin-bottom: 12px; }
-  .plan-field label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
-
-  .config-form {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  .config-field label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
-  .config-field textarea { min-height: 60px; resize: vertical; }
-
+  /* Pagination */
   .pagination {
     display: flex;
     gap: 8px;
     justify-content: center;
-    margin-top: 16px;
+    margin-top: 20px;
   }
-  .pagination button {
+  .page-btn {
+    padding: 8px 14px;
     background: var(--surface2);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 12px;
+    border-radius: 8px;
     color: var(--text);
     cursor: pointer;
-    font-size: 0.82rem;
-  }
-  .pagination button:hover { border-color: var(--accent); }
-  .pagination button.active { background: var(--accent); border-color: var(--accent); }
-
-  .team-form {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-  }
-  .team-form input { max-width: 200px; }
-
-  .toggle {
-    position: relative;
-    width: 40px;
-    height: 22px;
-    display: inline-block;
-  }
-  .toggle input { display: none; }
-  .toggle .slider {
-    position: absolute;
-    inset: 0;
-    background: var(--border);
-    border-radius: 11px;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-  .toggle .slider::after {
-    content: '';
-    position: absolute;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: #fff;
-    top: 3px;
-    left: 3px;
-    transition: transform 0.2s;
-  }
-  .toggle input:checked + .slider { background: var(--green); }
-  .toggle input:checked + .slider::after { transform: translateX(18px); }
-
-  .toast {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    padding: 12px 20px;
-    border-radius: 10px;
-    background: var(--green);
-    color: #fff;
     font-size: 0.85rem;
-    font-weight: 600;
-    z-index: 9999;
-    transform: translateY(80px);
-    opacity: 0;
-    transition: all 0.3s;
   }
-  .toast.visible { transform: translateY(0); opacity: 1; }
+  .page-btn:hover { background: var(--accent-glow); border-color: var(--accent); }
+  .page-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .page-btn:disabled { opacity: 0.4; cursor: default; }
 
-  @media (max-width: 768px) {
-    .content { padding: 16px; }
-    .stat-grid { grid-template-columns: repeat(2, 1fr); }
-    .plan-grid { grid-template-columns: 1fr; }
+  /* Modal overlay */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    overflow-y: auto;
+    padding: 40px 20px;
+  }
+  .modal-overlay.open { display: flex; justify-content: center; align-items: flex-start; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    position: relative;
+  }
+  .modal-header {
+    padding: 24px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .modal-header h2 { font-size: 1.2rem; font-weight: 700; }
+  .modal-header .meta { font-size: 0.85rem; color: var(--muted); margin-top: 4px; }
+  .modal-close {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    width: 36px; height: 36px;
+    cursor: pointer;
+    font-size: 1.1rem;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .modal-close:hover { background: var(--red); border-color: var(--red); }
+  .modal-body { padding: 24px 28px; }
+  .modal-section { margin-bottom: 24px; }
+  .modal-section-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Photos grid */
+  .photos-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .photo-thumb {
+    width: 140px;
+    height: 140px;
+    object-fit: cover;
+    border-radius: 10px;
+    border: 2px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .photo-thumb:hover {
+    border-color: var(--accent);
+    transform: scale(1.03);
+  }
+
+  /* Lightbox */
+  .lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.92);
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+  }
+  .lightbox.open { display: flex; }
+  .lightbox img {
+    max-width: 90vw;
+    max-height: 90vh;
+    border-radius: 12px;
+    object-fit: contain;
+  }
+
+  /* Summary row */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .summary-item { }
+  .summary-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 2px; }
+  .summary-val { font-size: 1.1rem; font-weight: 600; }
+  .price-highlight {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--green);
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin: 2px 4px 2px 0;
+  }
+  .badge-condition {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+  .badge-lookup {
+    background: rgba(79,142,247,0.15);
+    color: var(--accent);
+    border: 1px solid rgba(79,142,247,0.3);
+  }
+  .badge-redistributed {
+    background: rgba(245,158,11,0.15);
+    color: var(--orange);
+    border: 1px solid rgba(245,158,11,0.3);
+  }
+  .badge-ai {
+    background: rgba(124,58,237,0.15);
+    color: #a78bfa;
+    border: 1px solid rgba(124,58,237,0.3);
+  }
+
+  /* Confidence bar */
+  .confidence-bar-wrap {
+    background: var(--surface2);
+    border-radius: 8px;
+    height: 8px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+  .confidence-bar {
+    height: 100%;
+    border-radius: 8px;
+    transition: width 0.3s;
+  }
+
+  /* Notes */
+  .notes-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* Spatial math highlight */
+  .spatial-math {
+    background: rgba(79,142,247,0.1);
+    border: 1px solid rgba(79,142,247,0.25);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.88rem;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+
+  /* Recycling warning */
+  .recycling-warning {
+    background: rgba(245,158,11,0.1);
+    border: 1px solid rgba(245,158,11,0.25);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 0.88rem;
+  }
+
+  /* Accuracy tracking */
+  .accuracy-wrap {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .accuracy-input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 0.95rem;
+    width: 160px;
+  }
+  .accuracy-input:focus { outline: none; border-color: var(--accent); }
+  .btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-sm { padding: 6px 14px; font-size: 0.82rem; }
+  .accuracy-result {
+    font-size: 0.88rem;
+    margin-top: 10px;
+    padding: 10px 14px;
+    border-radius: 8px;
+  }
+  .accuracy-hit { background: rgba(34,197,94,0.12); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+  .accuracy-miss { background: rgba(239,68,68,0.12); color: var(--red); border: 1px solid rgba(239,68,68,0.25); }
+
+  /* Items table in modal */
+  .items-table th { font-size: 0.72rem; }
+  .items-table td { font-size: 0.85rem; padding: 8px 10px; }
+
+  .loading { text-align: center; padding: 40px; color: var(--muted); }
+  .empty { text-align: center; padding: 40px; color: var(--muted); font-size: 0.9rem; }
+
+  @media (max-width: 600px) {
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .summary-grid { grid-template-columns: 1fr; }
+    .photo-thumb { width: 100px; height: 100px; }
+    .modal-body { padding: 16px; }
+    .modal-header { padding: 16px; }
+    td, th { padding: 8px 6px; font-size: 0.8rem; }
   }
 </style>
 </head>
 <body>
 
-<header class="top-bar">
-  <h1><span aria-hidden="true">●</span> WhatShouldICharge <span style="font-weight:400;color:var(--muted);font-size:0.85rem;">Admin</span></h1>
-  <nav class="top-bar-links" aria-label="Admin navigation">
-    <a href="/estimate">Estimator</a>
-    <a href="/library">Library</a>
-    <a href="/" target="_blank" rel="noopener">Site</a>
-  </nav>
+<header>
+  <div class="logo-icon">&#x1f4ca;</div>
+  <div>
+    <h1>WSIC Admin</h1>
+    <p>Dashboard &amp; Analytics</p>
+  </div>
+  <div class="header-right">
+    <a href="/estimate">Back to App</a>
+  </div>
 </header>
 
-<div class="tabs" role="tablist" aria-label="Admin sections">
-  <button class="tab active" data-panel="analytics" role="tab" aria-selected="true" aria-controls="panel-analytics">Analytics</button>
-  <button class="tab" data-panel="users" role="tab" aria-selected="false" aria-controls="panel-users">Users</button>
-  <button class="tab" data-panel="plans" role="tab" aria-selected="false" aria-controls="panel-plans">Plans</button>
-  <button class="tab" data-panel="team" role="tab" aria-selected="false" aria-controls="panel-team">Team</button>
-  <button class="tab" data-panel="site-config" role="tab" aria-selected="false" aria-controls="panel-site-config">Site Config</button>
-  <button class="tab" data-panel="estimates" role="tab" aria-selected="false" aria-controls="panel-estimates">Estimates</button>
-  <button class="tab" data-panel="my-settings" role="tab" aria-selected="false" aria-controls="panel-my-settings" style="margin-left:auto;color:var(--green);">My Settings</button>
-</div>
+<div class="main-wrap">
+  <div class="tabs">
+    <button class="tab active" data-tab="analytics">Analytics</button>
+    <button class="tab" data-tab="estimates">Estimates</button>
+    <button class="tab" data-tab="users">Users</button>
+  </div>
 
-<main class="content">
-
-  <!-- Analytics Panel -->
-  <div class="panel active" id="panel-analytics" role="tabpanel" aria-labelledby="tab-analytics">
-    <div class="stat-grid" id="stats-grid"></div>
+  <!-- Analytics Tab -->
+  <div class="tab-content active" id="tab-analytics">
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value" id="stat-users">--</div></div>
+      <div class="stat-card"><div class="stat-label">Paid Users</div><div class="stat-value" id="stat-paid">--</div></div>
+      <div class="stat-card"><div class="stat-label">Total Estimates</div><div class="stat-value" id="stat-estimates">--</div></div>
+      <div class="stat-card"><div class="stat-label">Today</div><div class="stat-value" id="stat-today">--</div></div>
+      <div class="stat-card"><div class="stat-label">This Week</div><div class="stat-value" id="stat-week">--</div></div>
+      <div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value" id="stat-month">--</div></div>
+    </div>
     <div class="card">
-      <div class="card-title">User Distribution</div>
-      <div class="tier-bar" id="tier-bar"></div>
-      <div id="tier-legend" style="display:flex;gap:16px;margin-top:10px;font-size:0.78rem;flex-wrap:wrap;"></div>
+      <div class="card-title">Averages</div>
+      <p style="font-size:0.9rem;color:var(--muted)">Avg Volume: <strong id="stat-avg-cy">--</strong> CY &nbsp;&middot;&nbsp; Avg Price: <strong id="stat-avg-price">--</strong></p>
     </div>
     <div class="card">
       <div class="card-title">Recent Users</div>
-      <table id="recent-users-table">
+      <table>
         <thead><tr><th>Email</th><th>Company</th><th>Tier</th><th>Joined</th></tr></thead>
-        <tbody></tbody>
+        <tbody id="recent-users-body"></tbody>
       </table>
     </div>
   </div>
 
-  <!-- Users Panel -->
-  <div class="panel" id="panel-users" role="tabpanel" aria-labelledby="tab-users">
-    <div class="search-box">
-      <label for="user-search" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Search users</label>
-    <input type="text" id="user-search" placeholder="Search by email or company..." aria-label="Search users by email or company">
-    </div>
+  <!-- Estimates Tab -->
+  <div class="tab-content" id="tab-estimates">
     <div class="card">
-      <table id="users-table">
-        <thead><tr><th>Email</th><th>Company</th><th>Location</th><th>Tier</th><th>Usage</th><th>Joined</th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <div class="pagination" id="users-pagination"></div>
-    </div>
-  </div>
-
-  <!-- Plans Panel -->
-  <div class="panel" id="panel-plans" role="tabpanel" aria-labelledby="tab-plans">
-    <div class="plan-grid" id="plans-grid"></div>
-  </div>
-
-  <!-- Team Panel -->
-  <div class="panel" id="panel-team" role="tabpanel" aria-labelledby="tab-team">
-    <div class="card">
-      <div class="card-title">Add Team Member</div>
-      <div class="team-form">
-        <input type="text" id="team-name" placeholder="Name">
-        <input type="text" id="team-pin" placeholder="PIN (4+ digits)">
-        <select id="team-role"><option value="estimator">Estimator</option><option value="viewer">Viewer</option></select>
-        <button class="btn btn-green" onclick="addTeamMember()">Add Member</button>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-title">Team Members</div>
-      <table id="team-table">
-        <thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Site Config Panel -->
-  <div class="panel" id="panel-site-config" role="tabpanel" aria-labelledby="tab-site-config">
-    <div class="card">
-      <div class="card-title">Website Content</div>
-      <div class="config-form" id="config-form"></div>
-      <div style="margin-top:16px;">
-        <button class="btn btn-primary" onclick="saveSiteConfig()">Save Changes</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Estimates Panel -->
-  <div class="panel" id="panel-estimates" role="tabpanel" aria-labelledby="tab-estimates">
-    <div class="card">
-      <table id="estimates-table">
-        <thead><tr><th>ID</th><th>User</th><th>Photos</th><th>Price Range</th><th>CY</th><th>Date</th></tr></thead>
-        <tbody></tbody>
+      <div class="card-title">All Estimates</div>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Date</th>
+            <th>User</th>
+            <th>Photos</th>
+            <th>CY</th>
+            <th>Price Range</th>
+          </tr>
+        </thead>
+        <tbody id="estimates-body"></tbody>
       </table>
       <div class="pagination" id="estimates-pagination"></div>
     </div>
   </div>
 
-  <!-- My Settings Panel -->
-  <div class="panel" id="panel-my-settings" role="tabpanel" aria-labelledby="tab-my-settings">
-
+  <!-- Users Tab -->
+  <div class="tab-content" id="tab-users">
     <div class="card">
-      <div class="card-title">Company Profile</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Company Name</label><input type="text" id="ms-company-name"></div>
-        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Phone</label><input type="text" id="ms-phone"></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">City</label><input type="text" id="ms-city"></div>
-        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">State</label><input type="text" id="ms-state" maxlength="2" placeholder="WI"></div>
-      </div>
-      <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Logo URL</label><input type="text" id="ms-logo" placeholder="https://example.com/logo.png"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Pricing</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Standard Rate ($/CY)</label><input type="number" id="ms-rate-standard" step="0.01" min="0" placeholder="e.g. 35.00"></div>
-        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Heavy/Hoarding Rate ($/CY)</label><input type="number" id="ms-rate-heavy" step="0.01" min="0" placeholder="e.g. 50.00"></div>
-      </div>
-      <div style="font-size:0.75rem;color:var(--muted);margin-bottom:12px;">Your per-cubic-yard rates. Estimates use -10%/+20% for the price range. If blank, fallback rates below are used.</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Minimum Charge ($)</label><input type="number" id="ms-min-charge" step="0.01" min="0"></div>
-        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Truck Capacity (CY)</label><input type="number" id="ms-truck" step="0.1" min="1"></div>
-      </div>
-      <div style="font-size:0.75rem;color:var(--muted);margin-bottom:12px;">Estimates will never quote below the minimum charge amount.</div>
-      <div style="margin-top:12px;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <span style="font-size:0.8rem;font-weight:600;">Check Market Rates</span>
-          <button class="btn btn-sm btn-primary" id="ms-check-market" style="font-size:0.75rem;padding:5px 12px;">Look Up Rates</button>
-        </div>
-        <div style="font-size:0.75rem;color:var(--muted);">Search what competitors in your area charge per cubic yard. Use this to inform your pricing — it does not affect your estimates.</div>
-        <div id="ms-market-result" style="display:none;margin-top:10px;padding:10px;background:var(--surface);border-radius:6px;font-size:0.8rem;"></div>
-      </div>
-      <details style="margin-top:12px;">
-        <summary style="font-size:0.78rem;color:var(--muted);cursor:pointer;">Advanced: Fallback Rates (used when custom rates are blank)</summary>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px;">
-          <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">$/CY (Low)</label><input type="number" id="ms-rate-low" step="0.01" min="0"></div>
-          <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">$/CY (High)</label><input type="number" id="ms-rate-high" step="0.01" min="0"></div>
-          <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Premium $/CY</label><input type="number" id="ms-rate-premium" step="0.01" min="0"></div>
-        </div>
-      </details>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Profitability Calculator</div>
-      <div style="font-size:0.75rem;color:var(--muted);margin-bottom:12px;">Estimate your profit per job. Adjust costs to find the right $/CY rate for your business.</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Dump/Disposal Fee ($)</label><input type="number" id="pc-dump-fee" step="1" min="0" value="50"></div>
-        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Fuel Cost Per Job ($)</label><input type="number" id="pc-fuel" step="1" min="0" value="25"></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Labor Cost Per Job ($)</label><input type="number" id="pc-labor" step="1" min="0" value="60"></div>
-        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Job Size (CY)</label><input type="number" id="pc-cy" step="0.5" min="0.5" value="5"></div>
-      </div>
-      <button class="btn btn-sm btn-primary" id="pc-calc" style="margin-bottom:12px;">Calculate</button>
-      <div id="pc-result" style="display:none;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:0.85rem;"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Customer Estimate Page</div>
-      <div style="font-size:0.8rem;color:var(--muted);margin-bottom:12px;">Let your customers submit photos for estimates. Set a slug to enable your public page.</div>
-      <div style="margin-bottom:12px;">
-        <label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Company Slug (URL)</label>
-        <div style="display:flex;align-items:center;">
-          <span style="padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-right:none;border-radius:8px 0 0 8px;color:var(--muted);font-size:0.8rem;white-space:nowrap;">/estimate/</span>
-          <input type="text" id="ms-slug" placeholder="your-company-name" style="border-radius:0 8px 8px 0;" maxlength="60">
-        </div>
-        <div id="ms-slug-preview" style="font-size:0.75rem;color:var(--muted);margin-top:6px;"></div>
-      </div>
-      <div id="ms-embed-section" style="display:none;margin-bottom:12px;">
-        <label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Embed Code</label>
-        <div style="display:flex;gap:8px;align-items:start;">
-          <textarea id="ms-embed-code" readonly rows="2" style="font-family:monospace;font-size:0.75rem;color:var(--green);resize:none;flex:1;"></textarea>
-          <button class="btn btn-sm btn-primary" id="ms-copy-embed">Copy</button>
-        </div>
-      </div>
-    </div>
-
-    <button class="btn btn-green" id="ms-save" style="min-width:160px;">Save All Settings</button>
-    <span id="ms-msg" style="margin-left:12px;font-size:0.83rem;color:var(--green);display:none;"></span>
-
-    <div class="card" style="margin-top:16px;">
-      <div class="card-title">Change Password</div>
-      <div style="max-width:400px;">
-        <div style="margin-bottom:12px;"><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Current Password</label><input type="password" id="pw-current"></div>
-        <div style="margin-bottom:12px;"><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">New Password</label><input type="password" id="pw-new" minlength="8"></div>
-        <div style="margin-bottom:12px;"><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Confirm New Password</label><input type="password" id="pw-confirm" minlength="8"></div>
-      </div>
-      <button class="btn btn-primary" id="pw-save" style="min-width:160px;">Save Password</button>
-      <span id="pw-msg" style="margin-left:12px;font-size:0.83rem;display:none;"></span>
-    </div>
-
-    <div class="card" style="margin-top:16px;">
-      <div class="card-title">Security</div>
-      <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px;">Log out from all other browsers and devices where you're signed in.</p>
-      <button class="btn btn-red" id="logout-all" style="min-width:200px;">Log Out All Devices</button>
+      <div class="card-title">All Users</div>
+      <table>
+        <thead><tr><th>ID</th><th>Email</th><th>Company</th><th>Tier</th><th>Estimates</th><th>Joined</th></tr></thead>
+        <tbody id="users-body"></tbody>
+      </table>
+      <div class="pagination" id="users-pagination"></div>
     </div>
   </div>
-
 </div>
 
-</main>
+<!-- Estimate Detail Modal -->
+<div class="modal-overlay" id="estimate-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h2 id="modal-title">Estimate #--</h2>
+        <div class="meta" id="modal-meta"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-body">
+      <div class="loading">Loading estimate details...</div>
+    </div>
+  </div>
+</div>
 
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!-- Photo Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <img id="lightbox-img" src="" alt="Full size photo">
+</div>
 
 <script>
-function getCsrfToken() {
-  var match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
-  return match ? match[1] : '';
-}
-function csrfHeaders(extra) {
-  var h = {'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken()};
-  if (extra) Object.assign(h, extra);
-  return h;
-}
-function esc(s) { var d = document.createElement('div'); d.textContent = String(s || ''); return d.innerHTML; }
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
 
-function showToast(msg) {
-  var t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('visible');
-  setTimeout(function() { t.classList.remove('visible'); }, 2500);
-}
-
-document.querySelectorAll('.tab').forEach(function(tab) {
-  tab.addEventListener('click', function() {
-    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
-    document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+// ── Tabs ──
+$$('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    $$('.tab').forEach(t => t.classList.remove('active'));
+    $$('.tab-content').forEach(c => c.classList.remove('active'));
     tab.classList.add('active');
-    tab.setAttribute('aria-selected', 'true');
-    document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
-    // Reload settings when My Settings tab is clicked
-    if (tab.dataset.panel === 'my-settings') { loadMySettings(); }
+    const target = tab.dataset.tab;
+    $(`#tab-${target}`).classList.add('active');
+    if (target === 'analytics' && !analyticsLoaded) loadAnalytics();
+    if (target === 'estimates' && !estimatesLoaded) loadEstimates(1);
+    if (target === 'users' && !usersLoaded) loadUsers(1);
   });
 });
 
+let analyticsLoaded = false;
+let estimatesLoaded = false;
+let usersLoaded = false;
+
+async function apiFetch(url, opts) {
+  const res = await fetch(url, { credentials: 'include', ...opts });
+  if (res.status === 401 || res.status === 403) {
+    window.location.href = '/login';
+    throw new Error('Not authorized');
+  }
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+// ── Analytics ──
 async function loadAnalytics() {
   try {
-  var resp = await fetch('/api/admin/analytics');
-  if (resp.status === 401 || resp.status === 403) { window.location.href = '/login'; return; }
-  var d = await resp.json();
-  var grid = document.getElementById('stats-grid');
-  grid.innerHTML = `
-    <div class="stat-card"><div class="label">Total Users</div><div class="value accent">${d.total_users}</div></div>
-    <div class="stat-card"><div class="label">Paid Users</div><div class="value green">${d.paid_users}</div></div>
-    <div class="stat-card"><div class="label">Total Estimates</div><div class="value">${d.total_estimates}</div></div>
-    <div class="stat-card"><div class="label">Estimates Today</div><div class="value accent">${d.estimates_today}</div></div>
-    <div class="stat-card"><div class="label">Estimates This Week</div><div class="value">${d.estimates_week}</div></div>
-    <div class="stat-card"><div class="label">Estimates This Month</div><div class="value">${d.estimates_month}</div></div>
-    <div class="stat-card"><div class="label">Avg. Volume</div><div class="value amber">${d.avg_cy} CY</div></div>
-    <div class="stat-card"><div class="label">Team Members</div><div class="value">${d.team_members}</div></div>
-  `;
+    const d = await apiFetch('/api/admin/analytics');
+    $('#stat-users').textContent = d.total_users;
+    $('#stat-paid').textContent = d.paid_users;
+    $('#stat-estimates').textContent = d.total_estimates;
+    $('#stat-today').textContent = d.estimates_today;
+    $('#stat-week').textContent = d.estimates_week;
+    $('#stat-month').textContent = d.estimates_month;
+    $('#stat-avg-cy').textContent = d.avg_cy + ' CY';
+    $('#stat-avg-price').textContent = '$' + d.avg_price;
 
-  var tierColors = { free: '#6b7280', starter: '#4f8ef7', pro: '#a855f7', agency: '#16a34a' };
-  var total = d.total_users || 1;
-  var bar = document.getElementById('tier-bar');
-  var legend = document.getElementById('tier-legend');
-  bar.innerHTML = '';
-  legend.innerHTML = '';
-  ['free','starter','pro','agency'].forEach(function(t) {
-    var cnt = d.tier_counts[t] || 0;
-    var pct = (cnt / total * 100);
-    bar.innerHTML += '<div class="tier-bar-seg" style="width:' + pct + '%;background:' + tierColors[t] + '"></div>';
-    legend.innerHTML += '<div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + tierColors[t] + ';margin-right:4px;vertical-align:middle;"></span>' + t.charAt(0).toUpperCase() + t.slice(1) + ' (' + cnt + ')</div>';
-  });
-
-  var tbody = document.querySelector('#recent-users-table tbody');
-  tbody.innerHTML = '';
-  (d.recent_users || []).forEach(function(u) {
-    var tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + esc(u.email) + '</td><td>' + esc(u.company_name) + '</td><td><span class="badge badge-' + u.tier + '">' + esc(u.tier) + '</span></td><td style="color:var(--muted)">' + (u.created_at ? new Date(u.created_at).toLocaleDateString() : '') + '</td>';
-    tbody.appendChild(tr);
-  });
-  } catch (e) { showToast('Failed to load analytics'); }
+    const tbody = $('#recent-users-body');
+    tbody.innerHTML = d.recent_users.map(u => `
+      <tr>
+        <td>${esc(u.email)}</td>
+        <td>${esc(u.company_name || '--')}</td>
+        <td><span class="badge badge-condition">${esc(u.tier)}</span></td>
+        <td>${fmtDate(u.created_at)}</td>
+      </tr>
+    `).join('');
+    analyticsLoaded = true;
+  } catch(e) { console.error('Analytics load error:', e); }
 }
 
-var usersPage = 1;
-async function loadUsers(page, query) {
-  page = page || 1;
-  query = query || '';
-  var resp = await fetch('/api/admin/users?page=' + page + '&q=' + encodeURIComponent(query));
-  var d = await resp.json();
-  var tbody = document.querySelector('#users-table tbody');
-  tbody.innerHTML = '';
-  d.users.forEach(function(u) {
-    var tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + esc(u.email) + '</td><td>' + esc(u.company_name) + '</td><td style="color:var(--muted)">' + esc((u.company_city || '') + (u.company_state ? ', ' + u.company_state : '')) + '</td><td><span class="badge badge-' + u.tier + '">' + esc(u.tier) + '</span></td><td>' + u.estimates_used + '/' + u.estimates_limit + '</td><td style="color:var(--muted)">' + (u.created_at ? new Date(u.created_at).toLocaleDateString() : '') + '</td>';
-    tbody.appendChild(tr);
-  });
-  renderPagination('users-pagination', d.page, d.pages, function(p) { usersPage = p; loadUsers(p, document.getElementById('user-search').value); });
-}
-
-function renderPagination(containerId, current, total, callback) {
-  var el = document.getElementById(containerId);
-  el.innerHTML = '';
-  if (total <= 1) return;
-  for (var i = 1; i <= total; i++) {
-    var btn = document.createElement('button');
-    btn.textContent = i;
-    if (i === current) btn.classList.add('active');
-    btn.addEventListener('click', (function(page) { return function() { callback(page); }; })(i));
-    el.appendChild(btn);
-  }
-}
-
-document.getElementById('user-search').addEventListener('input', function(e) {
-  loadUsers(1, e.target.value);
-});
-
-async function loadPlans() {
-  var resp = await fetch('/api/admin/plans');
-  var plans = await resp.json();
-  var grid = document.getElementById('plans-grid');
-  grid.innerHTML = '';
-  plans.forEach(function(p) {
-    var features = (p.features || []).join('\n');
-    var card = document.createElement('div');
-    card.className = 'plan-card';
-    card.innerHTML = `
-      <h3>${esc(p.display_name)}</h3>
-      <div class="plan-field"><label>Display Name</label><input type="text" value="${esc(p.display_name)}" data-field="display_name"></div>
-      <div class="plan-field"><label>Price (cents)</label><input type="number" value="${p.price_cents}" data-field="price_cents"></div>
-      <div class="plan-field"><label>Estimate Limit</label><input type="number" value="${p.estimate_limit}" data-field="estimate_limit"></div>
-      <div class="plan-field"><label>Stripe Price ID</label><input type="text" value="${esc(p.stripe_price_id)}" data-field="stripe_price_id"></div>
-      <div class="plan-field"><label>Features (one per line)</label><textarea data-field="features" rows="4">${esc(features)}</textarea></div>
-      <div class="plan-field" style="display:flex;align-items:center;gap:8px;">
-        <label style="margin:0;">Active</label>
-        <label class="toggle"><input type="checkbox" ${p.is_active ? 'checked' : ''} data-field="is_active"><span class="slider"></span></label>
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="savePlan(${p.id}, this.closest('.plan-card'))">Save</button>
-    `;
-    grid.appendChild(card);
-  });
-}
-
-async function savePlan(id, card) {
-  var data = {};
-  card.querySelectorAll('[data-field]').forEach(function(el) {
-    var f = el.dataset.field;
-    if (f === 'features') data[f] = el.value.split('\n').filter(function(l) { return l.trim(); });
-    else if (f === 'is_active') data[f] = el.checked;
-    else if (f === 'price_cents' || f === 'estimate_limit') data[f] = parseInt(el.value) || 0;
-    else data[f] = el.value;
-  });
-  await fetch('/api/admin/plans/' + id, { method: 'PUT', headers: csrfHeaders(), body: JSON.stringify(data) });
-  showToast('Plan saved');
-  loadPlans();
-}
-
-async function loadTeam() {
-  var resp = await fetch('/api/team/members');
-  var members = await resp.json();
-  var tbody = document.querySelector('#team-table tbody');
-  tbody.innerHTML = '';
-  members.forEach(function(m) {
-    var tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${esc(m.name)}</td>
-      <td>${esc(m.role)}</td>
-      <td>${m.is_active ? '<span style="color:var(--green)">Active</span>' : '<span style="color:var(--red)">Inactive</span>'}</td>
-      <td style="color:var(--muted)">${m.created_at ? new Date(m.created_at).toLocaleDateString() : ''}</td>
-      <td>
-        <button class="btn btn-sm ${m.is_active ? 'btn-red' : 'btn-green'}" onclick="toggleMember(${m.id}, ${m.is_active})">${m.is_active ? 'Deactivate' : 'Activate'}</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-async function addTeamMember() {
-  var name = document.getElementById('team-name').value.trim();
-  var pin = document.getElementById('team-pin').value.trim();
-  var role = document.getElementById('team-role').value;
-  if (!name || !pin || pin.length < 4) { alert('Name and PIN (4+ digits) required.'); return; }
-  await fetch('/api/team/members', { method: 'POST', headers: csrfHeaders(), body: JSON.stringify({name: name, pin: pin, role: role}) });
-  document.getElementById('team-name').value = '';
-  document.getElementById('team-pin').value = '';
-  showToast('Team member added');
-  loadTeam();
-}
-
-async function toggleMember(id, isActive) {
-  await fetch('/api/team/members/' + id, { method: 'PUT', headers: csrfHeaders(), body: JSON.stringify({is_active: !isActive}) });
-  showToast(isActive ? 'Member deactivated' : 'Member activated');
-  loadTeam();
-}
-
-var siteConfig = {};
-async function loadSiteConfig() {
-  var resp = await fetch('/api/admin/site-config');
-  siteConfig = await resp.json();
-  var form = document.getElementById('config-form');
-  form.innerHTML = '';
-  var labels = {
-    hero_title: 'Hero Title',
-    hero_subtitle: 'Hero Subtitle',
-    hero_description: 'Hero Description',
-    cta_primary: 'Primary CTA Button',
-    cta_secondary: 'Secondary CTA Button',
-    feature_1_title: 'Feature 1 Title',
-    feature_1_desc: 'Feature 1 Description',
-    feature_2_title: 'Feature 2 Title',
-    feature_2_desc: 'Feature 2 Description',
-    feature_3_title: 'Feature 3 Title',
-    feature_3_desc: 'Feature 3 Description',
-    faq_1_q: 'FAQ 1 Question',
-    faq_1_a: 'FAQ 1 Answer',
-    faq_2_q: 'FAQ 2 Question',
-    faq_2_a: 'FAQ 2 Answer',
-    faq_3_q: 'FAQ 3 Question',
-    faq_3_a: 'FAQ 3 Answer',
-  };
-  Object.keys(siteConfig).forEach(function(key) {
-    var div = document.createElement('div');
-    div.className = 'config-field';
-    var isLong = key.includes('desc') || key.includes('_a');
-    div.innerHTML = '<label>' + esc(labels[key] || key) + '</label>' +
-      (isLong ? '<textarea data-key="' + esc(key) + '">' + esc(siteConfig[key]) + '</textarea>'
-              : '<input type="text" data-key="' + esc(key) + '" value="' + esc(siteConfig[key]) + '">');
-    form.appendChild(div);
-  });
-}
-
-async function saveSiteConfig() {
-  var data = {};
-  document.querySelectorAll('#config-form [data-key]').forEach(function(el) {
-    data[el.dataset.key] = el.value;
-  });
-  await fetch('/api/admin/site-config', { method: 'PUT', headers: csrfHeaders(), body: JSON.stringify(data) });
-  showToast('Site config saved');
-}
-
-var estPage = 1;
+// ── Estimates ──
 async function loadEstimates(page) {
-  page = page || 1;
-  var resp = await fetch('/api/admin/estimates?page=' + page);
-  var d = await resp.json();
-  var tbody = document.querySelector('#estimates-table tbody');
-  tbody.innerHTML = '';
-  d.estimates.forEach(function(e) {
-    var tr = document.createElement('tr');
-    tr.innerHTML = '<td>#' + e.id + '</td><td>' + esc(e.user_email) + '</td><td>' + (e.photos_count || 0) + '</td><td>$' + (e.price_low || 0).toLocaleString() + ' — $' + (e.price_high || 0).toLocaleString() + '</td><td>' + (e.cy_estimate || 0) + '</td><td style="color:var(--muted)">' + (e.created_at ? new Date(e.created_at).toLocaleDateString() : '') + '</td>';
-    tbody.appendChild(tr);
-  });
-  renderPagination('estimates-pagination', d.page, d.pages, function(p) { estPage = p; loadEstimates(p); });
-}
-
-// My Settings
-async function loadMySettings() {
+  const tbody = $('#estimates-body');
+  tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading...</td></tr>';
   try {
-    var resp = await fetch('/api/settings?_t=' + Date.now());
-    if (!resp.ok) return;
-    var d = await resp.json();
-    document.getElementById('ms-company-name').value = d.company_name || '';
-    document.getElementById('ms-phone').value = d.company_phone || '';
-    document.getElementById('ms-city').value = d.company_city || '';
-    document.getElementById('ms-state').value = d.company_state || '';
-    document.getElementById('ms-logo').value = d.company_logo_url || '';
-    document.getElementById('ms-rate-standard').value = d.price_per_cy_standard || '';
-    document.getElementById('ms-rate-heavy').value = d.price_per_cy_heavy || '';
-    document.getElementById('ms-rate-low').value = d.price_per_cy_low;
-    document.getElementById('ms-rate-high').value = d.price_per_cy_high;
-    document.getElementById('ms-rate-premium').value = d.price_per_cy_premium;
-    document.getElementById('ms-min-charge').value = d.min_charge;
-    document.getElementById('ms-truck').value = d.truck_capacity_cy;
-    document.getElementById('ms-slug').value = d.company_slug || '';
-    updateMsSlugPreview();
-  } catch(e) { console.error('loadMySettings error:', e); }
+    const d = await apiFetch(`/api/admin/estimates?page=${page}`);
+    if (!d.estimates.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">No estimates yet</td></tr>';
+    } else {
+      tbody.innerHTML = d.estimates.map(e => `
+        <tr class="est-row" onclick="openEstimate(${e.id})">
+          <td>#${e.id}</td>
+          <td>${fmtDate(e.created_at)}</td>
+          <td>${esc(e.user_email)}</td>
+          <td>${e.photos_count || 0}</td>
+          <td>${e.cy_estimate ? e.cy_estimate.toFixed(1) : '--'}</td>
+          <td>$${e.price_low ? Math.round(e.price_low) : '--'} &ndash; $${e.price_high ? Math.round(e.price_high) : '--'}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Pagination
+    const pagDiv = $('#estimates-pagination');
+    if (d.pages > 1) {
+      let html = '';
+      if (page > 1) html += `<button class="page-btn" onclick="loadEstimates(${page-1})">&laquo; Prev</button>`;
+      for (let i = 1; i <= d.pages; i++) {
+        if (d.pages > 10 && Math.abs(i - page) > 2 && i !== 1 && i !== d.pages) {
+          if (i === page - 3 || i === page + 3) html += '<span style="color:var(--muted);padding:8px">...</span>';
+          continue;
+        }
+        html += `<button class="page-btn${i===page?' active':''}" onclick="loadEstimates(${i})">${i}</button>`;
+      }
+      if (page < d.pages) html += `<button class="page-btn" onclick="loadEstimates(${page+1})">Next &raquo;</button>`;
+      pagDiv.innerHTML = html;
+    } else {
+      pagDiv.innerHTML = '';
+    }
+    estimatesLoaded = true;
+  } catch(e) { console.error('Estimates load error:', e); tbody.innerHTML = '<tr><td colspan="6" class="empty">Error loading estimates</td></tr>'; }
 }
 
-function updateMsSlugPreview() {
-  var slug = document.getElementById('ms-slug').value.trim();
-  var preview = document.getElementById('ms-slug-preview');
-  var embedSection = document.getElementById('ms-embed-section');
-  if (slug) {
-    preview.innerHTML = 'Public page: <a href="/estimate/' + esc(slug) + '" target="_blank" style="color:var(--accent);">whatshouldicharge.app/estimate/' + esc(slug) + '</a>';
-    document.getElementById('ms-embed-code').value = '<script src="https://whatshouldicharge.app/static/widget.js" data-slug="' + esc(slug) + '"></' + 'script>';
-    embedSection.style.display = 'block';
+// ── Users ──
+async function loadUsers(page) {
+  const tbody = $('#users-body');
+  tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading...</td></tr>';
+  try {
+    const d = await apiFetch(`/api/admin/users?page=${page}`);
+    tbody.innerHTML = d.users.map(u => `
+      <tr>
+        <td>#${u.id}</td>
+        <td>${esc(u.email)}</td>
+        <td>${esc(u.company_name || '--')}</td>
+        <td><span class="badge badge-condition">${esc(u.tier)}</span></td>
+        <td>${u.estimates_used}/${u.estimates_limit}</td>
+        <td>${fmtDate(u.created_at)}</td>
+      </tr>
+    `).join('');
+
+    const pagDiv = $('#users-pagination');
+    if (d.pages > 1) {
+      let html = '';
+      if (page > 1) html += `<button class="page-btn" onclick="loadUsers(${page-1})">&laquo; Prev</button>`;
+      for (let i = 1; i <= d.pages; i++) {
+        html += `<button class="page-btn${i===page?' active':''}" onclick="loadUsers(${i})">${i}</button>`;
+      }
+      if (page < d.pages) html += `<button class="page-btn" onclick="loadUsers(${page+1})">Next &raquo;</button>`;
+      pagDiv.innerHTML = html;
+    } else {
+      pagDiv.innerHTML = '';
+    }
+    usersLoaded = true;
+  } catch(e) { console.error('Users load error:', e); }
+}
+
+// ── Estimate Detail Modal ──
+async function openEstimate(id) {
+  const overlay = $('#estimate-modal');
+  const body = $('#modal-body');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  $('#modal-title').textContent = `Estimate #${id}`;
+  $('#modal-meta').textContent = 'Loading...';
+  body.innerHTML = '<div class="loading">Loading estimate details...</div>';
+
+  try {
+    const d = await apiFetch(`/api/admin/estimates/${id}`);
+    $('#modal-meta').textContent = `${fmtDate(d.created_at)} \u00b7 ${esc(d.user_email)}${d.company_name ? ' \u00b7 ' + esc(d.company_name) : ''}${d.company_city ? ', ' + esc(d.company_city) : ''}${d.company_state ? ' ' + esc(d.company_state) : ''}`;
+
+    const result = d.result || {};
+    const items = result.items || [];
+    const totals = result.totals || {};
+    const notes = result.notes || '';
+    const confidence = result.confidence || 0;
+    const conditions = result.conditions || [];
+    const refPoints = result.reference_points || result.reference_items || [];
+    const jobType = result.job_type || 'standard';
+
+    let html = '';
+
+    // ── Photos ──
+    if (d.photos && d.photos.length > 0) {
+      html += `<div class="modal-section">
+        <div class="modal-section-title">Photos (${d.photos.length})</div>
+        <div class="photos-grid">
+          ${d.photos.map(p => `<img class="photo-thumb" src="${p.data_url}" alt="Photo ${p.index+1}" onclick="openLightbox('${p.data_url}')">`).join('')}
+        </div>
+      </div>`;
+    }
+
+    // ── Estimate Summary ──
+    const confColor = confidence >= 80 ? 'var(--green)' : confidence >= 60 ? 'var(--orange)' : 'var(--red)';
+    html += `<div class="modal-section">
+      <div class="modal-section-title">Estimate Results</div>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <div class="summary-label">Total Volume</div>
+          <div class="summary-val">${d.cy_estimate ? d.cy_estimate.toFixed(1) : '--'} CY</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">Price Range</div>
+          <div class="price-highlight">$${d.price_low ? Math.round(d.price_low) : '--'} &ndash; $${d.price_high ? Math.round(d.price_high) : '--'}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">Job Type</div>
+          <div class="summary-val">${esc(jobType)}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">AI Confidence</div>
+          <div class="summary-val" style="color:${confColor}">${confidence}%</div>
+          <div class="confidence-bar-wrap">
+            <div class="confidence-bar" style="width:${confidence}%;background:${confColor}"></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+    // ── Conditions ──
+    if (conditions.length > 0) {
+      const condEmoji = {
+        'premium': '\u26a1', 'outdoor': '\ud83c\udf33', 'hazardous': '\u2623\ufe0f', 'hoarder': '\ud83c\udfe0',
+        'stairs': '\ud83e\udea8', 'heavy_items': '\ud83c\udfcb\ufe0f', 'construction': '\ud83d\udea7',
+        'tight_access': '\ud83d\udeaa', 'demo_required': '\ud83d\udca5'
+      };
+      html += `<div class="modal-section">
+        <div class="modal-section-title">Conditions</div>
+        <div>${conditions.map(c => `<span class="badge badge-condition">${condEmoji[c] || '\ud83d\udccc'} ${esc(c.replace(/_/g, ' '))}</span>`).join('')}</div>
+      </div>`;
+    }
+
+    // ── Spatial Math ──
+    const spatialMatch = notes.match(/(?:pile|area|space|room|load|stack|heap)[\s\S]*?(?:\d+(?:\.\d+)?\s*(?:ft|feet|foot|inch|in|x|×|by)\s*[\s\S]*?(?:CY|cubic\s*yard))/i);
+    if (spatialMatch) {
+      html += `<div class="modal-section">
+        <div class="modal-section-title">Spatial Math</div>
+        <div class="spatial-math">${esc(spatialMatch[0])}</div>
+      </div>`;
+    }
+
+    // ── Reference Points ──
+    if (refPoints.length > 0) {
+      html += `<div class="modal-section">
+        <div class="modal-section-title">Spatial Reference Points</div>
+        <div style="font-size:0.88rem">
+          ${refPoints.map(rp => {
+            const name = typeof rp === 'string' ? rp : (rp.name || rp.item || '');
+            const desc = typeof rp === 'object' ? (rp.description || rp.note || '') : '';
+            return `<div style="padding:4px 0;color:var(--muted)">\u2022 <span style="color:var(--text)">${esc(name)}</span>${desc ? ' \u2014 ' + esc(desc) : ''}</div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }
+
+    // ── Item Breakdown ──
+    if (items.length > 0) {
+      html += `<div class="modal-section">
+        <div class="modal-section-title">Item Breakdown</div>
+        <table class="items-table">
+          <thead><tr><th>Item</th><th>Qty</th><th>CY/unit</th><th>Total CY</th><th>Source</th></tr></thead>
+          <tbody>
+            ${items.map(it => {
+              const qty = it.quantity || 1;
+              const cy = it.cubic_yards || 0;
+              const total = (cy * qty).toFixed(2);
+              let source = '';
+              if (it.looked_up || it.volume_lookup_applied) {
+                source = '<span class="badge badge-lookup">lookup</span>';
+              } else if (it.volume_redistributed) {
+                source = '<span class="badge badge-redistributed">redistributed</span>';
+              } else {
+                source = '<span class="badge badge-ai">AI</span>';
+              }
+              const special = it.is_special ? ' \u267b\ufe0f' : '';
+              return `<tr>
+                <td>${esc(it.name || 'Unknown')}${special}</td>
+                <td style="text-align:center">${qty}</td>
+                <td style="text-align:right">${cy.toFixed(2)}</td>
+                <td style="text-align:right">${total}</td>
+                <td>${source}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        <div style="margin-top:10px;font-size:0.78rem;color:var(--muted)">
+          <span class="badge badge-lookup">lookup</span> = volume from reference library &nbsp;
+          <span class="badge badge-redistributed">redistributed</span> = adjusted to match spatial total &nbsp;
+          <span class="badge badge-ai">AI</span> = AI estimate kept as-is
+        </div>
+      </div>`;
+    }
+
+    // ── Recycling Warnings ──
+    const recyclingItems = items.filter(it => it.is_special);
+    const recyclingFromResult = result.recycling_items || [];
+    if (recyclingItems.length > 0 || recyclingFromResult.length > 0) {
+      const allRecycling = recyclingItems.map(it => `${it.name || 'Unknown'} x${it.quantity || 1}`);
+      recyclingFromResult.forEach(r => {
+        const name = typeof r === 'string' ? r : r.name || '';
+        if (name && !allRecycling.some(a => a.toLowerCase().includes(name.toLowerCase()))) {
+          allRecycling.push(name);
+        }
+      });
+      html += `<div class="modal-section">
+        <div class="modal-section-title">\u267b\ufe0f Recycling Fee Items</div>
+        <div class="recycling-warning">
+          ${allRecycling.map(r => `<div>\u2022 ${esc(r)}</div>`).join('')}
+          <div style="margin-top:8px;font-size:0.78rem;color:var(--muted)">These items may require separate disposal fees not included in the estimate.</div>
+        </div>
+      </div>`;
+    }
+
+    // ── Lookups (volume corrections) ──
+    if (d.lookups && d.lookups.length > 0) {
+      html += `<div class="modal-section">
+        <div class="modal-section-title">Volume Corrections Applied</div>
+        <div style="font-size:0.88rem">
+          ${d.lookups.map(l => `<div style="padding:3px 0">\u2022 <strong>${esc(l.item_name)}</strong>: corrected to ${l.cubic_yards} CY ${l.source_note ? '(' + esc(l.source_note) + ')' : ''}</div>`).join('')}
+        </div>
+      </div>`;
+    }
+
+    // ── Notes ──
+    if (notes) {
+      // Extract volume corrections section
+      const corrMatch = notes.match(/Volume corrections?:[\s\S]*/i);
+      const mainNotes = corrMatch ? notes.replace(corrMatch[0], '').trim() : notes;
+
+      html += `<div class="modal-section">
+        <div class="modal-section-title">Estimator Notes</div>
+        <div class="notes-block">${esc(mainNotes)}</div>
+      </div>`;
+
+      if (corrMatch) {
+        html += `<div class="modal-section">
+          <div class="modal-section-title">Volume Correction Notes</div>
+          <div class="notes-block">${esc(corrMatch[0])}</div>
+        </div>`;
+      }
+    }
+
+    // ── Accuracy Tracking ──
+    html += `<div class="modal-section">
+      <div class="modal-section-title">Accuracy Tracking</div>
+      <div class="accuracy-wrap">
+        <span style="color:var(--muted);font-size:0.88rem">Actual job price: $</span>
+        <input type="number" class="accuracy-input" id="actual-price-input" placeholder="0.00" step="0.01" value="${d.actual_price || ''}">
+        <button class="btn btn-primary btn-sm" onclick="saveActualPrice(${d.id})">Save</button>
+      </div>
+      <div id="accuracy-result-${d.id}">
+        ${d.actual_price ? buildAccuracyResult(d.actual_price, d.price_low, d.price_high) : '<div style="margin-top:8px;font-size:0.78rem;color:var(--muted)">Enter what the job actually sold for to track estimate accuracy over time.</div>'}
+      </div>
+    </div>`;
+
+    body.innerHTML = html;
+  } catch(e) {
+    console.error('Error loading estimate detail:', e);
+    body.innerHTML = '<div class="empty">Error loading estimate details. Please try again.</div>';
+  }
+}
+
+function buildAccuracyResult(actual, low, high) {
+  if (!actual || !low || !high) return '';
+  const inRange = actual >= low && actual <= high;
+  const mid = (low + high) / 2;
+  const pctOff = Math.abs((actual - mid) / mid * 100).toFixed(0);
+  if (inRange) {
+    return `<div class="accuracy-result accuracy-hit" style="margin-top:10px">Estimated $${Math.round(low)}\u2013$${Math.round(high)}, Actual $${Math.round(actual)} \u2014 Within range!</div>`;
   } else {
-    preview.textContent = 'Set a slug to enable your public estimate page.';
-    embedSection.style.display = 'none';
+    const dir = actual < low ? 'below' : 'above';
+    return `<div class="accuracy-result accuracy-miss" style="margin-top:10px">Estimated $${Math.round(low)}\u2013$${Math.round(high)}, Actual $${Math.round(actual)} \u2014 ${pctOff}% ${dir} midpoint</div>`;
   }
 }
 
-document.getElementById('ms-slug').addEventListener('input', updateMsSlugPreview);
-
-document.getElementById('ms-copy-embed').addEventListener('click', function() {
-  var ta = document.getElementById('ms-embed-code');
-  ta.select();
-  document.execCommand('copy');
-  this.textContent = 'Copied!';
-  var btn = this;
-  setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
-});
-
-document.getElementById('ms-save').addEventListener('click', async function() {
-  var btn = this;
-  var msg = document.getElementById('ms-msg');
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
+async function saveActualPrice(estId) {
+  const input = $('#actual-price-input');
+  const val = parseFloat(input.value);
+  if (isNaN(val) || val < 0) { alert('Enter a valid price'); return; }
   try {
-    var body = {
-      company_name: document.getElementById('ms-company-name').value.trim(),
-      company_phone: document.getElementById('ms-phone').value.trim(),
-      company_city: document.getElementById('ms-city').value.trim(),
-      company_state: document.getElementById('ms-state').value.trim(),
-      company_logo_url: document.getElementById('ms-logo').value.trim(),
-      price_per_cy_standard: document.getElementById('ms-rate-standard').value ? parseFloat(document.getElementById('ms-rate-standard').value) : null,
-      price_per_cy_heavy: document.getElementById('ms-rate-heavy').value ? parseFloat(document.getElementById('ms-rate-heavy').value) : null,
-      price_per_cy_low: parseFloat(document.getElementById('ms-rate-low').value) || 35,
-      price_per_cy_high: parseFloat(document.getElementById('ms-rate-high').value) || 40,
-      price_per_cy_premium: parseFloat(document.getElementById('ms-rate-premium').value) || 55,
-      min_charge: parseFloat(document.getElementById('ms-min-charge').value) || 75,
-      truck_capacity_cy: parseFloat(document.getElementById('ms-truck').value) || 16,
-      company_slug: document.getElementById('ms-slug').value.trim(),
-    };
-    var resp = await fetch('/api/settings', { method: 'PUT', headers: csrfHeaders(), body: JSON.stringify(body) });
-    var result = await resp.json();
-    if (resp.ok && result.ok) {
-      showToast('Settings saved');
-      msg.textContent = 'Saved!';
-      msg.style.color = 'var(--green)';
-      msg.style.display = 'inline';
-      setTimeout(function() { msg.style.display = 'none'; }, 2000);
-      updateMsSlugPreview();
-    } else {
-      msg.textContent = result.detail || 'Error saving';
-      msg.style.color = 'var(--red)';
-      msg.style.display = 'inline';
-    }
+    const res = await apiFetch(`/api/admin/estimates/${estId}/actual-price`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actual_price: val })
+    });
+    // Find price_low/high from current modal data — re-fetch
+    const d = await apiFetch(`/api/admin/estimates/${estId}`);
+    $(`#accuracy-result-${estId}`).innerHTML = buildAccuracyResult(val, d.price_low, d.price_high);
   } catch(e) {
-    msg.textContent = 'Error: ' + e.message;
-    msg.style.color = 'var(--red)';
-    msg.style.display = 'inline';
+    alert('Error saving actual price');
+    console.error(e);
   }
-  btn.disabled = false;
-  btn.textContent = 'Save All Settings';
+}
+
+function closeModal() {
+  $('#estimate-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// Close modal on overlay click
+$('#estimate-modal').addEventListener('click', e => {
+  if (e.target === $('#estimate-modal')) closeModal();
 });
 
-document.getElementById('ms-check-market').addEventListener('click', async function() {
-  var btn = this;
-  var resultDiv = document.getElementById('ms-market-result');
-  btn.disabled = true;
-  btn.textContent = 'Searching...';
-  resultDiv.style.display = 'none';
-  try {
-    var resp = await fetch('/api/settings/check-market-rates', { method: 'POST', headers: csrfHeaders() });
-    var data = await resp.json();
-    if (data.source === 'live_market_search') {
-      resultDiv.innerHTML = '<div style="color:var(--green);font-weight:600;margin-bottom:6px;">Market rates for ' + esc(data.city) + ', ' + esc(data.state) + '</div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">' +
-        '<div>Low: <strong>$' + data.low.toFixed(2) + '/CY</strong></div>' +
-        '<div>Avg: <strong>$' + data.market_avg.toFixed(2) + '/CY</strong></div>' +
-        '<div>High: <strong>$' + data.high.toFixed(2) + '/CY</strong></div>' +
-        '</div>' +
-        '<div style="font-size:0.7rem;color:var(--muted);margin-top:6px;">Based on ' + data.samples + ' price samples from web search</div>';
-    } else {
-      resultDiv.innerHTML = '<span style="color:var(--muted);">No market data found. Make sure your city and state are set above, then save before checking.</span>';
-    }
-    resultDiv.style.display = 'block';
-  } catch(e) {
-    resultDiv.innerHTML = '<span style="color:var(--red);">Error: ' + e.message + '</span>';
-    resultDiv.style.display = 'block';
+// Close on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if ($('#lightbox').classList.contains('open')) closeLightbox();
+    else closeModal();
   }
-  btn.disabled = false;
-  btn.textContent = 'Look Up Rates';
 });
 
-document.getElementById('pc-calc').addEventListener('click', function() {
-  var dumpFee = parseFloat(document.getElementById('pc-dump-fee').value) || 0;
-  var fuel = parseFloat(document.getElementById('pc-fuel').value) || 0;
-  var labor = parseFloat(document.getElementById('pc-labor').value) || 0;
-  var cy = parseFloat(document.getElementById('pc-cy').value) || 1;
-  var rate = parseFloat(document.getElementById('ms-rate-standard').value) || 35;
+// ── Lightbox ──
+function openLightbox(src) {
+  $('#lightbox-img').src = src;
+  $('#lightbox').classList.add('open');
+}
+function closeLightbox() {
+  $('#lightbox').classList.remove('open');
+  $('#lightbox-img').src = '';
+}
 
-  var totalCost = dumpFee + fuel + labor;
-  var revenue = cy * rate;
-  var profit = revenue - totalCost;
-  var margin = revenue > 0 ? ((profit / revenue) * 100).toFixed(1) : 0;
-  var breakEvenRate = cy > 0 ? (totalCost / cy).toFixed(2) : '—';
+// ── Helpers ──
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+function fmtDate(iso) {
+  if (!iso) return '--';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
 
-  var color = profit > 0 ? 'var(--green)' : 'var(--red)';
-  var resultDiv = document.getElementById('pc-result');
-  resultDiv.innerHTML =
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">' +
-    '<div>Revenue: <strong>$' + revenue.toFixed(2) + '</strong></div>' +
-    '<div>Total Costs: <strong>$' + totalCost.toFixed(2) + '</strong></div>' +
-    '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">' +
-    '<div>Profit: <strong style="color:' + color + ';">$' + profit.toFixed(2) + '</strong></div>' +
-    '<div>Margin: <strong style="color:' + color + ';">' + margin + '%</strong></div>' +
-    '</div>' +
-    '<div style="font-size:0.78rem;color:var(--muted);">Break-even rate: <strong>$' + breakEvenRate + '/CY</strong> — charge above this to profit.</div>';
-  resultDiv.style.display = 'block';
-});
-
-document.getElementById('pw-save').addEventListener('click', async function() {
-  var btn = this;
-  var msg = document.getElementById('pw-msg');
-  var current = document.getElementById('pw-current').value;
-  var newPw = document.getElementById('pw-new').value;
-  var confirm = document.getElementById('pw-confirm').value;
-  msg.style.display = 'none';
-
-  if (!current || !newPw || !confirm) {
-    msg.textContent = 'All fields are required.'; msg.style.color = 'var(--red)'; msg.style.display = 'inline'; return;
-  }
-  if (newPw.length < 8) {
-    msg.textContent = 'New password must be at least 8 characters.'; msg.style.color = 'var(--red)'; msg.style.display = 'inline'; return;
-  }
-  if (newPw !== confirm) {
-    msg.textContent = 'New passwords do not match.'; msg.style.color = 'var(--red)'; msg.style.display = 'inline'; return;
-  }
-
-  btn.disabled = true; btn.textContent = 'Saving...';
-  try {
-    var resp = await fetch('/api/settings/password', { method: 'PUT', headers: csrfHeaders(), body: JSON.stringify({current_password: current, new_password: newPw, confirm_password: confirm}) });
-    var result = await resp.json();
-    if (resp.ok && result.ok) {
-      msg.textContent = 'Password changed!'; msg.style.color = 'var(--green)'; msg.style.display = 'inline';
-      document.getElementById('pw-current').value = '';
-      document.getElementById('pw-new').value = '';
-      document.getElementById('pw-confirm').value = '';
-    } else {
-      msg.textContent = result.detail || 'Error changing password.'; msg.style.color = 'var(--red)'; msg.style.display = 'inline';
-    }
-  } catch(e) {
-    msg.textContent = 'Error: ' + e.message; msg.style.color = 'var(--red)'; msg.style.display = 'inline';
-  }
-  btn.disabled = false; btn.textContent = 'Save Password';
-});
-
-document.getElementById('logout-all').addEventListener('click', async function() {
-  if (!window.confirm('This will log you out from all other devices. Continue?')) return;
-  try {
-    var resp = await fetch('/api/settings/logout-all', { method: 'POST', headers: csrfHeaders() });
-    var result = await resp.json();
-    if (resp.ok && result.ok) {
-      showToast('All other sessions revoked.');
-    } else {
-      showToast(result.detail || 'Error revoking sessions.');
-    }
-  } catch(e) { showToast('Error: ' + e.message); }
-});
-
+// ── Init ──
 loadAnalytics();
-loadUsers();
-loadPlans();
-loadTeam();
-loadSiteConfig();
-loadEstimates();
-loadMySettings();
 </script>
 </body>
 </html>

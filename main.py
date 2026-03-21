@@ -21,7 +21,7 @@ import stripe
 import httpx
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy import Column, Integer, Float, DateTime, Text, String, Boolean, select, text, func
+from sqlalchemy import Column, Integer, Float, DateTime, Text, String, Boolean, ForeignKey, select, text, func
 import asyncio
 from PIL import Image
 import io
@@ -233,16 +233,73 @@ Base = declarative_base()
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
+# Legacy — kept for reference but no longer used for gating
 TIER_LIMITS = {
     "free": 3,
     "solo": 999,
     "team": 999,
     "enterprise": 999,
     "custom": 999,
-    # Legacy tiers
     "starter": 20,
     "pro": 40,
     "agency": 999,
+}
+
+CREDIT_PACKS = {
+    "single": {
+        "name": "Single Estimate",
+        "credits": 1,
+        "price_cents": 1000,
+        "per_credit_cents": 1000,
+        "discount_pct": 0,
+        "stripe_price_id": "price_1TDUHaAPEzwLONiqUUjQTuTS",
+        "description": "1 estimate credit"
+    },
+    "10_pack": {
+        "name": "10-Pack",
+        "credits": 10,
+        "price_cents": 6000,
+        "per_credit_cents": 600,
+        "discount_pct": 40,
+        "stripe_price_id": "price_1TDUHbAPEzwLONiqhcyemzyF",
+        "description": "10 estimate credits (40% off)"
+    },
+    "25_pack": {
+        "name": "25-Pack",
+        "credits": 25,
+        "price_cents": 12500,
+        "per_credit_cents": 500,
+        "discount_pct": 50,
+        "stripe_price_id": "price_1TDUHcAPEzwLONiqwG3OZf9I",
+        "description": "25 estimate credits (50% off)"
+    },
+    "50_pack": {
+        "name": "50-Pack",
+        "credits": 50,
+        "price_cents": 20000,
+        "per_credit_cents": 400,
+        "discount_pct": 60,
+        "stripe_price_id": "price_1TDUHdAPEzwLONiqFtviLtbK",
+        "description": "50 estimate credits (60% off)"
+    },
+    "100_pack": {
+        "name": "100-Pack",
+        "credits": 100,
+        "price_cents": 30000,
+        "per_credit_cents": 300,
+        "discount_pct": 70,
+        "stripe_price_id": "price_1TDUHeAPEzwLONiqETAdtOiz",
+        "description": "100 estimate credits (70% off)"
+    },
+    "250_pack": {
+        "name": "250-Pack",
+        "credits": 250,
+        "price_cents": 50000,
+        "per_credit_cents": 200,
+        "discount_pct": 80,
+        "stripe_price_id": "price_1TDUHeAPEzwLONiqOoqQr7UP",
+        "description": "250 estimate credits (80% off)"
+    }
 }
 
 STATE_TIMEZONE_MAP = {
@@ -360,6 +417,11 @@ class User(Base):
     overage_charges_cents = Column(Integer, default=0)
     role = Column(String, default="owner")
     industry = Column(String, default="junk_removal")
+    credit_balance = Column(Integer, default=0)
+    credits_purchased_total = Column(Integer, default=0)
+    credits_used_total = Column(Integer, default=0)
+    free_trial_used = Column(Integer, default=0)
+    free_trial_email = Column(String, nullable=True)
 
 
 class TeamMember(Base):
@@ -401,6 +463,20 @@ class PlanConfig(Base):
     features_json = Column(Text, default="[]")
     stripe_price_id = Column(String, default="")
     is_active = Column(Boolean, default=True)
+
+
+class CreditTransaction(Base):
+    __tablename__ = "credit_transactions"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    transaction_type = Column(String, nullable=False)  # "purchase", "usage", "free_trial", "refund", "bonus"
+    credits = Column(Integer, nullable=False)  # positive = added, negative = used
+    balance_after = Column(Integer, nullable=False)  # balance after this transaction
+    description = Column(String, nullable=True)
+    stripe_session_id = Column(String, nullable=True)
+    pack_type = Column(String, nullable=True)
+    amount_cents = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=func.now(), index=True)
 
 
 class PromoCode(Base):
@@ -531,6 +607,11 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS overage_charges_cents INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'owner'",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS industry VARCHAR DEFAULT 'junk_removal'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS credit_balance INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS credits_purchased_total INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS credits_used_total INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS free_trial_used INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS free_trial_email VARCHAR",
         ]
     else:
         alter_statements = [
@@ -566,6 +647,11 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN overage_charges_cents INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'owner'",
             "ALTER TABLE users ADD COLUMN industry TEXT DEFAULT 'junk_removal'",
+            "ALTER TABLE users ADD COLUMN credit_balance INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN credits_purchased_total INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN credits_used_total INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN free_trial_used INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN free_trial_email TEXT",
         ]
 
     async with engine.begin() as conn:
@@ -574,6 +660,44 @@ async def init_db():
                 await conn.execute(text(stmt))
             except Exception:
                 pass
+
+    # Create credit_transactions table
+    async with engine.begin() as conn:
+        try:
+            if _is_postgres:
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS credit_transactions (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id),
+                        transaction_type VARCHAR NOT NULL,
+                        credits INTEGER NOT NULL,
+                        balance_after INTEGER NOT NULL,
+                        description VARCHAR,
+                        stripe_session_id VARCHAR,
+                        pack_type VARCHAR,
+                        amount_cents INTEGER,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_id ON credit_transactions(user_id)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_credit_transactions_created_at ON credit_transactions(created_at)"))
+            else:
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS credit_transactions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL REFERENCES users(id),
+                        transaction_type TEXT NOT NULL,
+                        credits INTEGER NOT NULL,
+                        balance_after INTEGER NOT NULL,
+                        description TEXT,
+                        stripe_session_id TEXT,
+                        pack_type TEXT,
+                        amount_cents INTEGER,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+        except Exception:
+            pass
 
     # Backfill NULL values to defaults for existing users
     backfill_statements = [
@@ -1007,6 +1131,59 @@ async def health_check():
 async def list_available_industries():
     from services.industry_config import list_industries
     return {"industries": list_industries()}
+
+
+@app.get("/api/credits")
+async def get_credit_balance(request: Request):
+    """Get current credit balance and transaction history."""
+    user = await require_user(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(CreditTransaction)
+            .where(CreditTransaction.user_id == user.id)
+            .order_by(CreditTransaction.created_at.desc())
+            .limit(50)
+        )
+        transactions = result.scalars().all()
+
+    return {
+        "credit_balance": user.credit_balance or 0,
+        "credits_purchased_total": user.credits_purchased_total or 0,
+        "credits_used_total": user.credits_used_total or 0,
+        "free_trial_remaining": max(0, 2 - (user.free_trial_used or 0)),
+        "transactions": [
+            {
+                "id": t.id,
+                "type": t.transaction_type,
+                "credits": t.credits,
+                "balance_after": t.balance_after,
+                "description": t.description,
+                "pack_type": t.pack_type,
+                "amount_cents": t.amount_cents,
+                "created_at": t.created_at.isoformat() if t.created_at else None
+            }
+            for t in transactions
+        ]
+    }
+
+
+@app.get("/api/credits/packs")
+async def get_available_packs():
+    """List available credit packs for purchase."""
+    return {
+        "packs": [
+            {
+                "type": k,
+                "name": v["name"],
+                "credits": v["credits"],
+                "price_cents": v["price_cents"],
+                "per_credit_cents": v["per_credit_cents"],
+                "discount_pct": v["discount_pct"],
+                "description": v["description"]
+            }
+            for k, v in CREDIT_PACKS.items()
+        ]
+    }
 
 
 @app.get("/robots.txt")
@@ -1936,13 +2113,33 @@ async def public_create_estimate(
         result = await db.execute(select(User).where(User.id == company_user.id))
         cu = result.scalar_one_or_none()
         if cu:
-            _reset_billing_cycle_if_needed(cu)
-            allowed, err = _check_usage_limit(cu)
-            if not allowed:
+            # Credit-based gating for widget estimates
+            free_remaining = max(0, 2 - (cu.free_trial_used or 0))
+            if (cu.credit_balance or 0) <= 0 and free_remaining <= 0:
                 await db.commit()
                 raise HTTPException(status_code=403, detail="This estimator is temporarily unavailable. Please contact the company directly.")
-            _record_usage(cu)
+            # Deduct credit
+            if free_remaining > 0 and (cu.credit_balance or 0) <= 0:
+                cu.free_trial_used = (cu.free_trial_used or 0) + 1
+                txn = CreditTransaction(
+                    user_id=cu.id,
+                    transaction_type="free_trial",
+                    credits=-1,
+                    balance_after=cu.credit_balance or 0,
+                    description=f"Free Trial Widget Estimate #{cu.free_trial_used}"
+                )
+            else:
+                cu.credit_balance = (cu.credit_balance or 0) - 1
+                cu.credits_used_total = (cu.credits_used_total or 0) + 1
+                txn = CreditTransaction(
+                    user_id=cu.id,
+                    transaction_type="usage",
+                    credits=-1,
+                    balance_after=cu.credit_balance,
+                    description="Widget Estimate"
+                )
             cu.estimates_used = (cu.estimates_used or 0) + 1
+            db.add(txn)
             await db.commit()
             company_user = cu
 
@@ -2283,6 +2480,8 @@ async def auth_me(request: Request):
         "monthly_calls_used": getattr(user, 'monthly_calls_used', 0) or 0,
         "overage_mode": getattr(user, 'overage_mode', 'warn_and_charge') or 'warn_and_charge',
         "role": getattr(user, 'role', 'owner') or 'owner',
+        "credit_balance": getattr(user, 'credit_balance', 0) or 0,
+        "free_trial_remaining": max(0, 2 - (getattr(user, 'free_trial_used', 0) or 0)),
     }
 
 
@@ -2316,6 +2515,8 @@ async def get_settings(request: Request):
         "company_logo_url": row["company_logo_url"] or "",
         "price_per_cy_standard": row["price_per_cy_standard"],
         "price_per_cy_heavy": row["price_per_cy_heavy"],
+        "credit_balance": getattr(user, 'credit_balance', 0) or 0,
+        "free_trial_remaining": max(0, 2 - (getattr(user, 'free_trial_used', 0) or 0)),
     }
     cache_set(cache_key, data, ttl=60)
     return data
@@ -3045,13 +3246,36 @@ async def create_estimate(
         fresh_user = result.scalar_one_or_none()
         if not fresh_user:
             raise HTTPException(status_code=403, detail="estimate_limit_reached")
-        _reset_billing_cycle_if_needed(fresh_user)
-        allowed, err = _check_usage_limit(fresh_user)
-        if not allowed:
+        # Credit-based gating
+        free_remaining = max(0, 2 - (fresh_user.free_trial_used or 0))
+        if (fresh_user.credit_balance or 0) <= 0 and free_remaining <= 0:
             await db.commit()
-            return JSONResponse(status_code=429, content=err)
-        _record_usage(fresh_user)
+            return JSONResponse(status_code=402, content={
+                "detail": "no_credits",
+                "message": "No estimate credits remaining. Purchase a credit pack to continue."
+            })
+        # Deduct credit
+        if free_remaining > 0 and (fresh_user.credit_balance or 0) <= 0:
+            fresh_user.free_trial_used = (fresh_user.free_trial_used or 0) + 1
+            txn = CreditTransaction(
+                user_id=fresh_user.id,
+                transaction_type="free_trial",
+                credits=-1,
+                balance_after=fresh_user.credit_balance or 0,
+                description=f"Free Trial Estimate #{fresh_user.free_trial_used}"
+            )
+        else:
+            fresh_user.credit_balance = (fresh_user.credit_balance or 0) - 1
+            fresh_user.credits_used_total = (fresh_user.credits_used_total or 0) + 1
+            txn = CreditTransaction(
+                user_id=fresh_user.id,
+                transaction_type="usage",
+                credits=-1,
+                balance_after=fresh_user.credit_balance,
+                description="Estimate"
+            )
         fresh_user.estimates_used = (fresh_user.estimates_used or 0) + 1
+        db.add(txn)
         await db.commit()
         user = fresh_user
 
@@ -3516,12 +3740,11 @@ async def estimate_status(request: Request, job_id: str):
     return resp
 
 
+# Legacy mapping — kept for reference, no longer used for gating
 PRICE_TO_TIER = {
-    # One-time purchase tiers
     "price_1TDJ2wAPEzwLONiqTut1n11W": "solo",
     "price_1TDJ2xAPEzwLONiq56jpA1fH": "team",
     "price_1TDJ5OAPEzwLONiqVhcBQjPn": "enterprise",
-    # Legacy subscription tiers (keep for existing subscribers)
     "price_1T7PXXAPEzwLONiqIIrAtsQZ": "starter",
     "price_1T6iUPAPEzwLONiqp31lIw9T": "pro",
     "price_1T7PXXAPEzwLONiqpQbgpgZ8": "agency",
@@ -3532,37 +3755,47 @@ PRICE_TO_TIER = {
 async def create_checkout(request: Request):
     user = await require_user(request)
     body = await request.json()
-    price_id = body.get("price_id")
+    pack_type = body.get("pack_type")
 
-    if not price_id:
-        raise HTTPException(status_code=400, detail="price_id is required.")
+    if pack_type not in CREDIT_PACKS:
+        raise HTTPException(status_code=400, detail=f"Invalid pack type. Options: {list(CREDIT_PACKS.keys())}")
 
-    tier_name = PRICE_TO_TIER.get(price_id)
-    if not tier_name:
-        raise HTTPException(status_code=400, detail="Invalid price_id.")
+    pack = CREDIT_PACKS[pack_type]
 
-    checkout_params = {
-        "payment_method_types": ["card"],
-        "line_items": [{"price": price_id, "quantity": 1}],
-        "mode": "payment",
-        "success_url": str(request.base_url) + "payment-success?session_id={CHECKOUT_SESSION_ID}",
-        "cancel_url": str(request.base_url) + "upgrade",
-        "metadata": {"user_id": str(user.id)},
-        "allow_promotion_codes": True,
-    }
+    if not pack["stripe_price_id"]:
+        raise HTTPException(status_code=500, detail="Stripe product not configured for this pack")
 
-    if user.stripe_customer_id:
-        checkout_params["customer"] = user.stripe_customer_id
-    else:
-        checkout_params["customer_email"] = user.email
+    # Create or reuse Stripe customer
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == user.id))
+        fresh_user = result.scalar_one_or_none()
+        if fresh_user and not fresh_user.stripe_customer_id:
+            customer = await asyncio.to_thread(
+                lambda: stripe.Customer.create(email=fresh_user.email, name=fresh_user.company_name)
+            )
+            fresh_user.stripe_customer_id = customer.id
+            await db.commit()
+            user = fresh_user
 
-    try:
-        session = await asyncio.to_thread(
-            lambda: stripe.checkout.Session.create(**checkout_params)
+    session = await asyncio.to_thread(
+        lambda: stripe.checkout.Session.create(
+            customer=user.stripe_customer_id if user.stripe_customer_id else None,
+            customer_email=user.email if not user.stripe_customer_id else None,
+            payment_method_types=["card"],
+            line_items=[{"price": pack["stripe_price_id"], "quantity": 1}],
+            mode="payment",
+            metadata={
+                "user_id": str(user.id),
+                "pack_type": pack_type,
+                "credits": str(pack["credits"]),
+            },
+            success_url=str(request.base_url) + f"payment-success?session_id={{CHECKOUT_SESSION_ID}}&pack={pack_type}",
+            cancel_url=str(request.base_url) + "upgrade",
+            allow_promotion_codes=True,
         )
-        return {"checkout_url": session.url}
-    except Exception:
-        raise HTTPException(status_code=500, detail="Payment processing error. Please try again.")
+    )
+
+    return {"checkout_url": session.url}
 
 
 @app.post("/api/payments/webhook")
@@ -3580,59 +3813,39 @@ async def stripe_webhook(request: Request):
         session = event["data"]["object"]
         user_id = int(session.get("metadata", {}).get("user_id", 0))
         customer_id = session.get("customer", "")
-        subscription_id = session.get("subscription", "")
+        pack_type = session.get("metadata", {}).get("pack_type")
+        credits_to_add = int(session.get("metadata", {}).get("credits", 0))
 
-        tier_name = "starter"
-        try:
-            line_items = stripe.checkout.Session.list_line_items(session["id"], limit=1)
-            if line_items and line_items.data:
-                price_id = line_items.data[0].price.id
-                tier_name = PRICE_TO_TIER.get(price_id, "starter")
-        except Exception:
-            pass
-
-        if user_id:
+        if user_id and pack_type and credits_to_add > 0:
             async with AsyncSessionLocal() as db:
                 result = await db.execute(select(User).where(User.id == user_id))
                 user = result.scalar_one_or_none()
                 if user:
-                    user.subscription_tier = tier_name
-                    user.stripe_customer_id = customer_id or ""
-                    user.stripe_subscription_id = subscription_id or ""
-                    user.estimates_limit = TIER_LIMITS.get(tier_name, 3)
-                    user.estimates_used = 0
-                    await db.commit()
+                    user.credit_balance = (user.credit_balance or 0) + credits_to_add
+                    user.credits_purchased_total = (user.credits_purchased_total or 0) + credits_to_add
+                    user.stripe_customer_id = customer_id or user.stripe_customer_id or ""
 
-                    send_email(
-                        user.email,
-                        f"Your {tier_name.title()} plan is active!",
-                        f"<h2>You're all set!</h2>"
-                        f"<p>Your <strong>{tier_name.title()}</strong> plan is now active.</p>"
-                        f"<p>You have <strong>{TIER_LIMITS.get(tier_name, 3)} estimates</strong> per month.</p>"
-                        f"<p>Start estimating at whatshouldicharge.app/estimate</p>"
+                    pack = CREDIT_PACKS.get(pack_type, {})
+                    txn = CreditTransaction(
+                        user_id=user.id,
+                        transaction_type="purchase",
+                        credits=credits_to_add,
+                        balance_after=user.credit_balance,
+                        description=f"{pack.get('name', pack_type)} Purchase",
+                        stripe_session_id=session.get("id", ""),
+                        pack_type=pack_type,
+                        amount_cents=pack.get("price_cents", 0)
                     )
-
-    elif event["type"] == "customer.subscription.deleted":
-        subscription = event["data"]["object"]
-        customer_id = subscription.get("customer", "")
-        if customer_id:
-            async with AsyncSessionLocal() as db:
-                result = await db.execute(
-                    select(User).where(User.stripe_customer_id == customer_id)
-                )
-                user = result.scalar_one_or_none()
-                if user:
-                    user.subscription_tier = "free"
-                    user.estimates_limit = 0
-                    user.stripe_subscription_id = ""
+                    db.add(txn)
                     await db.commit()
 
                     send_email(
                         user.email,
-                        "Your subscription has been cancelled",
-                        "<h2>Subscription cancelled</h2>"
-                        "<p>Your WhatShouldICharge subscription has been cancelled.</p>"
-                        "<p>You can resubscribe anytime at whatshouldicharge.app/upgrade</p>"
+                        f"Your {credits_to_add} estimate credits are ready!",
+                        f"<h2>Credits added!</h2>"
+                        f"<p><strong>{credits_to_add} estimate credits</strong> have been added to your account.</p>"
+                        f"<p>Your new balance: <strong>{user.credit_balance} credits</strong></p>"
+                        f"<p>Start estimating at whatshouldicharge.app/estimate</p>"
                     )
 
     return {"received": True}

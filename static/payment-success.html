@@ -16,7 +16,7 @@
   .check-icon { width: 72px; height: 72px; background: rgba(22,163,74,0.15); border: 2px solid var(--green); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; font-size: 2rem; }
   h1 { font-size: 1.8rem; font-weight: 800; margin-bottom: 12px; }
   .sub { font-size: 1rem; color: var(--muted); margin-bottom: 32px; line-height: 1.6; }
-  .tier-name { color: var(--green-light); font-weight: 700; }
+  .credit-info { color: var(--green-light); font-weight: 700; }
   .btn { display: inline-flex; align-items: center; gap: 8px; padding: 14px 30px; border-radius: 10px; background: var(--green); color: #fff; font-size: 1rem; font-weight: 700; text-decoration: none; transition: all 0.15s; border: none; cursor: pointer; }
   .btn:hover { background: var(--green-light); transform: translateY(-1px); }
   .note { font-size: 0.82rem; color: var(--muted); margin-top: 22px; }
@@ -24,10 +24,10 @@
 </head>
 <body>
 <div class="card">
-  <div class="check-icon">✓</div>
-  <h1>You're all set!</h1>
-  <div class="sub">Your <span class="tier-name" id="tier-label">plan</span> is now active.<br>Start using AI-powered estimates right away.</div>
-  <a href="/estimate" class="btn">Start Estimating →</a>
+  <div class="check-icon">&#10003;</div>
+  <h1>Credits added!</h1>
+  <div class="sub" id="credit-msg">Your estimate credits have been added to your account.<br>Start using AI-powered estimates right away.</div>
+  <a href="/estimate" class="btn">Start Estimating &#8594;</a>
   <div class="note">A confirmation email has been sent to your inbox.</div>
 </div>
 <script>
@@ -35,9 +35,10 @@
   try {
     const resp = await fetch('/api/auth/me');
     const data = await resp.json();
-    if (data.authenticated && data.subscription_tier) {
-      const names = { starter: 'Starter', pro: 'Professional', agency: 'Agency' };
-      document.getElementById('tier-label').textContent = (names[data.subscription_tier] || data.subscription_tier) + ' plan';
+    if (data.authenticated) {
+      const bal = data.credit_balance || 0;
+      document.getElementById('credit-msg').innerHTML =
+        `<span class="credit-info">${bal} credit${bal !== 1 ? 's' : ''}</span> available in your account.<br>Start using AI-powered estimates right away.`;
     }
   } catch(e) {}
 })();

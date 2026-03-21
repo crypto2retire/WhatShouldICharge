@@ -1,5 +1,10 @@
 # Task Tracker
 
+## Volume lookup validation (2026-03-20)
+
+- [x] Add `services/volume_lookup.py` with `validate_estimate`
+- [x] Call `validate_estimate(result_data)` in `run_estimate` after item lookups, before pricing
+
 ## WSIC Railway Migration
 
 - [x] Migrate from SQLite to PostgreSQL

@@ -27,6 +27,8 @@ from PIL import Image
 import io
 from cryptography.fernet import Fernet, InvalidToken
 
+from services.volume_lookup import validate_estimate
+
 _encryption_key = os.environ.get("ENCRYPTION_KEY")
 _fernet = Fernet(_encryption_key.encode()) if _encryption_key else None
 
@@ -3110,6 +3112,8 @@ async def run_estimate(
                     totals["cubic_yards_low"] = round(item_sum * 0.85, 1)
                     totals["cubic_yards_high"] = round(item_sum * 1.15, 1)
                     result_data["totals"] = totals
+
+        result_data = validate_estimate(result_data)
 
         market_context = None
         market_rates = None

@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Volume lookup validation — 2026-03-20
+
+### 1. Where to call `validate_estimate` in WSIC
+This repo runs the AI pipeline in `main.py` (`run_estimate`), not `wsic_ai_router.py`. Call validation **after** optional `items_needing_lookup` adjustments (so Tavily-updated CY is included) and **before** `calculate_price`, so stored `result_json` and prices match reconciled volumes.
+
 ## Railway Deployment — 2026-03-12
 
 ### 1. Railway PostgreSQL Networking

@@ -234,6 +234,11 @@ stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
 TIER_LIMITS = {
     "free": 3,
+    "solo": 999,
+    "team": 999,
+    "enterprise": 999,
+    "ppu": 999,
+    # Legacy tiers
     "starter": 20,
     "pro": 40,
     "agency": 999,
@@ -693,15 +698,28 @@ async def seed_plan_configs():
             PlanConfig(tier_name="free", display_name="Free", price_cents=0, estimate_limit=3,
                        features_json='["3 estimates total","AI photo analysis","Basic pricing"]',
                        stripe_price_id="", is_active=True),
-            PlanConfig(tier_name="starter", display_name="Starter", price_cents=2900, estimate_limit=20,
-                       features_json='["20 estimates/month","AI photo analysis","Market rate lookup","Item library","Email support"]',
-                       stripe_price_id="price_1T7PXXAPEzwLONiqIIrAtsQZ", is_active=True),
-            PlanConfig(tier_name="pro", display_name="Pro", price_cents=5900, estimate_limit=40,
-                       features_json='["40 estimates/month","Everything in Starter","Priority analysis","Team dashboard","PDF estimates"]',
-                       stripe_price_id="price_1T6iUPAPEzwLONiqp31lIw9T", is_active=True),
-            PlanConfig(tier_name="agency", display_name="Agency", price_cents=9900, estimate_limit=999,
-                       features_json='["Unlimited estimates","Everything in Pro","Unlimited team members","Custom branding","API access"]',
-                       stripe_price_id="price_1T7PXXAPEzwLONiqpQbgpgZ8", is_active=True),
+            PlanConfig(tier_name="solo", display_name="Solo", price_cents=14900, estimate_limit=999,
+                       features_json='["1 user","AI photo estimates","Item detection & volume calc","Premium job detection","Customer estimate link","Estimate history","Email support"]',
+                       stripe_price_id="price_1TDJ2wAPEzwLONiqTut1n11W", is_active=True),
+            PlanConfig(tier_name="team", display_name="Team", price_cents=29900, estimate_limit=999,
+                       features_json='["Up to 3 users","Everything in Solo","Truck load calculator","Custom rate settings","Priority support"]',
+                       stripe_price_id="price_1TDJ2xAPEzwLONiq56jpA1fH", is_active=True),
+            PlanConfig(tier_name="enterprise", display_name="Enterprise", price_cents=49900, estimate_limit=999,
+                       features_json='["Unlimited users","Everything in Team","API access","Dedicated onboarding","Phone support"]',
+                       stripe_price_id="price_1TDJ5OAPEzwLONiqVhcBQjPn", is_active=True),
+            PlanConfig(tier_name="ppu", display_name="Pay-Per-Use", price_cents=2000, estimate_limit=999,
+                       features_json='["Pay only when you use it","Full AI estimate features","No upfront cost"]',
+                       stripe_price_id="price_1TDJ2zAPEzwLONiqmAAoWrgZ", is_active=True),
+            # Legacy tiers (inactive)
+            PlanConfig(tier_name="starter", display_name="Starter (Legacy)", price_cents=2900, estimate_limit=20,
+                       features_json='["Legacy plan"]',
+                       stripe_price_id="price_1T7PXXAPEzwLONiqIIrAtsQZ", is_active=False),
+            PlanConfig(tier_name="pro", display_name="Pro (Legacy)", price_cents=5900, estimate_limit=40,
+                       features_json='["Legacy plan"]',
+                       stripe_price_id="price_1T6iUPAPEzwLONiqp31lIw9T", is_active=False),
+            PlanConfig(tier_name="agency", display_name="Agency (Legacy)", price_cents=9900, estimate_limit=999,
+                       features_json='["Legacy plan"]',
+                       stripe_price_id="price_1T7PXXAPEzwLONiqpQbgpgZ8", is_active=False),
         ]
         for p in plans:
             db.add(p)
@@ -3474,6 +3492,12 @@ async def estimate_status(request: Request, job_id: str):
 
 
 PRICE_TO_TIER = {
+    # New one-time purchase tiers
+    "price_1TDJ2wAPEzwLONiqTut1n11W": "solo",
+    "price_1TDJ2xAPEzwLONiq56jpA1fH": "team",
+    "price_1TDJ5OAPEzwLONiqVhcBQjPn": "enterprise",
+    "price_1TDJ2zAPEzwLONiqmAAoWrgZ": "ppu",
+    # Legacy subscription tiers (keep for existing subscribers)
     "price_1T7PXXAPEzwLONiqIIrAtsQZ": "starter",
     "price_1T6iUPAPEzwLONiqp31lIw9T": "pro",
     "price_1T7PXXAPEzwLONiqpQbgpgZ8": "agency",
@@ -3496,7 +3520,7 @@ async def create_checkout(request: Request):
     checkout_params = {
         "payment_method_types": ["card"],
         "line_items": [{"price": price_id, "quantity": 1}],
-        "mode": "subscription",
+        "mode": "payment",
         "success_url": str(request.base_url) + "payment-success?session_id={CHECKOUT_SESSION_ID}",
         "cancel_url": str(request.base_url) + "upgrade",
         "metadata": {"user_id": str(user.id)},

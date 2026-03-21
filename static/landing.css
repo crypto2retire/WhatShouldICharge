@@ -515,8 +515,12 @@ section {
   transform: scale(1.03);
 }
 
+@media (max-width: 900px) {
+  .pricing-grid[style*="repeat(4"] { grid-template-columns: repeat(2, 1fr) !important; }
+}
 @media (max-width: 700px) {
   .pricing-card.popular { transform: none; }
+  .pricing-grid[style*="repeat(4"] { grid-template-columns: 1fr !important; }
 }
 
 .popular-badge {

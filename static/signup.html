@@ -10,30 +10,44 @@
     --bg: #0f1117; --surface: #1a1d27; --border: #2e3352;
     --green: #16a34a; --green-light: #22c55e;
     --text: #e8eaf0; --muted: #7b82a0; --red: #ef4444;
+    --accent: #4f8ef7;
   }
   body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-  .auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px; width: 100%; max-width: 440px; }
-  .logo { text-align: center; margin-bottom: 28px; }
+  .auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 36px; width: 100%; max-width: 480px; }
+  .logo { text-align: center; margin-bottom: 24px; }
   .logo-dot { display: inline-block; width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 8px var(--green); margin-right: 8px; vertical-align: middle; }
   .logo-text { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.03em; }
-  .auth-title { font-size: 1.5rem; font-weight: 800; text-align: center; margin-bottom: 8px; }
-  .auth-sub { text-align: center; color: var(--muted); font-size: 0.9rem; margin-bottom: 28px; }
-  .form-group { margin-bottom: 16px; }
-  .form-group label { display: block; font-size: 0.83rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
-  .form-group input, .form-group select { width: 100%; padding: 11px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.93rem; font-family: inherit; transition: border-color 0.15s; }
+  .auth-title { font-size: 1.4rem; font-weight: 800; text-align: center; margin-bottom: 6px; }
+  .auth-sub { text-align: center; color: var(--muted); font-size: 0.88rem; margin-bottom: 24px; }
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+  .form-group input, .form-group select { width: 100%; padding: 10px 13px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.92rem; font-family: inherit; transition: border-color 0.15s; }
   .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--green); }
   .form-row { display: flex; gap: 12px; }
   .form-row .form-group { flex: 1; }
   .btn-submit { width: 100%; padding: 13px; border-radius: 10px; border: none; background: var(--green); color: #fff; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.15s; margin-top: 8px; }
   .btn-submit:hover { background: var(--green-light); }
   .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
-  .auth-footer { text-align: center; margin-top: 22px; font-size: 0.85rem; color: var(--muted); }
+  .auth-footer { text-align: center; margin-top: 20px; font-size: 0.85rem; color: var(--muted); }
   .auth-footer a { color: var(--green-light); text-decoration: none; font-weight: 600; }
   .auth-footer a:hover { text-decoration: underline; }
-  .error-msg { display: none; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; color: var(--red); font-size: 0.85rem; margin-bottom: 16px; }
+  .error-msg { display: none; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; color: var(--red); font-size: 0.85rem; margin-bottom: 14px; }
   .error-msg.visible { display: block; }
-  .free-badge { text-align: center; margin-bottom: 24px; }
-  .free-badge span { display: inline-block; background: rgba(22,163,74,0.12); border: 1px solid rgba(22,163,74,0.3); color: var(--green-light); padding: 5px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+
+  /* Plan selection */
+  .plan-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 18px; }
+  .plan-option { background: var(--bg); border: 2px solid var(--border); border-radius: 10px; padding: 14px; cursor: pointer; transition: all 0.15s; text-align: center; }
+  .plan-option:hover { border-color: rgba(22,163,74,0.5); }
+  .plan-option.selected { border-color: var(--green); background: rgba(22,163,74,0.06); }
+  .plan-option input { display: none; }
+  .plan-name { font-size: 0.95rem; font-weight: 700; margin-bottom: 2px; }
+  .plan-price { font-size: 1.3rem; font-weight: 800; color: var(--green-light); }
+  .plan-detail { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+  .cost-summary { background: rgba(22,163,74,0.06); border: 1px solid rgba(22,163,74,0.2); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 0.82rem; line-height: 1.6; }
+  .cost-summary strong { color: var(--green-light); }
+  .divider { border-top: 1px solid var(--border); margin: 18px 0 14px; padding-top: 14px; }
+  .divider-label { font-size: 0.9rem; font-weight: 700; margin-bottom: 4px; }
+  .divider-sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; }
 </style>
 </head>
 <body>
@@ -41,7 +55,6 @@
   <div class="logo"><span class="logo-dot"></span><span class="logo-text">WhatShouldICharge</span></div>
   <div class="auth-title">Create your account</div>
   <div class="auth-sub">Get 3 free estimates to try the platform</div>
-  <div class="free-badge"><span>3 Free Estimates Included</span></div>
   <div class="error-msg" id="error-msg" role="alert"></div>
   <form id="signup-form">
     <div class="form-group">
@@ -66,23 +79,59 @@
         <input type="text" id="company_state" placeholder="TX" maxlength="2">
       </div>
     </div>
-    <div style="border-top:1px solid var(--border);margin:20px 0 16px;padding-top:16px;">
-      <div style="font-size:0.9rem;font-weight:700;margin-bottom:4px;">Your Pricing</div>
-      <div style="font-size:0.78rem;color:var(--muted);margin-bottom:12px;">What do you charge per cubic yard? This sets your estimate pricing. You can change it later in settings.</div>
-      <div class="form-row">
-        <div class="form-group">
-          <label for="price_standard">Standard $/CY</label>
-          <input type="number" id="price_standard" step="0.01" min="1" placeholder="35.00">
-        </div>
-        <div class="form-group">
-          <label for="price_heavy">Heavy/Hoarding $/CY</label>
-          <input type="number" id="price_heavy" step="0.01" min="1" placeholder="50.00">
-        </div>
+
+    <div class="divider">
+      <div class="divider-label">Choose Your Plan</div>
+      <div class="divider-sub">Start with 3 free estimates. Purchase a plan when you're ready.</div>
+    </div>
+    <div class="plan-grid">
+      <label class="plan-option" onclick="selectPlan(this)">
+        <input type="radio" name="plan" value="solo">
+        <div class="plan-name">Solo</div>
+        <div class="plan-price">$149</div>
+        <div class="plan-detail">one-time &middot; 1 user</div>
+      </label>
+      <label class="plan-option selected" onclick="selectPlan(this)">
+        <input type="radio" name="plan" value="team" checked>
+        <div class="plan-name">Team</div>
+        <div class="plan-price">$299</div>
+        <div class="plan-detail">one-time &middot; 3 users</div>
+      </label>
+      <label class="plan-option" onclick="selectPlan(this)">
+        <input type="radio" name="plan" value="enterprise">
+        <div class="plan-name">Enterprise</div>
+        <div class="plan-price">$499</div>
+        <div class="plan-detail">one-time &middot; unlimited</div>
+      </label>
+      <label class="plan-option" onclick="selectPlan(this)">
+        <input type="radio" name="plan" value="ppu">
+        <div class="plan-name">Pay-Per-Use</div>
+        <div class="plan-price">$20</div>
+        <div class="plan-detail">per estimate</div>
+      </label>
+    </div>
+    <div class="cost-summary" id="cost-summary">
+      <strong>One-time software:</strong> $299 &nbsp;+&nbsp; <strong>Monthly hosting & data:</strong> ~$15-30/mo<br>
+      <span style="font-size:0.78rem;color:var(--muted);">You'll set up billing for hosting and data after your free trial.</span>
+    </div>
+
+    <div class="divider">
+      <div class="divider-label">Your Pricing</div>
+      <div class="divider-sub">What do you charge per cubic yard? You can change this later in settings.</div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="price_standard">Standard $/CY</label>
+        <input type="number" id="price_standard" step="0.01" min="1" placeholder="35.00">
       </div>
       <div class="form-group">
-        <label for="min_charge">Minimum Job Price ($)</label>
-        <input type="number" id="min_charge" step="1" min="0" placeholder="75" style="max-width:200px;">
+        <label for="price_heavy">Heavy/Hoarding $/CY</label>
+        <input type="number" id="price_heavy" step="0.01" min="1" placeholder="50.00">
       </div>
+    </div>
+    <div class="form-group">
+      <label for="min_charge">Minimum Job Price ($)</label>
+      <input type="number" id="min_charge" step="1" min="0" placeholder="75" style="max-width:200px;">
     </div>
     <div class="form-group" style="margin-top:8px;">
       <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;color:var(--text);font-weight:400;">
@@ -95,6 +144,22 @@
   <div class="auth-footer">Already have an account? <a href="/login">Log in</a></div>
 </main>
 <script>
+const planPrices = { solo: '$149', team: '$299', enterprise: '$499', ppu: '$20/estimate' };
+const planMonthly = { solo: '~$15-30/mo', team: '~$15-30/mo', enterprise: '~$15-60/mo', ppu: 'pay as you go' };
+
+function selectPlan(el) {
+  document.querySelectorAll('.plan-option').forEach(p => p.classList.remove('selected'));
+  el.classList.add('selected');
+  el.querySelector('input').checked = true;
+  const plan = el.querySelector('input').value;
+  const summary = document.getElementById('cost-summary');
+  if (plan === 'ppu') {
+    summary.innerHTML = '<strong>Pay-Per-Use:</strong> $20 per estimate &nbsp;&middot;&nbsp; No upfront cost<br><span style="font-size:0.78rem;color:var(--muted);">Great for trying the tool. Upgrade to a full license anytime.</span>';
+  } else {
+    summary.innerHTML = `<strong>One-time software:</strong> ${planPrices[plan]} &nbsp;+&nbsp; <strong>Monthly hosting & data:</strong> ${planMonthly[plan]}<br><span style="font-size:0.78rem;color:var(--muted);">You'll set up billing for hosting and data after your free trial.</span>`;
+  }
+}
+
 const form = document.getElementById('signup-form');
 const errorMsg = document.getElementById('error-msg');
 const submitBtn = document.getElementById('submit-btn');

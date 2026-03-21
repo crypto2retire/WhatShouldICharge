@@ -1119,7 +1119,7 @@ document.getElementById('nav-logout').addEventListener('click', async () => {
       if (resp.ok) {
         var s = await resp.json();
         document.getElementById('set-user-email').textContent = currentUser.email || '';
-        var tierNames = {free:'Free (3 estimates)',solo:'Solo',team:'Team',enterprise:'Enterprise',ppu:'Pay-Per-Use',starter:'Starter (Legacy)',pro:'Pro (Legacy)',agency:'Agency (Legacy)'};
+        var tierNames = {free:'Free (3 estimates)',solo:'Solo',team:'Team',enterprise:'Enterprise',custom:'Custom',starter:'Starter (Legacy)',pro:'Pro (Legacy)',agency:'Agency (Legacy)'};
         document.getElementById('set-user-plan').textContent = tierNames[currentUser.subscription_tier] || currentUser.subscription_tier || 'Free';
         document.getElementById('set-company-name').value = s.company_name || '';
         document.getElementById('set-city').value = s.company_city || '';

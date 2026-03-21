@@ -89,30 +89,30 @@
         <input type="radio" name="plan" value="solo">
         <div class="plan-name">Solo</div>
         <div class="plan-price">$149</div>
-        <div class="plan-detail">one-time &middot; 1 user</div>
+        <div class="plan-detail">1 user &middot; 150 est/mo &middot; $19/mo hosting</div>
       </label>
       <label class="plan-option selected" onclick="selectPlan(this)">
         <input type="radio" name="plan" value="team" checked>
         <div class="plan-name">Team</div>
         <div class="plan-price">$299</div>
-        <div class="plan-detail">one-time &middot; 3 users</div>
+        <div class="plan-detail">3-9 users &middot; 750 est/mo &middot; $49/mo &middot; widget</div>
       </label>
       <label class="plan-option" onclick="selectPlan(this)">
         <input type="radio" name="plan" value="enterprise">
         <div class="plan-name">Enterprise</div>
         <div class="plan-price">$499</div>
-        <div class="plan-detail">one-time &middot; unlimited</div>
+        <div class="plan-detail">Unlimited &middot; 2,500 est/mo &middot; $99/mo &middot; branding</div>
       </label>
       <label class="plan-option" onclick="selectPlan(this)">
-        <input type="radio" name="plan" value="ppu">
-        <div class="plan-name">Pay-Per-Use</div>
-        <div class="plan-price">$20</div>
-        <div class="plan-detail">per estimate</div>
+        <input type="radio" name="plan" value="custom">
+        <div class="plan-name">Custom</div>
+        <div class="plan-price">$999+</div>
+        <div class="plan-detail">Fully customized solution</div>
       </label>
     </div>
     <div class="cost-summary" id="cost-summary">
-      <strong>One-time software:</strong> $299 &nbsp;+&nbsp; <strong>Monthly hosting & data:</strong> ~$15-30/mo<br>
-      <span style="font-size:0.78rem;color:var(--muted);">You'll set up billing for hosting and data after your free trial.</span>
+      <strong>One-time software:</strong> $299 &nbsp;+&nbsp; <strong>Monthly hosting:</strong> $49/mo (includes 750 estimates)<br>
+      <span style="font-size:0.78rem;color:var(--muted);">You'll set up billing for hosting after your free trial.</span>
     </div>
 
     <div class="divider">
@@ -144,8 +144,12 @@
   <div class="auth-footer">Already have an account? <a href="/login">Log in</a></div>
 </main>
 <script>
-const planPrices = { solo: '$149', team: '$299', enterprise: '$499', ppu: '$20/estimate' };
-const planMonthly = { solo: '~$15-30/mo', team: '~$15-30/mo', enterprise: '~$15-60/mo', ppu: 'pay as you go' };
+const planInfo = {
+  solo: { price: '$149', hosting: '$19/mo', est: '150 estimates/mo' },
+  team: { price: '$299', hosting: '$49/mo', est: '750 estimates/mo' },
+  enterprise: { price: '$499', hosting: '$99/mo', est: '2,500 estimates/mo' },
+  custom: { price: '$999+', hosting: 'Set per client', est: 'Custom' },
+};
 
 function selectPlan(el) {
   document.querySelectorAll('.plan-option').forEach(p => p.classList.remove('selected'));
@@ -153,10 +157,11 @@ function selectPlan(el) {
   el.querySelector('input').checked = true;
   const plan = el.querySelector('input').value;
   const summary = document.getElementById('cost-summary');
-  if (plan === 'ppu') {
-    summary.innerHTML = '<strong>Pay-Per-Use:</strong> $20 per estimate &nbsp;&middot;&nbsp; No upfront cost<br><span style="font-size:0.78rem;color:var(--muted);">Great for trying the tool. Upgrade to a full license anytime.</span>';
+  const p = planInfo[plan];
+  if (plan === 'custom') {
+    summary.innerHTML = '<strong>Custom solution starting at $999.</strong> Contact us to discuss your needs.<br><span style="font-size:0.78rem;color:var(--muted);">kevin@cleartheclutter.net</span>';
   } else {
-    summary.innerHTML = `<strong>One-time software:</strong> ${planPrices[plan]} &nbsp;+&nbsp; <strong>Monthly hosting & data:</strong> ${planMonthly[plan]}<br><span style="font-size:0.78rem;color:var(--muted);">You'll set up billing for hosting and data after your free trial.</span>`;
+    summary.innerHTML = `<strong>One-time software:</strong> ${p.price} &nbsp;+&nbsp; <strong>Monthly hosting:</strong> ${p.hosting} (includes ${p.est})<br><span style="font-size:0.78rem;color:var(--muted);">You'll set up billing for hosting after your free trial.</span>`;
   }
 }
 

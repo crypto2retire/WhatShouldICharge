@@ -237,7 +237,7 @@ TIER_LIMITS = {
     "solo": 999,
     "team": 999,
     "enterprise": 999,
-    "ppu": 999,
+    "custom": 999,
     # Legacy tiers
     "starter": 20,
     "pro": 40,
@@ -707,9 +707,9 @@ async def seed_plan_configs():
             PlanConfig(tier_name="enterprise", display_name="Enterprise", price_cents=49900, estimate_limit=999,
                        features_json='["Unlimited users","Everything in Team","API access","Dedicated onboarding","Phone support"]',
                        stripe_price_id="price_1TDJ5OAPEzwLONiqVhcBQjPn", is_active=True),
-            PlanConfig(tier_name="ppu", display_name="Pay-Per-Use", price_cents=2000, estimate_limit=999,
-                       features_json='["Pay only when you use it","Full AI estimate features","No upfront cost"]',
-                       stripe_price_id="price_1TDJ2zAPEzwLONiqmAAoWrgZ", is_active=True),
+            PlanConfig(tier_name="custom", display_name="Custom", price_cents=99900, estimate_limit=999,
+                       features_json='["Fully customized solution","Custom integrations","White-label options","Dedicated support"]',
+                       stripe_price_id="", is_active=True),
             # Legacy tiers (inactive)
             PlanConfig(tier_name="starter", display_name="Starter (Legacy)", price_cents=2900, estimate_limit=20,
                        features_json='["Legacy plan"]',
@@ -3492,11 +3492,10 @@ async def estimate_status(request: Request, job_id: str):
 
 
 PRICE_TO_TIER = {
-    # New one-time purchase tiers
+    # One-time purchase tiers
     "price_1TDJ2wAPEzwLONiqTut1n11W": "solo",
     "price_1TDJ2xAPEzwLONiq56jpA1fH": "team",
     "price_1TDJ5OAPEzwLONiqVhcBQjPn": "enterprise",
-    "price_1TDJ2zAPEzwLONiqmAAoWrgZ": "ppu",
     # Legacy subscription tiers (keep for existing subscribers)
     "price_1T7PXXAPEzwLONiqIIrAtsQZ": "starter",
     "price_1T6iUPAPEzwLONiqp31lIw9T": "pro",

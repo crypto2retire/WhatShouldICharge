@@ -263,6 +263,8 @@ class User(Base):
     company_slug = Column(String, default="", index=True)
     company_phone = Column(String, default="")
     company_logo_url = Column(String, default="")
+    price_per_cy_standard = Column(Float, default=None)
+    price_per_cy_heavy = Column(Float, default=None)
 
 
 class TeamMember(Base):
@@ -401,6 +403,8 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS min_charge DOUBLE PRECISION DEFAULT 75.0",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS truck_capacity_cy DOUBLE PRECISION DEFAULT 16.0",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS photos_json TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS price_per_cy_standard DOUBLE PRECISION DEFAULT NULL",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS price_per_cy_heavy DOUBLE PRECISION DEFAULT NULL",
         ]
     else:
         alter_statements = [
@@ -420,6 +424,8 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN min_charge REAL DEFAULT 75.0",
             "ALTER TABLE users ADD COLUMN truck_capacity_cy REAL DEFAULT 16.0",
             "ALTER TABLE estimates ADD COLUMN photos_json TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN price_per_cy_standard REAL DEFAULT NULL",
+            "ALTER TABLE users ADD COLUMN price_per_cy_heavy REAL DEFAULT NULL",
         ]
 
     async with engine.begin() as conn:
@@ -446,6 +452,16 @@ async def init_db():
                 await conn.execute(text(stmt))
             except Exception:
                 pass
+
+    # Set CTC (Clear The Clutter) custom rates if not already set
+    async with engine.begin() as conn:
+        try:
+            await conn.execute(text(
+                "UPDATE users SET price_per_cy_standard = 35.0, price_per_cy_heavy = 50.0 "
+                "WHERE company_slug = 'clear-the-clutter' AND price_per_cy_standard IS NULL"
+            ))
+        except Exception:
+            pass
     logger.info("Database migrations and backfills complete")
 
 
@@ -2087,7 +2103,7 @@ async def get_settings(request: Request):
         return cached
     async with AsyncSessionLocal() as db:
         raw = await db.execute(
-            text("SELECT id, company_name, company_city, company_state, company_phone, company_slug, company_logo_url, price_per_cy_low, price_per_cy_high, price_per_cy_premium, min_charge, truck_capacity_cy FROM users WHERE id = :uid"),
+            text("SELECT id, company_name, company_city, company_state, company_phone, company_slug, company_logo_url, price_per_cy_low, price_per_cy_high, price_per_cy_premium, min_charge, truck_capacity_cy, price_per_cy_standard, price_per_cy_heavy FROM users WHERE id = :uid"),
             {"uid": user.id}
         )
         row = raw.mappings().first()
@@ -2105,6 +2121,8 @@ async def get_settings(request: Request):
         "company_slug": row["company_slug"] or "",
         "company_phone": row["company_phone"] or "",
         "company_logo_url": row["company_logo_url"] or "",
+        "price_per_cy_standard": row["price_per_cy_standard"],
+        "price_per_cy_heavy": row["price_per_cy_heavy"],
     }
     cache_set(cache_key, data, ttl=60)
     return data
@@ -2129,6 +2147,8 @@ async def update_settings(request: Request):
         "company_slug": str,
         "company_phone": str,
         "company_logo_url": str,
+        "price_per_cy_standard": float,
+        "price_per_cy_heavy": float,
     }
 
     async with AsyncSessionLocal() as db:
@@ -2190,7 +2210,7 @@ async def update_settings(request: Request):
 
         # Read back the saved values via raw SQL
         verify = await db.execute(
-            text("SELECT company_name, company_city, company_state, company_phone, company_slug, company_logo_url, price_per_cy_low, price_per_cy_high, price_per_cy_premium, min_charge, truck_capacity_cy FROM users WHERE id = :uid"),
+            text("SELECT company_name, company_city, company_state, company_phone, company_slug, company_logo_url, price_per_cy_low, price_per_cy_high, price_per_cy_premium, min_charge, truck_capacity_cy, price_per_cy_standard, price_per_cy_heavy FROM users WHERE id = :uid"),
             {"uid": user.id}
         )
         row = verify.mappings().first()
@@ -2210,6 +2230,8 @@ async def update_settings(request: Request):
             "company_slug": row["company_slug"] or "",
             "company_phone": row["company_phone"] or "",
             "company_logo_url": row["company_logo_url"] or "",
+            "price_per_cy_standard": row["price_per_cy_standard"],
+            "price_per_cy_heavy": row["price_per_cy_heavy"],
         }
 
 
@@ -3115,30 +3137,69 @@ async def run_estimate(
 
         result_data = validate_estimate(result_data)
 
-        market_context = None
-        market_rates = None
-        try:
-            market_rates = await get_market_rates(user.company_city, user.company_state)
-            if market_rates.get("source") == "live_market_search":
-                market_context = {
-                    "city": user.company_city,
-                    "state": user.company_state,
-                    "market_avg": market_rates.get("market_avg"),
-                    "market_low": market_rates.get("low"),
-                    "market_high": market_rates.get("high"),
-                    "samples": market_rates.get("samples", 0),
-                }
-        except Exception:
-            pass
+        # --- Custom per-company pricing (skip Tavily when rates are set) ---
+        custom_standard = getattr(user, 'price_per_cy_standard', None)
+        custom_heavy = getattr(user, 'price_per_cy_heavy', None)
 
-        price_low, price_high, cy_mid, special_items, min_charge_applied = calculate_price(
-            result_data,
-            rate_low=user.price_per_cy_low or 35.0,
-            rate_high=user.price_per_cy_high or 40.0,
-            rate_premium=user.price_per_cy_premium or 55.0,
-            min_charge=user.min_charge or 75.0,
-            market_rates=market_rates,
-        )
+        if custom_standard and custom_heavy:
+            # Use company's own rates with asymmetric range (-10% low, +20% high)
+            totals = result_data.get("totals", {})
+            cy_mid = float(totals.get("cubic_yards_mid", totals.get("cubic_yards_low", 2.0)))
+
+            job_type = result_data.get("job_type", "standard")
+            conditions = result_data.get("conditions", [])
+            is_heavy = (
+                job_type in ("premium", "hoarder", "truck_load")
+                or "stairs" in conditions
+                or "heavy_items" in conditions
+                or "hoarder" in conditions
+                or cy_mid > 10
+            )
+
+            rate = custom_heavy if is_heavy else custom_standard
+            base_price = cy_mid * rate
+            price_low = round(base_price * 0.90, 2)   # -10%
+            price_high = round(base_price * 1.20, 2)   # +20%
+
+            min_ch = user.min_charge or 75.0
+            min_charge_applied = price_low < min_ch or price_high < min_ch
+            price_low = max(price_low, min_ch)
+            price_high = max(price_high, min_ch)
+
+            items = result_data.get("items", [])
+            special_items = [
+                {"name": item.get("name", "Unknown"), "quantity": int(item.get("quantity", 1))}
+                for item in items if item.get("is_special")
+            ]
+            cy_mid = round(cy_mid, 1)
+            market_context = {"source": "custom_company_rate", "rate": rate, "is_heavy": is_heavy}
+            logger.info(f"[run_estimate] Job {job_id}: custom rate ${rate}/CY ({'heavy' if is_heavy else 'standard'}) → ${price_low}-${price_high}")
+        else:
+            # Fall back to Tavily market rates + existing pricing logic
+            market_context = None
+            market_rates = None
+            try:
+                market_rates = await get_market_rates(user.company_city, user.company_state)
+                if market_rates.get("source") == "live_market_search":
+                    market_context = {
+                        "city": user.company_city,
+                        "state": user.company_state,
+                        "market_avg": market_rates.get("market_avg"),
+                        "market_low": market_rates.get("low"),
+                        "market_high": market_rates.get("high"),
+                        "samples": market_rates.get("samples", 0),
+                    }
+            except Exception:
+                pass
+
+            price_low, price_high, cy_mid, special_items, min_charge_applied = calculate_price(
+                result_data,
+                rate_low=user.price_per_cy_low or 35.0,
+                rate_high=user.price_per_cy_high or 40.0,
+                rate_premium=user.price_per_cy_premium or 55.0,
+                min_charge=user.min_charge or 75.0,
+                market_rates=market_rates,
+            )
 
         # Serialize stored photos for DB persistence
         stored_photos = job.get("stored_photos", [])

@@ -368,15 +368,23 @@
     <div class="card">
       <div class="card-title">Pricing</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Standard $/CY (Low)</label><input type="number" id="ms-rate-low" step="0.01" min="0"></div>
-        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Standard $/CY (High)</label><input type="number" id="ms-rate-high" step="0.01" min="0"></div>
+        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Standard Rate ($/CY)</label><input type="number" id="ms-rate-standard" step="0.01" min="0" placeholder="e.g. 35.00"></div>
+        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Heavy/Hoarding Rate ($/CY)</label><input type="number" id="ms-rate-heavy" step="0.01" min="0" placeholder="e.g. 50.00"></div>
       </div>
+      <div style="font-size:0.75rem;color:var(--muted);margin-bottom:12px;">Set your own per-cubic-yard rates. Estimates use -10%/+20% for the price range. Leave blank to use market rates from web search.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Premium $/CY</label><input type="number" id="ms-rate-premium" step="0.01" min="0"></div>
         <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Minimum Charge ($)</label><input type="number" id="ms-min-charge" step="0.01" min="0"></div>
+        <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Truck Capacity (CY)</label><input type="number" id="ms-truck" step="0.1" min="1"></div>
       </div>
       <div style="font-size:0.75rem;color:var(--muted);margin-bottom:12px;">Estimates will never quote below the minimum charge amount.</div>
-      <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Truck Capacity (CY)</label><input type="number" id="ms-truck" step="0.1" min="1" style="max-width:200px;"></div>
+      <details style="margin-top:8px;">
+        <summary style="font-size:0.78rem;color:var(--muted);cursor:pointer;">Advanced: Fallback Rates (used when custom rates are blank)</summary>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px;">
+          <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">$/CY (Low)</label><input type="number" id="ms-rate-low" step="0.01" min="0"></div>
+          <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">$/CY (High)</label><input type="number" id="ms-rate-high" step="0.01" min="0"></div>
+          <div><label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">Premium $/CY</label><input type="number" id="ms-rate-premium" step="0.01" min="0"></div>
+        </div>
+      </details>
     </div>
 
     <div class="card">
@@ -679,6 +687,8 @@ async function loadMySettings() {
     document.getElementById('ms-city').value = d.company_city || '';
     document.getElementById('ms-state').value = d.company_state || '';
     document.getElementById('ms-logo').value = d.company_logo_url || '';
+    document.getElementById('ms-rate-standard').value = d.price_per_cy_standard || '';
+    document.getElementById('ms-rate-heavy').value = d.price_per_cy_heavy || '';
     document.getElementById('ms-rate-low').value = d.price_per_cy_low;
     document.getElementById('ms-rate-high').value = d.price_per_cy_high;
     document.getElementById('ms-rate-premium').value = d.price_per_cy_premium;
@@ -726,6 +736,8 @@ document.getElementById('ms-save').addEventListener('click', async function() {
       company_city: document.getElementById('ms-city').value.trim(),
       company_state: document.getElementById('ms-state').value.trim(),
       company_logo_url: document.getElementById('ms-logo').value.trim(),
+      price_per_cy_standard: document.getElementById('ms-rate-standard').value ? parseFloat(document.getElementById('ms-rate-standard').value) : null,
+      price_per_cy_heavy: document.getElementById('ms-rate-heavy').value ? parseFloat(document.getElementById('ms-rate-heavy').value) : null,
       price_per_cy_low: parseFloat(document.getElementById('ms-rate-low').value) || 35,
       price_per_cy_high: parseFloat(document.getElementById('ms-rate-high').value) || 40,
       price_per_cy_premium: parseFloat(document.getElementById('ms-rate-premium').value) || 55,

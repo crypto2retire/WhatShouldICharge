@@ -511,6 +511,7 @@ class Estimate(Base):
     customer_name = Column(String, default="")
     customer_email = Column(String, default="")
     customer_phone = Column(String, default="")
+    preferred_contact = Column(String, default="phone")
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     photos_count = Column(Integer)
     result_json = Column(Text)
@@ -580,6 +581,7 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS customer_name TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS customer_email TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS customer_phone TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS preferred_contact VARCHAR DEFAULT 'phone'",
             "ALTER TABLE item_reference_library ADD COLUMN IF NOT EXISTS dimensions TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS estimate_name TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS company_slug TEXT DEFAULT ''",
@@ -620,6 +622,7 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN customer_name TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN customer_email TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN customer_phone TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN preferred_contact TEXT DEFAULT 'phone'",
             "ALTER TABLE item_reference_library ADD COLUMN dimensions TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN estimate_name TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN company_slug TEXT DEFAULT ''",
@@ -2104,6 +2107,7 @@ async def public_create_estimate(
     customer_name: str = Form(default=""),
     customer_email: str = Form(default=""),
     customer_phone: str = Form(default=""),
+    preferred_contact: str = Form(default="phone"),
 ):
     """Public estimate endpoint — customer submits photos, charges against company's estimate count."""
     client_ip = get_client_ip(request)
@@ -2220,6 +2224,7 @@ async def public_create_estimate(
         "customer_name": customer_name,
         "customer_email": customer_email,
         "customer_phone": customer_phone,
+        "preferred_contact": preferred_contact,
         "created_at": datetime.utcnow(),
         "stored_photos": stored_photos,
         "company_email": company_user.email,
@@ -3585,6 +3590,7 @@ async def run_estimate(
                 customer_name=encrypt_pii(job.get("customer_name", "")),
                 customer_email=encrypt_pii(job.get("customer_email", "")),
                 customer_phone=encrypt_pii(job.get("customer_phone", "")),
+                preferred_contact=job.get("preferred_contact", "phone"),
                 photos_count=num_photos,
                 result_json=json.dumps(result_data),
                 price_low=price_low,
@@ -3884,6 +3890,7 @@ async def get_estimates(request: Request):
                 "estimate_name": e.estimate_name or "",
                 "customer_name": decrypt_pii(e.customer_name or ""),
                 "customer_email": decrypt_pii(e.customer_email or ""),
+                "preferred_contact": e.preferred_contact or "phone",
                 "has_photos": bool(getattr(e, 'photos_json', None)),
             }
             for e in estimates
@@ -3917,6 +3924,7 @@ async def get_estimate_detail(request: Request, estimate_id: int):
             "customer_name": decrypt_pii(e.customer_name or ""),
             "customer_email": decrypt_pii(e.customer_email or ""),
             "customer_phone": decrypt_pii(e.customer_phone or ""),
+            "preferred_contact": e.preferred_contact or "phone",
             "result": result_data,
             "has_photos": bool(e.photos_json),
         }

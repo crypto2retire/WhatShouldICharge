@@ -32,22 +32,9 @@ input, select { width: 100%; padding: 10px 12px; background: var(--bg); border: 
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-text { font-size: 0.9rem; color: var(--muted); margin-top: 12px; }
 .results { display: none; }
-.price-range { font-size: 2rem; font-weight: 800; color: var(--accent); text-align: center; padding: 16px 0; }
-.price-note { text-align: center; font-size: 0.78rem; color: var(--muted); margin-bottom: 16px; }
-.item-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
-.item-name { flex: 1; }
-.item-cy { color: var(--muted); font-size: 0.78rem; }
-.item-qty { color: var(--muted); font-size: 0.78rem; min-width: 30px; text-align: right; }
 .cta-card { text-align: center; padding: 20px; }
 .cta-card a { color: var(--accent); font-weight: 600; text-decoration: none; font-size: 1.1rem; }
 .error { color: #ef4444; font-size: 0.85rem; text-align: center; padding: 12px; display: none; }
-.badge { display: inline-block; padding: 2px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; }
-.badge-standard { background: rgba(22,163,74,0.15); color: #16a34a; }
-.badge-premium { background: rgba(245,158,11,0.15); color: #f59e0b; }
-.badge-hoarder { background: rgba(239,68,68,0.15); color: #ef4444; }
-.special-note { margin-top: 14px; padding: 12px; border-radius: 8px; background: rgba(120,53,15,0.15); border: 1px solid rgba(245,158,11,0.3); font-size: 0.8rem; color: #fde68a; }
-.dupe-note { margin-top: 14px; padding: 12px; border-radius: 8px; background: rgba(234,179,8,0.10); border: 1px solid rgba(234,179,8,0.3); font-size: 0.8rem; color: #eab308; }
-.min-charge-note { text-align: center; font-size: 0.8rem; color: #f59e0b; font-weight: 500; margin-bottom: 12px; }
 .powered { text-align: center; font-size: 0.7rem; color: var(--muted); padding: 20px 0; }
 .powered a { color: var(--muted); text-decoration: none; }
 .verify-section { }
@@ -86,6 +73,12 @@ input, select { width: 100%; padding: 10px 12px; background: var(--bg); border: 
         <input type="text" id="verify-code" class="code-input" placeholder="------" maxlength="6" autocomplete="one-time-code">
         <div style="font-size:0.75rem;color:var(--muted);text-align:center;margin-top:-8px;margin-bottom:8px;">Check your email for a 6-digit code</div>
       </div>
+      <label>Preferred Contact Method</label>
+      <select id="contact-method">
+        <option value="phone">Phone Call</option>
+        <option value="text">Text Message</option>
+        <option value="email">Email</option>
+      </select>
       <label>Phone</label>
       <input type="tel" id="cust-phone" placeholder="(555) 123-4567">
       <div class="error" id="verify-error"></div>
@@ -119,36 +112,21 @@ input, select { width: 100%; padding: 10px 12px; background: var(--bg); border: 
     <div class="loading-text" id="loading-text">Analyzing your photos...</div>
   </div>
 
-  <!-- Results -->
+  <!-- Results - Lead Capture Confirmation -->
   <div class="results" id="results">
-    <div class="card">
-      <div style="text-align:center;margin-bottom:8px;">
-        <span class="badge" id="res-badge"></span>
-      </div>
-      <div class="price-range" id="res-price"></div>
-      <div id="min-charge-msg" class="min-charge-note" style="display:none;"></div>
-      <div class="price-note">Estimated price range based on photo analysis</div>
-      <div style="text-align:center;font-size:0.85rem;color:var(--muted);" id="res-cy"></div>
+    <div class="card" style="text-align:center;padding:40px 20px;">
+      <div style="font-size:3rem;margin-bottom:16px;">&#x2713;</div>
+      <h2 style="font-size:1.4rem;font-weight:700;margin-bottom:12px;">Thank You!</h2>
+      <p style="color:var(--muted);font-size:0.95rem;line-height:1.6;margin-bottom:20px;">
+        We've received your photos and are preparing your estimate.<br>
+        We'll reach out to you shortly via your preferred contact method.
+      </p>
+      <div id="contact-method-confirm" style="background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.2);border-radius:8px;padding:12px 16px;font-size:0.85rem;color:var(--accent);margin-bottom:20px;"></div>
     </div>
-
-    <div class="card">
-      <div class="card-title">Items Detected</div>
-      <div id="res-items"></div>
-    </div>
-
-    <div id="res-special" class="special-note" style="display:none;"></div>
-    <div id="res-dupes" class="dupe-note" style="display:none;"></div>
-
-    <div class="card" id="res-notes-card" style="display:none;">
-      <div class="card-title">Notes</div>
-      <div id="res-notes" style="font-size:0.85rem;color:var(--muted);"></div>
-    </div>
-
     <div class="card cta-card" id="cta-card">
-      <div style="font-size:0.9rem;color:var(--muted);margin-bottom:10px;">Ready to schedule?</div>
-      <a id="cta-phone-link" href="tel:">Schedule an Appointment</a>
+      <div style="font-size:0.9rem;color:var(--muted);margin-bottom:10px;">Need help sooner?</div>
+      <a id="cta-phone-link" href="tel:" style="color:var(--accent);font-weight:600;text-decoration:none;font-size:1.1rem;">Call Us</a>
     </div>
-
     <div class="estimate-disclaimer">This estimate covers only the items visible in your uploaded photos. Any additional items not shown in the photos will be priced at our standard rates upon arrival. Recycling fees apply to items containing freon (refrigerators, freezers, AC units), tires, TVs, and certain electronics. This estimate is AI-generated and approximate only. Actual pricing may vary based on item weight, accessibility, and on-site conditions. This is not a binding quote. See <a href="/terms" target="_blank">Terms of Service</a> and <a href="/privacy" target="_blank">Privacy Policy</a>.</div>
   </div>
 
@@ -287,6 +265,7 @@ document.getElementById('submit-btn').addEventListener('click', async function()
   fd.append('customer_phone', document.getElementById('cust-phone').value.trim());
   fd.append('rooms', JSON.stringify(photos.map(function() { return 'Main'; })));
   if (verificationToken) fd.append('verification_token', verificationToken);
+  fd.append('preferred_contact', document.getElementById('contact-method').value);
 
   try {
     var resp = await fetch('/api/public/estimate/' + encodeURIComponent(slug), { method: 'POST', body: fd });
@@ -336,56 +315,11 @@ async function pollStatus(jobId) {
 
 function showResults(r) {
   document.getElementById('results').style.display = 'block';
-
-  var priceLow = r.price_low || 0;
-  var priceHigh = r.price_high || 0;
-  document.getElementById('res-price').textContent = '$' + priceLow.toLocaleString() + ' - $' + priceHigh.toLocaleString();
-
-  if (r.min_charge_applied) {
-    var mcMsg = document.getElementById('min-charge-msg');
-    mcMsg.textContent = 'Minimum charge applied';
-    mcMsg.style.display = 'block';
-  }
-
-  document.getElementById('res-cy').textContent = (r.cy_estimate || 0) + ' cubic yards estimated';
-
-  var badgeLabels = { standard: 'Standard', premium: 'Premium', hoarder: 'Hoarder', truck_load: 'Truck Load' };
-  var jt = r.job_type || 'standard';
-  document.getElementById('res-badge').textContent = badgeLabels[jt] || jt;
-  document.getElementById('res-badge').className = 'badge badge-' + jt;
-
-  var itemsEl = document.getElementById('res-items');
-  itemsEl.innerHTML = '';
-  (r.items || []).forEach(function(item) {
-    var row = document.createElement('div');
-    row.className = 'item-row';
-    row.innerHTML = '<div class="item-name">' + esc(item.name || 'Item') + '</div>' +
-      '<div class="item-cy">' + (item.cubic_yards || 0) + ' CY</div>' +
-      '<div class="item-qty">x' + (item.quantity || 1) + '</div>';
-    itemsEl.appendChild(row);
-  });
-
-  var specials = r.special_items || [];
-  if (specials.length > 0) {
-    var shtml = '<strong>Recycling/Disposal Fee Items:</strong><br>';
-    specials.forEach(function(s) { shtml += esc(s.name) + ' x' + (s.quantity || 1) + '<br>'; });
-    shtml += '<em style="font-size:0.75rem;">Fees confirmed on arrival.</em>';
-    document.getElementById('res-special').innerHTML = shtml;
-    document.getElementById('res-special').style.display = 'block';
-  }
-
-  var dupes = r.potential_duplicates || [];
-  if (dupes.length > 0) {
-    var dhtml = '<strong>Items to verify (may be duplicates):</strong><br>';
-    dupes.forEach(function(d) { dhtml += esc(d.item_a) + ' vs ' + esc(d.item_b) + '<br>'; });
-    document.getElementById('res-dupes').innerHTML = dhtml;
-    document.getElementById('res-dupes').style.display = 'block';
-  }
-
-  if (r.notes) {
-    document.getElementById('res-notes').textContent = r.notes;
-    document.getElementById('res-notes-card').style.display = 'block';
-  }
+  // Show which contact method they selected
+  var method = document.getElementById('contact-method').value;
+  var methodLabels = { phone: 'phone call', text: 'text message', email: 'email' };
+  document.getElementById('contact-method-confirm').textContent =
+    "We'll contact you by " + (methodLabels[method] || method) + " at the information you provided.";
 }
 
 // Notify parent iframe of height changes for widget auto-resize

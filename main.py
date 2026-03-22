@@ -717,6 +717,15 @@ async def init_db():
             except Exception:
                 pass
 
+    # Grant 999 credits to admin accounts for testing
+    async with engine.begin() as conn:
+        try:
+            await conn.execute(text(
+                "UPDATE users SET credit_balance = 999 WHERE is_admin = true AND (credit_balance IS NULL OR credit_balance < 999)"
+            ))
+        except Exception:
+            pass
+
     # Set CTC (Clear The Clutter) custom rates if not already set
     async with engine.begin() as conn:
         try:

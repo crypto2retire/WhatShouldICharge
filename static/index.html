@@ -1119,8 +1119,12 @@ var currentEstimateId = null;
     document.getElementById('nav-estimates').textContent = creditBal > 0 ? creditBal + ' credits' : freeTrial > 0 ? freeTrial + ' free estimate' + (freeTrial !== 1 ? 's' : '') : '0 credits';
 
     if (remaining <= 0) {
-      window.location.href = '/upgrade';
-      return;
+      // Show a banner instead of redirecting — let users access history, settings, etc.
+      var banner = document.createElement('div');
+      banner.style.cssText = 'background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:14px 20px;margin-bottom:20px;text-align:center;font-size:0.9rem;';
+      banner.innerHTML = 'You have no estimate credits remaining. <a href="/upgrade" style="color:#22c55e;font-weight:700;text-decoration:underline;">Buy credits</a> to run new estimates.';
+      var mainWrap = document.querySelector('.main-wrap');
+      if (mainWrap) mainWrap.prepend(banner);
     }
     loadHistory();
   } catch (e) {

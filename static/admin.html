@@ -463,13 +463,14 @@ async function loadClientDetail(userId) {
     </div>`;
 
     // Timezone override
-    html += \`<div class="card"><div class="card-title">Timezone</div>
-      <div class="form-group"><label class="form-label">IANA Timezone (auto-detected from state)</label>
-      <select class="form-select" id="cu-timezone">
-        \${['America/New_York','America/Chicago','America/Denver','America/Phoenix','America/Boise','America/Los_Angeles','America/Anchorage','Pacific/Honolulu'].map(tz => \`<option value="\${tz}" \${(u.timezone||'America/Chicago')===tz?'selected':''}>\${tz}</option>\`).join('')}
-      </select></div>
-      <button class="btn btn-outline btn-sm" onclick="saveClientTimezone(${u.id})">Save Timezone</button>
-    </div>\`;
+    var tzOptions = ['America/New_York','America/Chicago','America/Denver','America/Phoenix','America/Boise','America/Los_Angeles','America/Anchorage','Pacific/Honolulu'].map(function(tz) {
+      return '<option value="' + tz + '"' + ((u.timezone||'America/Chicago')===tz?' selected':'') + '>' + tz + '</option>';
+    }).join('');
+    html += '<div class="card"><div class="card-title">Timezone</div>' +
+      '<div class="form-group"><label class="form-label">IANA Timezone (auto-detected from state)</label>' +
+      '<select class="form-select" id="cu-timezone">' + tzOptions + '</select></div>' +
+      '<button class="btn btn-outline btn-sm" onclick="saveClientTimezone(' + u.id + ')">Save Timezone</button>' +
+    '</div>';
 
     // Credit balance card
     const crBal = u.credit_balance || 0;

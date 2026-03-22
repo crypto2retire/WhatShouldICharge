@@ -4080,7 +4080,8 @@ async def admin_analytics(request: Request):
             "team_members": team_count,
             "recent_users": [
                 {"id": u.id, "email": u.email, "company_name": u.company_name,
-                 "tier": u.subscription_tier, "created_at": u.created_at.isoformat() if u.created_at else None}
+                 "tier": u.subscription_tier, "credit_balance": getattr(u, 'credit_balance', 0) or 0,
+                 "created_at": u.created_at.isoformat() if u.created_at else None}
                 for u in recent_users
             ]
         }
@@ -4104,6 +4105,8 @@ async def admin_users(request: Request, q: str = "", page: int = 1):
                  "company_city": u.company_city, "company_state": u.company_state,
                  "tier": u.subscription_tier, "estimates_used": u.estimates_used,
                  "estimates_limit": u.estimates_limit, "is_admin": u.is_admin,
+                 "credit_balance": getattr(u, 'credit_balance', 0) or 0,
+                 "free_trial_used": getattr(u, 'free_trial_used', 0) or 0,
                  "pricing_setup": getattr(u, 'price_per_cy_standard', None) is not None,
                  "is_active": getattr(u, 'is_active', True),
                  "created_at": u.created_at.isoformat() if u.created_at else None}
@@ -4339,6 +4342,10 @@ async def admin_user_detail(request: Request, user_id: int):
             "company_logo_url": getattr(u, 'company_logo_url', '') or "",
             "subscription_tier": u.subscription_tier or "free",
             "estimates_used": u.estimates_used, "estimates_limit": u.estimates_limit,
+            "credit_balance": getattr(u, 'credit_balance', 0) or 0,
+            "credits_purchased_total": getattr(u, 'credits_purchased_total', 0) or 0,
+            "credits_used_total": getattr(u, 'credits_used_total', 0) or 0,
+            "free_trial_used": getattr(u, 'free_trial_used', 0) or 0,
             "is_admin": u.is_admin,
             "is_active": getattr(u, 'is_active', True),
             "admin_notes": getattr(u, 'admin_notes', '') or "",
@@ -4388,6 +4395,8 @@ async def admin_update_user(request: Request, user_id: int):
             u.is_active = bool(body["is_active"])
         if "estimates_limit" in body:
             u.estimates_limit = int(body["estimates_limit"])
+        if "credit_balance" in body:
+            u.credit_balance = int(body["credit_balance"])
         # If plan changed, update limit from plan config
         if "subscription_tier" in body:
             tier = body["subscription_tier"]

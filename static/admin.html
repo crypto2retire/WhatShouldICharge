@@ -215,7 +215,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
   </div>
   <div class="card">
     <div class="card-title">Recent Users</div>
-    <table><thead><tr><th>Email</th><th>Company</th><th>Tier</th><th>Joined</th></tr></thead><tbody id="recent-users-body"></tbody></table>
+    <table><thead><tr><th>Email</th><th>Company</th><th>Credits</th><th>Joined</th></tr></thead><tbody id="recent-users-body"></tbody></table>
   </div>
 </div>
 
@@ -229,7 +229,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
     </div>
     <div class="card">
       <table>
-        <thead><tr><th>ID</th><th>Email</th><th>Company</th><th>Location</th><th>Tier</th><th>Pricing</th><th>Estimates</th><th>Joined</th></tr></thead>
+        <thead><tr><th>ID</th><th>Email</th><th>Company</th><th>Location</th><th>Credits</th><th>Pricing</th><th>Free Trial</th><th>Joined</th></tr></thead>
         <tbody id="clients-body"></tbody>
       </table>
       <div class="pagination" id="clients-pagination"></div>
@@ -405,7 +405,7 @@ async function loadDashboard() {
     $('#stat-month').textContent = d.estimates_month;
     $('#stat-avg-cy').textContent = d.avg_cy + ' CY';
     $('#stat-avg-price').textContent = '$' + d.avg_price;
-    $('#recent-users-body').innerHTML = d.recent_users.map(u => `<tr><td>${esc(u.email)}</td><td>${esc(u.company_name||'--')}</td><td><span class="badge badge-condition">${esc(u.tier)}</span></td><td>${fmtShortDate(u.created_at)}</td></tr>`).join('');
+    $('#recent-users-body').innerHTML = d.recent_users.map(u => `<tr><td>${esc(u.email)}</td><td>${esc(u.company_name||'--')}</td><td><span class="badge badge-green">${u.credit_balance||0}</span></td><td>${fmtShortDate(u.created_at)}</td></tr>`).join('');
     // Load usage stats
     try {
       const u = await apiFetch('/api/admin/usage');
@@ -433,9 +433,9 @@ async function loadClients(page) {
       tbody.innerHTML = d.users.map(u => `<tr class="clickable-row" onclick="loadClientDetail(${u.id})">
         <td>#${u.id}</td><td>${esc(u.email)}</td><td>${esc(u.company_name||'--')}</td>
         <td>${esc((u.company_city||'')+(u.company_state?', '+u.company_state:''))}</td>
-        <td><span class="badge badge-condition">${esc(u.tier)}</span></td>
+        <td><span class="badge badge-green">${u.credit_balance||0}</span></td>
         <td>${u.pricing_setup?'<span class="badge badge-green">Setup</span>':'<span class="badge badge-red">Not Set</span>'}</td>
-        <td>${u.estimates_used}/${u.estimates_limit}</td>
+        <td>${u.free_trial_used||0}/2 used</td>
         <td>${fmtShortDate(u.created_at)}</td>
       </tr>`).join('');
     }
@@ -458,7 +458,7 @@ async function loadClientDetail(userId) {
     html += `<div class="card"><div class="card-title">Client Info</div>
       <div class="form-row"><div><span class="form-label">Email</span><div>${esc(u.email)}</div></div><div><span class="form-label">Phone</span><div>${esc(u.company_phone||'--')}</div></div></div>
       <div class="form-row" style="margin-top:10px"><div><span class="form-label">Location</span><div>${esc(u.company_city||'')}${u.company_state?', '+esc(u.company_state):''}</div></div><div><span class="form-label">Slug</span><div>${esc(u.company_slug||'--')}</div></div></div>
-      <div class="form-row" style="margin-top:10px"><div><span class="form-label">Plan</span><div><span class="badge badge-condition">${esc(u.subscription_tier)}</span></div></div><div><span class="form-label">Joined</span><div>${fmtShortDate(u.created_at)}</div></div></div>
+      <div class="form-row" style="margin-top:10px"><div><span class="form-label">Credits</span><div><span class="badge badge-green">${u.credit_balance||0}</span> (${u.credits_purchased_total||0} bought, ${u.credits_used_total||0} used, ${u.free_trial_used||0}/2 free trial)</div></div><div><span class="form-label">Joined</span><div>${fmtShortDate(u.created_at)}</div></div></div>
       <div class="form-row" style="margin-top:10px"><div><span class="form-label">Timezone</span><div>${esc(u.timezone||'America/Chicago')}</div></div><div></div></div>
     </div>`;
 
@@ -471,20 +471,18 @@ async function loadClientDetail(userId) {
       <button class="btn btn-outline btn-sm" onclick="saveClientTimezone(${u.id})">Save Timezone</button>
     </div>\`;
 
-    // Usage card
-    const usLimit = u.monthly_call_limit || 150;
-    const usUsed = u.monthly_calls_used || 0;
-    const usPct = usLimit > 0 ? Math.round(usUsed / usLimit * 100) : 0;
-    const usColor = usPct >= 90 ? 'var(--red)' : usPct >= 75 ? 'var(--orange)' : 'var(--green)';
-    html += `<div class="card"><div class="card-title">Usage This Month</div>
+    // Credit balance card
+    const crBal = u.credit_balance || 0;
+    const crBought = u.credits_purchased_total || 0;
+    const crUsed = u.credits_used_total || 0;
+    const freeTrial = u.free_trial_used || 0;
+    html += `<div class="card"><div class="card-title">Credit Balance</div>
       <div class="summary-grid">
-        <div><div class="summary-label">Estimates Used</div><div class="summary-val">${usUsed} / ${usLimit}</div></div>
-        <div><div class="summary-label">Overage Calls</div><div class="summary-val">${Math.max(0, usUsed - usLimit)}</div></div>
-        <div><div class="summary-label">Overage Charges</div><div class="summary-val">$${((u.overage_charges_cents||0)/100).toFixed(2)}</div></div>
-        <div><div class="summary-label">Overage Mode</div><div class="summary-val">${esc(u.overage_mode||'warn_and_charge')}</div></div>
+        <div><div class="summary-label">Available Credits</div><div class="summary-val" style="color:var(--green);font-size:1.4rem;font-weight:800;">${crBal}</div></div>
+        <div><div class="summary-label">Credits Purchased</div><div class="summary-val">${crBought}</div></div>
+        <div><div class="summary-label">Credits Used</div><div class="summary-val">${crUsed}</div></div>
+        <div><div class="summary-label">Free Trial</div><div class="summary-val">${freeTrial}/2 used</div></div>
       </div>
-      <div class="confidence-bar-wrap" style="margin-top:10px"><div class="confidence-bar" style="width:${Math.min(usPct,100)}%;background:${usColor}"></div></div>
-      <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">${usPct}% of plan limit</div>
     </div>`;
 
     // Pricing card
@@ -508,7 +506,7 @@ async function loadClientDetail(userId) {
     // Account actions
     html += `<div class="card"><div class="card-title">Account Actions</div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Change Plan</label><select class="form-select" id="cu-tier"><option ${u.subscription_tier==='free'?'selected':''}>free</option><option ${u.subscription_tier==='starter'?'selected':''}>starter</option><option ${u.subscription_tier==='pro'?'selected':''}>pro</option><option ${u.subscription_tier==='agency'?'selected':''}>agency</option></select></div>
+        <div class="form-group"><label class="form-label">Set Credit Balance</label><input class="form-input" type="number" id="cu-credits" value="${u.credit_balance||0}" min="0"></div>
         <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="cu-active"><option value="true" ${u.is_active!==false?'selected':''}>Active</option><option value="false" ${u.is_active===false?'selected':''}>Inactive</option></select></div>
       </div>
       <div class="btn-group" style="margin-bottom:14px">
@@ -551,7 +549,7 @@ async function saveClientPricing(userId) {
 async function saveClientAccount(userId) {
   try {
     await apiFetch(`/api/admin/users/${userId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({
-      subscription_tier: $('#cu-tier').value,
+      credit_balance: parseInt($('#cu-credits').value) || 0,
       is_active: $('#cu-active').value === 'true',
     })});
     toast('Account updated');

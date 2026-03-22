@@ -467,7 +467,7 @@ function esc(s) { var d = document.createElement('div'); d.textContent = String(
   if (!data.authenticated) { window.location.href = '/team'; return; }
   document.getElementById('team-name').textContent = data.name;
   document.getElementById('team-company').textContent = data.company_name;
-  document.getElementById('team-remaining').textContent = data.estimates_remaining + ' left';
+  document.getElementById('team-remaining').textContent = data.estimates_remaining > 0 ? data.estimates_remaining + ' credit' + (data.estimates_remaining !== 1 ? 's' : '') : '0 credits';
 
   var grid = document.getElementById('room-grid');
   ROOMS.forEach(function(room) {

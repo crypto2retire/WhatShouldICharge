@@ -3678,7 +3678,9 @@ async def run_estimate(
         except Exception:
             pass  # Don't fail the estimate if email fails
 
-        remaining = max(0, user.estimates_limit - user.estimates_used)
+        credit_bal = getattr(user, 'credit_balance', 0) or 0
+        free_left = max(0, 2 - (getattr(user, 'free_trial_used', 0) or 0))
+        remaining = credit_bal + free_left
 
         resp = {
             "id": estimate_id,
@@ -4836,7 +4838,9 @@ async def team_me(request: Request):
     member, owner = await get_team_member(request)
     if not member:
         return JSONResponse({"authenticated": False})
-    remaining = max(0, owner.estimates_limit - owner.estimates_used)
+    credit_bal = getattr(owner, 'credit_balance', 0) or 0
+    free_left = max(0, 2 - (getattr(owner, 'free_trial_used', 0) or 0))
+    remaining = credit_bal + free_left
     return {
         "authenticated": True,
         "name": member.name,

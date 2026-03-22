@@ -957,7 +957,7 @@
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:18px;">
         <div style="font-size:0.85rem;color:var(--text);font-weight:600;margin-bottom:8px;">Account</div>
         <div style="font-size:0.82rem;color:var(--muted);margin-bottom:4px;">Logged in as: <span id="set-user-email" style="color:var(--text);"></span></div>
-        <div style="font-size:0.82rem;color:var(--muted);margin-bottom:10px;">Plan: <span id="set-user-plan" style="color:var(--green);font-weight:600;"></span></div>
+        <div style="font-size:0.82rem;color:var(--muted);margin-bottom:10px;">Credits: <span id="set-user-plan" style="color:var(--green);font-weight:600;"></span> &middot; <a href="/upgrade" style="color:#4f8ef7;text-decoration:none;font-weight:600;">Buy More</a></div>
         <div id="usage-section" style="margin-bottom:10px;">
           <div style="font-size:0.82rem;color:var(--muted);margin-bottom:4px;">Usage: <span id="usage-text" style="color:var(--text);font-weight:600;"></span></div>
           <div style="background:var(--surface);border-radius:6px;height:8px;overflow:hidden;margin-bottom:4px;"><div id="usage-bar" style="height:100%;border-radius:6px;background:var(--green);width:0%;transition:width 0.3s;"></div></div>
@@ -1113,8 +1113,10 @@ var currentEstimateId = null;
     document.getElementById('nav-user').style.display = 'flex';
     document.getElementById('nav-company-name').textContent = data.company_name || data.email;
     if (data.is_admin) document.getElementById('nav-admin-link').style.display = '';
-    const remaining = Math.max(0, data.estimates_limit - data.estimates_used);
-    document.getElementById('nav-estimates').textContent = remaining + ' estimates remaining';
+    const creditBal = data.credit_balance || 0;
+    const freeTrial = data.free_trial_remaining || 0;
+    const remaining = creditBal + freeTrial;
+    document.getElementById('nav-estimates').textContent = creditBal > 0 ? creditBal + ' credits' : freeTrial > 0 ? freeTrial + ' free estimate' + (freeTrial !== 1 ? 's' : '') : '0 credits';
 
     if (remaining <= 0) {
       window.location.href = '/upgrade';
@@ -1149,8 +1151,9 @@ document.getElementById('nav-logout').addEventListener('click', async () => {
       if (resp.ok) {
         var s = await resp.json();
         document.getElementById('set-user-email').textContent = currentUser.email || '';
-        var tierNames = {free:'Free (3 estimates)',solo:'Solo',team:'Team',enterprise:'Enterprise',custom:'Custom',starter:'Starter (Legacy)',pro:'Pro (Legacy)',agency:'Agency (Legacy)'};
-        document.getElementById('set-user-plan').textContent = tierNames[currentUser.subscription_tier] || currentUser.subscription_tier || 'Free';
+        var cb = currentUser.credit_balance || 0;
+        var ft = currentUser.free_trial_remaining || 0;
+        document.getElementById('set-user-plan').textContent = cb > 0 ? cb + ' credits' : ft > 0 ? ft + ' free estimate' + (ft !== 1 ? 's' : '') + ' remaining' : 'No credits — buy a pack';
         document.getElementById('set-company-name').value = s.company_name || '';
         document.getElementById('set-city').value = s.company_city || '';
         document.getElementById('set-state').value = s.company_state || '';
@@ -1514,7 +1517,7 @@ async function submitEstimate() {
     const data = await resp.json();
 
     if (!resp.ok) {
-      if (data.detail === 'estimate_limit_reached') {
+      if (data.detail === 'estimate_limit_reached' || data.detail === 'no_credits') {
         window.location.href = '/upgrade';
         return;
       }
@@ -1546,7 +1549,8 @@ async function submitEstimate() {
       if (statusData.status === 'complete') {
         const result = statusData.result;
         if (result.estimates_remaining !== undefined) {
-          document.getElementById('nav-estimates').textContent = result.estimates_remaining + ' estimates remaining';
+          var r = result.estimates_remaining;
+          document.getElementById('nav-estimates').textContent = r > 0 ? r + ' credit' + (r !== 1 ? 's' : '') : '0 credits';
         }
         showResults(result);
         loadHistory();

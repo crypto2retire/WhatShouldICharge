@@ -40,6 +40,7 @@ STEP 2: Use anchors to measure the OVERALL pile/area dimensions:
   * Example: pile is 6ft × 5ft × 4ft = 120 cf ÷ 27 = 4.4 CY × 1.25 packing = 5.6 CY
 - NEVER use a packing factor below 1.0. Compressed piles EXPAND when loaded into a truck.
 - Do NOT add packing adjustment for loose stacking — spatial measurement IS the estimate.
+- NEVER adjust the spatial measurement downward for any reason including air gaps, loose stacking, irregular shapes, or voids. The spatial measurement (Length × Width × Height) IS the final volume. If the pile is 10ft × 8ft × 3ft = 8.9 CY, the answer is 8.9 CY. Do not reduce it. The only adjustment allowed is UPWARD (packing factor 1.2-1.3) for compressed hoarding situations.
 
 STEP 3: List individual items you can identify:
 - Each item needs: name, quantity, category, cubic_yards, is_special flag
@@ -81,9 +82,10 @@ Return this EXACT JSON structure:
 }
 
 CRITICAL RULES:
-- Show your spatial math in the notes field
+- Show your spatial math in the notes field. Your notes must show the spatial math and the FINAL number must match — do not show any downward adjustment.
 - Items must sum to spatial total
 - Never use packing factor below 1.0
+- Never adjust volume downward from the spatial measurement
 - Flag ALL special disposal items
 - Detect duplicates across photos
 - confidence should reflect photo quality and visibility""",

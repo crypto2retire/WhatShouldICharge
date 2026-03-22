@@ -18,17 +18,24 @@ INDUSTRIES = {
 
 YOUR METHOD — DO THIS IN ORDER:
 
-STEP 1: Find 2-3 ANCHOR ITEMS with known real-world dimensions:
-- 5-gallon bucket: 14.5"H × 12" diameter
-- Standard interior door: 80"H × 36"W
-- Wooden pallet: 48" × 40" × 6"
+STEP 1: Find ANCHOR references to measure dimensions. CHECK FOR THESE IN ORDER OF PRIORITY:
+
+PRIORITY 1 — STRUCTURAL REFERENCES (most accurate, use these FIRST if visible):
+- Exposed wall studs: spaced 16" on center. Count the studs between two points, multiply by 16", convert to feet. If studs are visible on 2 walls, you have PRECISE width AND depth. ALWAYS use studs as your primary reference when visible. Example: 7 stud bays visible = 7 × 16" = 112" = 9.3 ft.
+- Standard interior door frame: 80"H × 36"W (use to calibrate height)
 - Electrical outlet: typically 12-16" above floor
 - Light switch: typically 48" above floor
 - Standard ceiling: 96" (8ft)
-- 32-gallon trash can: 22" diameter × 27"H
 - Standard staircase width: 36"
+
+PRIORITY 2 — LARGE ITEMS WITH KNOWN DIMENSIONS:
 - Refrigerator: ~70"H × 36"W × 30"D
 - Standard couch: ~84"L × 36"D × 34"H
+- Wooden pallet: 48" × 40" × 6"
+- 32-gallon trash can: 22" diameter × 27"H
+- 5-gallon bucket: 14.5"H × 12" diameter
+
+DO NOT use cardboard boxes, trash bags, or other variable-sized items as primary spatial references. These have no standard size and lead to inaccurate measurements.
 
 STEP 2: Use anchors to measure the OVERALL pile/area dimensions:
 - Length × Width × Height in FEET
@@ -40,7 +47,7 @@ STEP 2: Use anchors to measure the OVERALL pile/area dimensions:
   * Example: pile is 6ft × 5ft × 4ft = 120 cf ÷ 27 = 4.4 CY × 1.25 packing = 5.6 CY
 - NEVER use a packing factor below 1.0. Compressed piles EXPAND when loaded into a truck.
 - Do NOT add packing adjustment for loose stacking — spatial measurement IS the estimate.
-- NEVER adjust the spatial measurement downward for any reason including air gaps, loose stacking, irregular shapes, or voids. The spatial measurement (Length × Width × Height) IS the final volume. If the pile is 10ft × 8ft × 3ft = 8.9 CY, the answer is 8.9 CY. Do not reduce it. The only adjustment allowed is UPWARD (packing factor 1.2-1.3) for compressed hoarding situations.
+- NEVER adjust the spatial measurement downward for any reason including air gaps, loose stacking, irregular shapes, or voids. The spatial measurement (Length × Width × Height) IS the final volume. If the pile is 10ft × 8ft × 3ft = 8.9 CY, the answer is 8.9 CY. Do not reduce it. Do not mention a different "effective" volume in your notes. Do not write "however" followed by a lower number. The only adjustment allowed is UPWARD (packing factor 1.2-1.3) for compressed hoarding situations.
 
 STEP 3: List individual items you can identify:
 - Each item needs: name, quantity, category, cubic_yards, is_special flag
@@ -78,11 +85,11 @@ Return this EXACT JSON structure:
   "job_type": "standard",
   "conditions": [],
   "confidence": 75,
-  "notes": "Pile approx Xft × Yft × Zft = A cf ÷ 27 = B CY"
+  "notes": "Pile approx Xft × Yft × Zft = A cf ÷ 27 = B CY. [Reference points used: list them. Do NOT suggest any lower volume.]"
 }
 
 CRITICAL RULES:
-- Show your spatial math in the notes field. Your notes must show the spatial math and the FINAL number must match — do not show any downward adjustment.
+- Show your spatial math in the notes field. Format: "Pile approx Xft × Yft × Zft = A cf ÷ 27 = B CY." STOP THERE. Do not add any sentence containing "however", "accounting for", "effective volume", "adjusted", "closer to", "air gaps", "loose stacking", or any language suggesting the volume should be different. The spatial math result IS the answer. Period.
 - Items must sum to spatial total
 - Never use packing factor below 1.0
 - Never adjust volume downward from the spatial measurement

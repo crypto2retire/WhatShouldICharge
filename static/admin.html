@@ -179,7 +179,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
     <button class="nav-item active" data-section="dashboard"><span class="nav-icon">&#x1f4ca;</span> Dashboard</button>
     <button class="nav-item" data-section="clients"><span class="nav-icon">&#x1f465;</span> Clients</button>
     <button class="nav-item" data-section="estimates"><span class="nav-icon">&#x1f4cb;</span> Estimates</button>
-    <button class="nav-item" data-section="plans"><span class="nav-icon">&#x1f4b3;</span> Plans & Pricing</button>
+    <button class="nav-item" data-section="plans"><span class="nav-icon">&#x1f4b3;</span> Credit Packs</button>
     <button class="nav-item" data-section="promos"><span class="nav-icon">&#x1f3ab;</span> Promo Codes</button>
     <button class="nav-item" data-section="accuracy"><span class="nav-icon">&#x1f3af;</span> Accuracy</button>
     <button class="nav-item" data-section="settings"><span class="nav-icon">&#x2699;&#xfe0f;</span> Site Settings</button>
@@ -250,27 +250,17 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
   </div>
 </div>
 
-<!-- ============ PLANS & PRICING ============ -->
+<!-- ============ CREDIT PACKS ============ -->
 <div class="section" id="sec-plans">
-  <div class="page-title">Plans & Pricing</div>
-  <div class="plan-grid" id="plans-grid"></div>
+  <div class="page-title">Credit Packs</div>
+  <div class="plan-grid" id="packs-grid"></div>
   <div class="card">
-    <div class="card-title">Global Settings</div>
-    <div id="global-settings-form">
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">PPU Rate (cents)</label><input class="form-input" id="gs-ppu_rate" value="20"></div>
-        <div class="form-group"><label class="form-label">Extra Photo Fee (cents)</label><input class="form-input" id="gs-extra_photo_fee" value="2"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Photos Included Per Estimate</label><input class="form-input" id="gs-photos_included" value="5"></div>
-        <div class="form-group"><label class="form-label">Default Packing Factor</label><input class="form-input" id="gs-packing_factor" value="1.0"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Price Range Low Multiplier</label><input class="form-input" id="gs-price_range_low_mult" value="0.9"></div>
-        <div class="form-group"><label class="form-label">Price Range High Multiplier</label><input class="form-input" id="gs-price_range_high_mult" value="1.2"></div>
-      </div>
-      <button class="btn btn-primary" onclick="saveGlobalSettings()">Save Global Settings</button>
-    </div>
+    <div class="card-title">Credit Pack Summary</div>
+    <p style="font-size:0.88rem;color:var(--muted);line-height:1.7;">
+      WSIC uses pay-per-use credit packs. Each estimate (app or widget) costs 1 credit.<br>
+      New users get 2 free trial estimates. Credits never expire.<br>
+      Prices and Stripe Price IDs are configured in <code>main.py</code> under <code>CREDIT_PACKS</code>.
+    </p>
   </div>
 </div>
 
@@ -373,7 +363,7 @@ $$('.nav-item').forEach(item => {
     if (sec === 'dashboard' && !loaded.dashboard) loadDashboard();
     if (sec === 'clients' && !loaded.clients) loadClients(1);
     if (sec === 'estimates' && !loaded.estimates) loadEstimates(1);
-    if (sec === 'plans' && !loaded.plans) loadPlans();
+    if (sec === 'plans' && !loaded.plans) loadPacks();
     if (sec === 'promos' && !loaded.promos) loadPromos();
     if (sec === 'accuracy' && !loaded.accuracy) loadAccuracy();
     if (sec === 'settings' && !loaded.settings) loadSettings();
@@ -728,54 +718,28 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { if ($('#li
 function openLightbox(src) { $('#lightbox-img').src = src; $('#lightbox').classList.add('open'); }
 function closeLightbox() { $('#lightbox').classList.remove('open'); $('#lightbox-img').src = ''; }
 
-// ── Plans & Pricing ──
-async function loadPlans() {
+// ── Credit Packs ──
+async function loadPacks() {
   try {
-    const plans = await apiFetch('/api/admin/plans');
-    $('#plans-grid').innerHTML = plans.map(p => `<div class="plan-card">
-      <h3>${esc(p.display_name)} <span class="badge badge-condition">${esc(p.tier_name)}</span></h3>
-      <div class="form-group"><label class="form-label">Display Name</label><input class="form-input" id="plan-name-${p.id}" value="${esc(p.display_name)}"></div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Price (cents)</label><input class="form-input" type="number" id="plan-price-${p.id}" value="${p.price_cents}"><div style="font-size:0.72rem;color:var(--muted);margin-top:2px">= $${(p.price_cents/100).toFixed(2)}</div></div>
-        <div class="form-group"><label class="form-label">Estimate Limit</label><input class="form-input" type="number" id="plan-limit-${p.id}" value="${p.estimate_limit}"></div>
-      </div>
-      <div class="form-group"><label class="form-label">Features (comma-separated)</label><input class="form-input" id="plan-features-${p.id}" value="${esc(p.features.join(', '))}"></div>
-      <div class="form-group"><label class="form-label">Stripe Price ID</label><input class="form-input" id="plan-stripe-${p.id}" value="${esc(p.stripe_price_id||'')}"></div>
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><label style="font-size:0.82rem;display:flex;align-items:center;gap:6px"><input type="checkbox" id="plan-active-${p.id}" ${p.is_active?'checked':''}> Active</label></div>
-      <button class="btn btn-primary btn-sm" onclick="savePlan(${p.id})">Save Plan</button>
-    </div>`).join('');
-
-    // Load global settings
-    const config = await apiFetch('/api/admin/site-config');
-    const gsKeys = ['ppu_rate','extra_photo_fee','photos_included','packing_factor','price_range_low_mult','price_range_high_mult'];
-    const defaults = {ppu_rate:'20',extra_photo_fee:'2',photos_included:'5',packing_factor:'1.0',price_range_low_mult:'0.9',price_range_high_mult:'1.2'};
-    gsKeys.forEach(k => { const el = $(`#gs-${k}`); if (el) el.value = config[k] || defaults[k]; });
+    const packs = await apiFetch('/api/credits/packs');
+    $('#packs-grid').innerHTML = packs.map(p => {
+      const perCredit = (p.price_cents / p.credits / 100).toFixed(2);
+      const savings = p.credits > 1 ? Math.round((1 - (p.price_cents / p.credits / 1000)) * 100) : 0;
+      return `<div class="plan-card">
+        <h3>${p.credits === 1 ? 'Single Estimate' : p.credits + '-Pack'}</h3>
+        <div style="font-size:1.8rem;font-weight:800;color:var(--green);margin:8px 0;">$${(p.price_cents/100).toFixed(2)}</div>
+        <div style="font-size:0.85rem;color:var(--muted);margin-bottom:12px;">
+          ${p.credits} credit${p.credits > 1 ? 's' : ''} &middot; $${perCredit}/estimate
+          ${savings > 0 ? ' &middot; <span style="color:var(--green)">' + savings + '% savings</span>' : ''}
+        </div>
+        <div style="font-size:0.78rem;color:var(--muted);">
+          Pack ID: <code>${p.pack_id}</code><br>
+          Stripe: <code style="font-size:0.72rem;">${p.stripe_price_id}</code>
+        </div>
+      </div>`;
+    }).join('');
     loaded.plans = true;
   } catch(e) { console.error(e); }
-}
-
-async function savePlan(planId) {
-  try {
-    const features = $(`#plan-features-${planId}`).value.split(',').map(f => f.trim()).filter(Boolean);
-    await apiFetch(`/api/admin/plans/${planId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({
-      display_name: $(`#plan-name-${planId}`).value,
-      price_cents: parseInt($(`#plan-price-${planId}`).value),
-      estimate_limit: parseInt($(`#plan-limit-${planId}`).value),
-      features: features,
-      stripe_price_id: $(`#plan-stripe-${planId}`).value,
-      is_active: $(`#plan-active-${planId}`).checked,
-    })});
-    toast('Plan saved');
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function saveGlobalSettings() {
-  try {
-    const body = {};
-    ['ppu_rate','extra_photo_fee','photos_included','packing_factor','price_range_low_mult','price_range_high_mult'].forEach(k => { body[k] = $(`#gs-${k}`).value; });
-    await apiFetch('/api/admin/site-config', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    toast('Global settings saved');
-  } catch(e) { toast(e.message, 'error'); }
 }
 
 // ── Promo Codes ──

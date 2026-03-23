@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Admin dashboard JS — 2026-03-21
+
+### 1. Escaped backticks break the whole page
+In `static/admin.html`, a timezone block used `\`` and `\${` (literal backslash + backtick / dollar) instead of real template literals. That is a **syntax error**: the browser never runs the script, so **no** `addEventListener` hooks or global functions (`loadClients`, etc.) exist and every control appears dead. After edits, run `new Function(extractedScript)` or open DevTools console for parse errors.
+
 ## Volume lookup validation — 2026-03-20
 
 ### 1. Where to call `validate_estimate` in WSIC

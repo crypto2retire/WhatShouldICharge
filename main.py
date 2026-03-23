@@ -60,7 +60,18 @@ def get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-app = FastAPI(title="WhatShouldICharge")
+def _is_production_env() -> bool:
+    env = (os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("ENVIRONMENT") or "production").strip().lower()
+    return env != "development"
+
+
+_prod = _is_production_env()
+app = FastAPI(
+    title="WhatShouldICharge",
+    docs_url=None if _prod else "/docs",
+    redoc_url=None if _prod else "/redoc",
+    openapi_url=None if _prod else "/openapi.json",
+)
 
 
 limiter = Limiter(key_func=get_client_ip)

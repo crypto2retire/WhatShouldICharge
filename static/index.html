@@ -2284,7 +2284,7 @@ async function saveOverageSettings() {
   if (!mode) return;
   var capCents = mode.value === 'capped' ? Math.round(parseFloat(document.getElementById('us-cap-input').value || 0) * 100) : 0;
   try {
-    await fetch('/api/usage/settings', { method: 'PUT', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ overage_mode: mode.value, overage_cap_cents: capCents }) });
+    await fetch('/api/usage/settings', { method: 'PUT', credentials: 'include', headers: {'Content-Type':'application/json', 'X-CSRF-Token': getCsrfToken()}, body: JSON.stringify({ overage_mode: mode.value, overage_cap_cents: capCents }) });
     var msg = document.getElementById('us-save-msg'); msg.textContent = 'Settings saved'; msg.style.display = ''; setTimeout(function() { msg.style.display = 'none'; }, 3000);
     loadUsageData();
   } catch (e) { alert('Error saving: ' + e.message); }
@@ -2294,7 +2294,7 @@ async function addUsageFunds() {
   var amt = parseFloat(document.getElementById('us-add-funds').value || 0);
   if (amt <= 0) return;
   try {
-    await fetch('/api/usage/add-funds', { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ additional_cents: Math.round(amt * 100) }) });
+    await fetch('/api/usage/add-funds', { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json', 'X-CSRF-Token': getCsrfToken()}, body: JSON.stringify({ additional_cents: Math.round(amt * 100) }) });
     var msg = document.getElementById('us-save-msg'); msg.textContent = '$' + amt.toFixed(2) + ' added to cap'; msg.style.display = ''; setTimeout(function() { msg.style.display = 'none'; }, 3000);
     loadUsageData();
   } catch (e) { alert('Error: ' + e.message); }

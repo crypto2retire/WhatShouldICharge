@@ -583,6 +583,10 @@ class Estimate(Base):
     actual_cy = Column(Float, default=None)
     accuracy_notes = Column(Text, default="")
     preferred_contact = Column(String, default="phone")
+    input_tokens = Column(Integer, default=0)
+    output_tokens = Column(Integer, default=0)
+    api_cost_cents = Column(Integer, default=0)
+    model_used = Column(String(50), default="")
 
 
 class ItemReferenceLibrary(Base):
@@ -673,6 +677,10 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS credits_used_total INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS free_trial_used INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS free_trial_email VARCHAR",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS input_tokens INTEGER DEFAULT 0",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS output_tokens INTEGER DEFAULT 0",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS api_cost_cents INTEGER DEFAULT 0",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS model_used VARCHAR(50) DEFAULT ''",
         ]
     else:
         alter_statements = [
@@ -715,6 +723,10 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN credits_used_total INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN free_trial_used INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN free_trial_email TEXT",
+            "ALTER TABLE estimates ADD COLUMN input_tokens INTEGER DEFAULT 0",
+            "ALTER TABLE estimates ADD COLUMN output_tokens INTEGER DEFAULT 0",
+            "ALTER TABLE estimates ADD COLUMN api_cost_cents INTEGER DEFAULT 0",
+            "ALTER TABLE estimates ADD COLUMN model_used TEXT DEFAULT ''",
         ]
 
     async with engine.begin() as conn:
@@ -3153,6 +3165,37 @@ async def get_library_context() -> str:
     return "\n".join(lines)
 
 
+# Anthropic $/million tokens — baseline for admin cost tracking (published rates, Mar 2026).
+ANTHROPIC_PRICING_PER_MILLION = {
+    "claude-sonnet-4-20250514": (3.0, 15.0),
+    "claude-sonnet-4-6-20250311": (3.0, 15.0),
+    "claude-sonnet-4-5-20241022": (3.0, 15.0),
+    "claude-3-5-sonnet-20241022": (3.0, 15.0),
+    "claude-3-5-sonnet-20240620": (3.0, 15.0),
+    "claude-haiku-4-5-20251001": (1.0, 5.0),
+    "claude-3-5-haiku-20241022": (1.0, 5.0),
+    "claude-opus-4-6-20250311": (5.0, 25.0),
+}
+
+
+def _claude_response_usage(resp) -> tuple[int, int, str]:
+    """(input_tokens, output_tokens, model) from an Anthropic messages response."""
+    try:
+        u = getattr(resp, "usage", None)
+        inp = int(getattr(u, "input_tokens", 0) or 0) if u else 0
+        out = int(getattr(u, "output_tokens", 0) or 0) if u else 0
+        mod = str(getattr(resp, "model", "") or "")
+        return inp, out, mod
+    except Exception:
+        return 0, 0, ""
+
+
+def estimate_anthropic_cost_cents(input_tokens: int, output_tokens: int, model_name: str) -> int:
+    """Approximate Claude API cost in US cents."""
+    rates = ANTHROPIC_PRICING_PER_MILLION.get(model_name or "", (3.0, 15.0))
+    cost_dollars = (input_tokens / 1_000_000.0) * rates[0] + (output_tokens / 1_000_000.0) * rates[1]
+    return int(round(cost_dollars * 100))
+
 
 def parse_ai_json(raw_text: str) -> dict:
     raw_text = raw_text.strip()
@@ -3212,8 +3255,15 @@ If you cannot find dimensions, return cubic_yards: 0"""
             )
 
         calc_response = await asyncio.to_thread(run_lookup_call)
+        in_tok, out_tok, mod = _claude_response_usage(calc_response)
+        token_meta = {"input": in_tok, "output": out_tok, "model": mod}
 
-        result = json.loads(calc_response.content[0].text.strip())
+        try:
+            result = json.loads(calc_response.content[0].text.strip())
+        except (json.JSONDecodeError, IndexError, AttributeError):
+            return {"cubic_yards": 0, "confidence": 0, "_token_usage": token_meta}
+
+        result["_token_usage"] = token_meta
 
         if result.get("cubic_yards", 0) > 0:
             async with AsyncSessionLocal() as db:
@@ -3233,6 +3283,8 @@ If you cannot find dimensions, return cubic_yards: 0"""
                     ))
                     await db.commit()
             return result
+
+        return result
 
     except Exception:
         pass
@@ -3467,6 +3519,9 @@ async def run_estimate(
         logger = logging.getLogger("wsic.estimate")
 
         client = anthropic.Anthropic(api_key=api_key, timeout=60.0)
+        total_input_tokens = 0
+        total_output_tokens = 0
+        model_name = ""
 
         def run_pass1():
             return client.messages.create(
@@ -3491,6 +3546,12 @@ async def run_estimate(
             job["message"] = "Our AI service is temporarily unavailable. Please try again in a few minutes."
             job["result"] = None
             return
+
+        pin, pout, pmod = _claude_response_usage(message)
+        total_input_tokens += pin
+        total_output_tokens += pout
+        if pmod:
+            model_name = pmod
 
         pass1_result = parse_ai_json(message.content[0].text)
         pass1_json_str = json.dumps(pass1_result)
@@ -3547,6 +3608,15 @@ async def run_estimate(
                 for item_name in items_needing_lookup[:5]
             ]
             lookup_results = await asyncio.gather(*lookup_tasks, return_exceptions=True)
+
+            for lr in lookup_results:
+                if isinstance(lr, dict):
+                    tu = lr.pop("_token_usage", None)
+                    if isinstance(tu, dict):
+                        total_input_tokens += int(tu.get("input", 0) or 0)
+                        total_output_tokens += int(tu.get("output", 0) or 0)
+                        if tu.get("model"):
+                            model_name = str(tu["model"])
 
             for i, item_name in enumerate(items_needing_lookup[:5]):
                 lr = lookup_results[i]
@@ -3631,6 +3701,22 @@ async def run_estimate(
         photos_json_str = json.dumps(stored_photos) if stored_photos else ""
         logger.info(f"[run_estimate] Job {job_id}: saving {len(stored_photos)} photos ({len(photos_json_str)} bytes)")
 
+        try:
+            api_cost_cents_val = estimate_anthropic_cost_cents(
+                total_input_tokens,
+                total_output_tokens,
+                model_name or "claude-sonnet-4-20250514",
+            )
+            token_input = total_input_tokens
+            token_output = total_output_tokens
+            token_model = (model_name or "")[:50]
+        except Exception as tok_err:
+            logger.warning(f"[run_estimate] Job {job_id}: token/cost calc failed: {tok_err}")
+            api_cost_cents_val = 0
+            token_input = 0
+            token_output = 0
+            token_model = ""
+
         async with AsyncSessionLocal() as db:
             # First try to add the column if it doesn't exist (safety net)
             try:
@@ -3657,6 +3743,10 @@ async def run_estimate(
                 pass2_json="",
                 lookups_json=lookups_json_str,
                 photos_json=photos_json_str,
+                input_tokens=token_input,
+                output_tokens=token_output,
+                api_cost_cents=int(api_cost_cents_val),
+                model_used=token_model,
             )
             db.add(est)
             try:
@@ -4161,6 +4251,53 @@ async def admin_analytics(request: Request):
                  "created_at": u.created_at.isoformat() if u.created_at else None}
                 for u in recent_users
             ]
+        }
+
+
+@app.get("/api/admin/api-costs")
+async def admin_api_costs(request: Request):
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        now = datetime.utcnow()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        result = await db.execute(
+            select(
+                func.count(Estimate.id).label("estimate_count"),
+                func.coalesce(func.sum(Estimate.input_tokens), 0).label("total_input_tokens"),
+                func.coalesce(func.sum(Estimate.output_tokens), 0).label("total_output_tokens"),
+                func.coalesce(func.sum(Estimate.api_cost_cents), 0).label("total_cost_cents"),
+            ).where(Estimate.created_at >= month_start)
+        )
+        row = result.one()
+
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_result = await db.execute(
+            select(
+                func.count(Estimate.id).label("estimate_count"),
+                func.coalesce(func.sum(Estimate.api_cost_cents), 0).label("total_cost_cents"),
+            ).where(Estimate.created_at >= today_start)
+        )
+        today_row = today_result.one()
+
+        mtd_n = int(row.estimate_count or 0)
+        avg_cost = round(int(row.total_cost_cents or 0) / mtd_n) if mtd_n > 0 else 0
+        total_tokens = int(row.total_input_tokens or 0) + int(row.total_output_tokens or 0)
+        mtd_cost = int(row.total_cost_cents or 0)
+
+        return {
+            "month": now.strftime("%B %Y"),
+            "mtd_estimates": mtd_n,
+            "mtd_input_tokens": int(row.total_input_tokens or 0),
+            "mtd_output_tokens": int(row.total_output_tokens or 0),
+            "mtd_total_tokens": total_tokens,
+            "mtd_cost_cents": mtd_cost,
+            "mtd_cost_display": f"${mtd_cost / 100:.2f}",
+            "avg_cost_per_estimate_cents": avg_cost,
+            "avg_cost_display": f"${avg_cost / 100:.2f}",
+            "today_estimates": int(today_row.estimate_count or 0),
+            "today_cost_cents": int(today_row.total_cost_cents or 0),
+            "today_cost_display": f"${int(today_row.total_cost_cents or 0) / 100:.2f}",
         }
 
 

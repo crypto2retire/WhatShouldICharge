@@ -204,14 +204,21 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
     <div class="card-title">Averages</div>
     <p style="font-size:0.88rem;color:var(--muted)">Avg Volume: <strong id="stat-avg-cy">--</strong> &nbsp;&middot;&nbsp; Avg Price: <strong id="stat-avg-price">--</strong></p>
   </div>
-  <div class="card">
-    <div class="card-title">System Usage (This Month)</div>
-    <div class="stats-grid" id="usage-stats-grid">
-      <div class="stat-card"><div class="stat-label">Total API Calls</div><div class="stat-value" id="stat-usage-calls">--</div></div>
-      <div class="stat-card"><div class="stat-label">Overage Revenue</div><div class="stat-value" id="stat-usage-overage">--</div></div>
-      <div class="stat-card"><div class="stat-label">Approaching Limit</div><div class="stat-value" id="stat-usage-approaching">--</div></div>
-      <div class="stat-card"><div class="stat-label">Hard-Stopped</div><div class="stat-value" id="stat-usage-stopped">--</div></div>
+  <div class="card" id="api-costs-card">
+    <div class="card-title">API Costs — <span id="api-costs-month">This Month</span></div>
+    <div class="stats-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:12px">
+      <div class="stat-card"><div class="stat-label">MTD Cost</div><div class="stat-value" id="mtd-cost">--</div></div>
+      <div class="stat-card"><div class="stat-label">Estimates (MTD)</div><div class="stat-value" id="mtd-estimates">--</div></div>
+      <div class="stat-card"><div class="stat-label">Avg / Estimate</div><div class="stat-value" id="avg-cost-per">--</div></div>
+      <div class="stat-card"><div class="stat-label">Input Tokens</div><div class="stat-value" id="mtd-input-tokens">--</div></div>
+      <div class="stat-card"><div class="stat-label">Output Tokens</div><div class="stat-value" id="mtd-output-tokens">--</div></div>
+      <div class="stat-card"><div class="stat-label">Total Tokens</div><div class="stat-value" id="mtd-total-tokens">--</div></div>
+      <div class="stat-card"><div class="stat-label">Today Cost</div><div class="stat-value" id="today-cost">--</div></div>
+      <div class="stat-card"><div class="stat-label">Today Estimates</div><div class="stat-value" id="today-estimates">--</div></div>
     </div>
+    <p style="font-size:0.82rem;color:var(--muted);margin-top:14px;border-top:1px solid var(--border);padding-top:10px;line-height:1.5">
+      Token counts are summed across all Claude API calls per estimate (vision pass + item lookups). Cost uses published per-million token rates for the model used.
+    </p>
   </div>
   <div class="card">
     <div class="card-title">Recent Users</div>
@@ -402,6 +409,19 @@ function fmtDate(iso) { if (!iso) return '--'; return new Date(iso).toLocaleDate
 function fmtShortDate(iso) { if (!iso) return '--'; return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
 
 // ── Dashboard ──
+async function loadApiCosts() {
+  const c = await apiFetch('/api/admin/api-costs');
+  $('#api-costs-month').textContent = c.month || 'This Month';
+  $('#mtd-cost').textContent = c.mtd_cost_display || '$0.00';
+  $('#mtd-estimates').textContent = (c.mtd_estimates ?? 0).toLocaleString();
+  $('#avg-cost-per').textContent = c.avg_cost_display || '$0.00';
+  $('#mtd-input-tokens').textContent = (c.mtd_input_tokens ?? 0).toLocaleString();
+  $('#mtd-output-tokens').textContent = (c.mtd_output_tokens ?? 0).toLocaleString();
+  $('#mtd-total-tokens').textContent = (c.mtd_total_tokens ?? 0).toLocaleString();
+  $('#today-cost').textContent = c.today_cost_display || '$0.00';
+  $('#today-estimates').textContent = (c.today_estimates ?? 0).toLocaleString();
+}
+
 async function loadDashboard() {
   try {
     const d = await apiFetch('/api/admin/analytics');
@@ -414,14 +434,7 @@ async function loadDashboard() {
     $('#stat-avg-cy').textContent = d.avg_cy + ' CY';
     $('#stat-avg-price').textContent = '$' + d.avg_price;
     $('#recent-users-body').innerHTML = d.recent_users.map(u => `<tr><td>${esc(u.email)}</td><td>${esc(u.company_name||'--')}</td><td><span class="badge badge-green">${u.credit_balance||0}</span></td><td>${fmtShortDate(u.created_at)}</td></tr>`).join('');
-    // Load usage stats
-    try {
-      const u = await apiFetch('/api/admin/usage');
-      $('#stat-usage-calls').textContent = u.total_calls;
-      $('#stat-usage-overage').textContent = '$' + (u.total_overage_cents / 100).toFixed(2);
-      $('#stat-usage-approaching').textContent = u.approaching_limit.length;
-      $('#stat-usage-stopped').textContent = u.hard_stopped.length;
-    } catch(e) { console.error('Usage stats error:', e); }
+    try { await loadApiCosts(); } catch (e) { console.error('API costs error:', e); }
     loaded.dashboard = true;
   } catch(e) { console.error(e); }
 }

@@ -4,7 +4,6 @@ import json
 import base64
 import secrets
 import time
-import collections
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -15,6 +14,8 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Redirect
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.gzip import GZipMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 import anthropic
 import bcrypt
 import stripe
@@ -52,7 +53,19 @@ def decrypt_pii(ciphertext: str) -> str:
         return ciphertext
 
 
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 app = FastAPI(title="WhatShouldICharge")
+
+
+limiter = Limiter(key_func=get_client_ip)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -86,7 +99,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 CSRF_EXEMPT_PATHS = {
     "/api/auth/login", "/api/auth/signup", "/api/auth/forgot-password",
-    "/api/team/auth", "/api/stripe/webhook",
+    "/api/team/auth",
+    "/api/stripe/webhook",
+    "/api/payments/webhook",
 }
 
 
@@ -118,35 +133,6 @@ app.add_middleware(CSRFMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
-class RateLimiter:
-    def __init__(self, max_requests: int, window_seconds: int):
-        self.max_requests = max_requests
-        self.window_seconds = window_seconds
-        self.requests: dict[str, list[float]] = collections.defaultdict(list)
-
-    def is_rate_limited(self, key: str) -> bool:
-        now = time.time()
-        window_start = now - self.window_seconds
-        self.requests[key] = [t for t in self.requests[key] if t > window_start]
-        if len(self.requests[key]) >= self.max_requests:
-            return True
-        self.requests[key].append(now)
-        return False
-
-    def cleanup(self):
-        now = time.time()
-        window_start = now - self.window_seconds
-        empty_keys = [k for k, v in self.requests.items() if not v or v[-1] < window_start]
-        for k in empty_keys:
-            del self.requests[k]
-
-
-auth_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
-forgot_password_rate_limiter = RateLimiter(max_requests=5, window_seconds=300)
-public_estimate_rate_limiter = RateLimiter(max_requests=10, window_seconds=3600)
-public_status_rate_limiter = RateLimiter(max_requests=50, window_seconds=3600)
-
-
 _response_cache: dict[str, dict] = {}
 
 
@@ -165,13 +151,6 @@ def cache_set(key: str, data, ttl: int = 60):
 
 def cache_invalidate(key: str):
     _response_cache.pop(key, None)
-
-
-def get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
 
 
 app.add_middleware(
@@ -525,6 +504,7 @@ class Estimate(Base):
     actual_price = Column(Float, default=None)
     actual_cy = Column(Float, default=None)
     accuracy_notes = Column(Text, default="")
+    preferred_contact = Column(String, default="phone")
 
 
 class ItemReferenceLibrary(Base):
@@ -598,6 +578,7 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS actual_price DOUBLE PRECISION DEFAULT NULL",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS actual_cy DOUBLE PRECISION DEFAULT NULL",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS accuracy_notes TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS preferred_contact VARCHAR DEFAULT 'phone'",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_notes TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(50) DEFAULT 'America/Chicago'",
@@ -639,6 +620,7 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN actual_price REAL DEFAULT NULL",
             "ALTER TABLE estimates ADD COLUMN actual_cy REAL DEFAULT NULL",
             "ALTER TABLE estimates ADD COLUMN accuracy_notes TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN preferred_contact TEXT DEFAULT 'phone'",
             "ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1",
             "ALTER TABLE users ADD COLUMN admin_notes TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN timezone TEXT DEFAULT 'America/Chicago'",
@@ -1118,25 +1100,13 @@ def send_email(to_email: str, subject: str, html_content: str):
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint — shows DB type and connection status."""
-    db_type = "postgresql" if _is_postgres else "sqlite"
-    db_url_masked = DATABASE_URL[:30] + "..." if len(DATABASE_URL) > 30 else DATABASE_URL
+    """Minimal health check for load balancers — no DB URLs, counts, or env metadata."""
     try:
         async with AsyncSessionLocal() as db:
-            result = await db.execute(text("SELECT COUNT(*) FROM users"))
-            user_count = result.scalar()
-        db_status = "connected"
-    except Exception as e:
-        user_count = 0
-        db_status = f"error: {type(e).__name__}"
-    return {
-        "status": "ok",
-        "database_type": db_type,
-        "database_url_prefix": db_url_masked,
-        "database_status": db_status,
-        "user_count": user_count,
-        "env_keys": [k for k in ("DATABASE_PRIVATE_URL", "DATABASE_PUBLIC_URL", "DATABASE_URL") if os.environ.get(k)],
-    }
+            await db.execute(text("SELECT 1"))
+        return {"status": "ok"}
+    except Exception:
+        return JSONResponse(status_code=503, content={"status": "unhealthy"})
 
 
 @app.get("/api/industries")
@@ -1802,8 +1772,8 @@ async function sendVerifyCode(){{
     var resp=await fetch('/api/public/verify/send',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{email:email,slug:slug}})}});
     var data=await resp.json();
     if(!resp.ok) throw new Error(data.detail||'Failed to send code');
+    if(data.ok===false){{errEl.textContent=data.message||'Could not send verification code. Please try again.';errEl.style.display='block';btn.textContent='Verify';btn.disabled=false;return}}
     document.getElementById('code-section').style.display='block';
-    if(data.fallback&&data.code){{document.getElementById('verify-code').value=data.code;document.getElementById('verify-code').parentElement.querySelector('div').textContent='Code auto-filled (email delivery unavailable during beta)'}}
     btn.textContent='Resend';btn.disabled=false;
   }}catch(e){{errEl.textContent=e.message;errEl.style.display='block';btn.textContent='Verify';btn.disabled=false}}
 }}
@@ -1998,6 +1968,7 @@ _verify_codes: dict[str, dict] = {}
 
 
 @app.post("/api/public/verify/send")
+@limiter.limit("30/minute")
 async def public_verify_send(request: Request):
     """Send a 6-digit verification code to customer email."""
     body = await request.json()
@@ -2030,14 +2001,17 @@ async def public_verify_send(request: Request):
         </div>"""
     )
     if not email_sent:
-        # Beta fallback: return code in response so user isn't blocked
         import logging
-        logging.getLogger("wsic.verify").warning(f"[verify/send] Email delivery failed for {email}, returning code in response (beta fallback)")
-        return {"ok": True, "message": "Email delivery issue — use this code", "code": code, "fallback": True}
+        logging.getLogger("wsic.verify").warning(f"[verify/send] Email delivery failed for {email}")
+        return {
+            "ok": False,
+            "message": "We could not send the code right now. Please try again in a few minutes or call the business directly.",
+        }
     return {"ok": True, "message": "Verification code sent"}
 
 
 @app.post("/api/public/verify/check")
+@limiter.limit("60/minute")
 async def public_verify_check(request: Request):
     """Verify the 6-digit code and return a verification token."""
     body = await request.json()
@@ -2099,6 +2073,7 @@ def validate_magic_bytes(raw: bytes, content_type: str) -> bool:
 
 
 @app.post("/api/public/estimate/{slug}")
+@limiter.limit("10/hour")
 async def public_create_estimate(
     request: Request,
     slug: str,
@@ -2110,10 +2085,6 @@ async def public_create_estimate(
     preferred_contact: str = Form(default="phone"),
 ):
     """Public estimate endpoint — customer submits photos, charges against company's estimate count."""
-    client_ip = get_client_ip(request)
-    if public_estimate_rate_limiter.is_rate_limited(client_ip):
-        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
-
     cleanup_expired_jobs()
     check_concurrent_limit()
 
@@ -2244,12 +2215,9 @@ async def public_create_estimate(
 
 
 @app.get("/api/public/estimate/status/{job_id}")
+@limiter.limit("120/minute")
 async def public_estimate_status(request: Request, job_id: str):
     """Public status check — no auth, but limited response."""
-    client_ip = get_client_ip(request)
-    if public_status_rate_limiter.is_rate_limited(client_ip):
-        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
-
     job = estimate_jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found or expired")
@@ -2281,11 +2249,8 @@ async def public_estimate_status(request: Request, job_id: str):
 
 
 @app.post("/api/auth/signup")
+@limiter.limit("10/minute")
 async def auth_signup(request: Request):
-    client_ip = get_client_ip(request)
-    if auth_rate_limiter.is_rate_limited(client_ip):
-        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
-
     body = await request.json()
     email = body.get("email", "").strip().lower()
     password = body.get("password", "")
@@ -2368,11 +2333,8 @@ async def auth_signup(request: Request):
 
 
 @app.post("/api/auth/login")
+@limiter.limit("10/minute")
 async def auth_login(request: Request):
-    client_ip = get_client_ip(request)
-    if auth_rate_limiter.is_rate_limited(client_ip):
-        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
-
     body = await request.json()
     email = body.get("email", "").strip().lower()
     password = body.get("password", "")
@@ -2411,11 +2373,8 @@ async def auth_login(request: Request):
 
 
 @app.post("/api/auth/forgot-password")
+@limiter.limit("5/15minutes")
 async def auth_forgot_password(request: Request):
-    client_ip = get_client_ip(request)
-    if forgot_password_rate_limiter.is_rate_limited(client_ip):
-        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
-
     body = await request.json()
     email = body.get("email", "").strip().lower()
 
@@ -3816,10 +3775,13 @@ async def create_checkout(request: Request):
 
 
 @app.post("/api/payments/webhook")
+@limiter.limit("300/minute")
 async def stripe_webhook(request: Request):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
-    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
+    if not webhook_secret:
+        raise HTTPException(status_code=503, detail="Webhook not configured.")
 
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
@@ -4791,11 +4753,8 @@ async def delete_team_member(request: Request, member_id: int):
 
 
 @app.post("/api/team/auth")
+@limiter.limit("10/minute")
 async def team_auth(request: Request):
-    client_ip = get_client_ip(request)
-    if auth_rate_limiter.is_rate_limited(client_ip):
-        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
-
     body = await request.json()
     company_code = body.get("company_code", "").strip().lower()
     pin = body.get("pin", "").strip()

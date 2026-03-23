@@ -115,7 +115,11 @@ input, select { width: 100%; padding: 10px 12px; background: var(--bg); border: 
   <!-- Results - Lead Capture Confirmation -->
   <div class="results" id="results">
     <div class="card" style="text-align:center;padding:40px 20px;">
+<<<<<<< HEAD
       <div style="font-size:3rem;margin-bottom:16px;">&#x2713;</div>
+=======
+      <div style="font-size:3rem;margin-bottom:16px;">&#10003;</div>
+>>>>>>> 63311a3 (Security: slowapi rate limits, webhook CSRF path, health hardening, no verify code leak)
       <h2 style="font-size:1.4rem;font-weight:700;margin-bottom:12px;">Thank You!</h2>
       <p style="color:var(--muted);font-size:0.95rem;line-height:1.6;margin-bottom:20px;">
         We've received your photos and are preparing your estimate.<br>
@@ -162,8 +166,14 @@ async function sendVerificationCode() {
     });
     var data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || 'Failed to send code');
+    if (data.ok === false) {
+      errEl.textContent = data.message || 'Could not send verification code. Please try again.';
+      errEl.style.display = 'block';
+      btn.textContent = 'Verify';
+      btn.disabled = false;
+      return;
+    }
     document.getElementById('code-section').style.display = 'block';
-    if (data.fallback && data.code) { document.getElementById('verify-code').value = data.code; document.getElementById('verify-code').parentElement.querySelector('div').textContent = 'Code auto-filled (email delivery unavailable during beta)'; }
     btn.textContent = 'Resend';
     btn.disabled = false;
   } catch(e) {

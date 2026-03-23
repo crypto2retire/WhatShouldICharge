@@ -53,16 +53,83 @@ def decrypt_pii(ciphertext: str) -> str:
         return ciphertext
 
 
+def _is_loopback_or_rfc1918(host: str) -> bool:
+    """True when the TCP peer is local/private (typical when sitting behind Railway's proxy)."""
+    if not host:
+        return False
+    h = host.lower().strip()
+    if h in ("127.0.0.1", "::1", "localhost"):
+        return True
+    if h.startswith("10."):
+        return True
+    if h.startswith("192.168."):
+        return True
+    parts = h.split(".")
+    if len(parts) == 4 and parts[0] == "172":
+        try:
+            second = int(parts[1])
+            if 16 <= second <= 31:
+                return True
+        except ValueError:
+            pass
+    if h.startswith("fc") or h.startswith("fd"):  # IPv6 ULA
+        return True
+    return False
+
+
+def _trust_forwarded_headers(request: Request) -> bool:
+    if os.environ.get("TRUST_FORWARDED_HEADERS", "").strip().lower() in ("1", "true", "yes"):
+        return True
+    peer = request.client.host if request.client else ""
+    return _is_loopback_or_rfc1918(peer)
+
+
 def get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """Client IP for rate limiting. Use proxy headers only when peer is a trusted hop (e.g. Railway)."""
+    if _trust_forwarded_headers(request):
+        for header in ("x-real-ip", "cf-connecting-ip", "true-client-ip"):
+            raw = request.headers.get(header)
+            if raw:
+                ip = raw.split(",")[0].strip()
+                if ip:
+                    return ip
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+            if parts:
+                return parts[0]
     return request.client.host if request.client else "unknown"
 
 
 def _is_production_env() -> bool:
     env = (os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("ENVIRONMENT") or "production").strip().lower()
     return env != "development"
+
+
+def _cors_allow_origins() -> list[str]:
+    """Explicit browser origins only. Override with CORS_ORIGINS=comma-separated URLs."""
+    raw = os.environ.get("CORS_ORIGINS", "").strip()
+    if raw:
+        return sorted({o.strip().rstrip("/") for o in raw.split(",") if o.strip()})
+    origins: set[str] = {
+        "https://whatshouldicharge.app",
+        "https://www.whatshouldicharge.app",
+    }
+    pub = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
+    if pub:
+        origins.add(("https://" + pub).rstrip("/") if not pub.startswith("http") else pub.rstrip("/"))
+    if not _is_production_env():
+        origins.update(
+            {
+                "http://127.0.0.1:3000",
+                "http://localhost:3000",
+                "http://127.0.0.1:5000",
+                "http://localhost:5000",
+                "http://127.0.0.1:8000",
+                "http://localhost:8000",
+            }
+        )
+    return sorted(origins)
 
 
 _prod = _is_production_env()
@@ -166,10 +233,10 @@ def cache_invalidate(key: str):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[],
+    allow_origins=_cors_allow_origins(),
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-CSRF-Token"],
 )
 
 def _get_database_url() -> str:
@@ -4621,11 +4688,15 @@ async def admin_accuracy(request: Request):
 # ── Env Status API ──
 
 @app.get("/api/admin/env-status")
-async def admin_env_status(request: Request):
+async def admin_env_status(request: Request) -> dict[str, bool]:
     await require_admin(request)
     keys = ["ANTHROPIC_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
             "TAVILY_API_KEY", "SENDGRID_API_KEY"]
-    return {k: bool(os.environ.get(k, "")) for k in keys}
+    out: dict[str, bool] = {}
+    for k in keys:
+        v = os.environ.get(k)
+        out[k] = bool(isinstance(v, str) and v.strip())
+    return out
 
 
 @app.get("/api/admin/usage")

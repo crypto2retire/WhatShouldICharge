@@ -1271,6 +1271,26 @@ async def privacy_page():
     return FileResponse("static/privacy.html")
 
 
+@app.get("/blog", response_class=HTMLResponse)
+async def blog_index_page():
+    return FileResponse("static/blog/index.html")
+
+
+@app.get("/blog/how-to-price-junk-removal-jobs", response_class=HTMLResponse)
+async def blog_how_to_price_junk_removal_jobs():
+    return FileResponse("static/blog/how-to-price-junk-removal-jobs.html")
+
+
+@app.get("/blog/junk-removal-startup-costs", response_class=HTMLResponse)
+async def blog_junk_removal_startup_costs():
+    return FileResponse("static/blog/junk-removal-startup-costs.html")
+
+
+@app.get("/blog/junk-removal-marketing", response_class=HTMLResponse)
+async def blog_junk_removal_marketing():
+    return FileResponse("static/blog/junk-removal-marketing.html")
+
+
 @app.get("/estimate", response_class=HTMLResponse)
 async def estimator(request: Request):
     user = await get_current_user(request)

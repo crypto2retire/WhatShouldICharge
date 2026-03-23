@@ -179,7 +179,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
     <button class="nav-item active" data-section="dashboard"><span class="nav-icon">&#x1f4ca;</span> Dashboard</button>
     <button class="nav-item" data-section="clients"><span class="nav-icon">&#x1f465;</span> Clients</button>
     <button class="nav-item" data-section="estimates"><span class="nav-icon">&#x1f4cb;</span> Estimates</button>
-    <button class="nav-item" data-section="plans"><span class="nav-icon">&#x1f4b3;</span> Credit Packs</button>
+    <button class="nav-item" data-section="plans"><span class="nav-icon">&#x1f4b3;</span> Plans &amp; Pricing</button>
     <button class="nav-item" data-section="promos"><span class="nav-icon">&#x1f3ab;</span> Promo Codes</button>
     <button class="nav-item" data-section="accuracy"><span class="nav-icon">&#x1f3af;</span> Accuracy</button>
     <button class="nav-item" data-section="settings"><span class="nav-icon">&#x2699;&#xfe0f;</span> Site Settings</button>
@@ -257,17 +257,43 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
   </div>
 </div>
 
-<!-- ============ CREDIT PACKS ============ -->
+<!-- ============ PLANS & PRICING (credit packs) ============ -->
 <div class="section" id="sec-plans">
-  <div class="page-title">Credit Packs</div>
-  <div class="plan-grid" id="packs-grid"></div>
+  <div class="page-title">Plans &amp; Pricing</div>
+  <p style="font-size:0.88rem;color:var(--muted);margin-bottom:14px;max-width:720px;line-height:1.6;">
+    Credit packs are stored in the database. Creating or changing prices here can create Stripe Products/Prices automatically when <code>STRIPE_SECRET_KEY</code> is set.
+    Each estimate uses one credit. New users get 2 free trials; credits never expire.
+  </p>
+  <div style="margin-bottom:14px"><button class="btn btn-primary" onclick="showPackForm()">+ Add Credit Pack</button></div>
+  <div class="card" id="pack-form-card" style="display:none">
+    <div class="card-title" id="pack-form-title">New Credit Pack</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Pack key</label><input class="form-input" id="pack-key" placeholder="e.g. 15_pack" style="margin:0"><div style="font-size:0.75rem;color:var(--muted);margin-top:4px">Lowercase, letters/digits/underscores. Used in checkout API (immutable after create).</div></div>
+      <div class="form-group"><label class="form-label">Display name</label><input class="form-input" id="pack-name" placeholder="15-Pack"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Credits</label><input class="form-input" type="number" id="pack-credits" min="1" value="1"></div>
+      <div class="form-group"><label class="form-label">Price (USD)</label><input class="form-input" type="number" id="pack-price-dollars" min="0.5" step="0.01" placeholder="60.00"></div>
+      <div class="form-group"><label class="form-label">Discount % (display)</label><input class="form-input" type="number" id="pack-discount" min="0" max="100" value="0"></div>
+      <div class="form-group"><label class="form-label">Sort order</label><input class="form-input" type="number" id="pack-sort" value="0"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Description</label><textarea class="form-input" id="pack-description" rows="2" placeholder="Shown on marketing/checkout where applicable"></textarea></div>
+    <div class="form-row" style="align-items:center;gap:20px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem"><input type="checkbox" id="pack-active" checked> Active (shown publicly)</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem"><input type="checkbox" id="pack-featured"> Featured (&quot;Most Popular&quot; on site)</label>
+    </div>
+    <div class="btn-group" style="margin-top:12px">
+      <button class="btn btn-primary" onclick="savePack()">Save</button>
+      <button class="btn btn-outline" onclick="hidePackForm()">Cancel</button>
+    </div>
+    <input type="hidden" id="pack-edit-id" value="">
+  </div>
   <div class="card">
-    <div class="card-title">Credit Pack Summary</div>
-    <p style="font-size:0.88rem;color:var(--muted);line-height:1.7;">
-      WSIC uses pay-per-use credit packs. Each estimate (app or widget) costs 1 credit.<br>
-      New users get 2 free trial estimates. Credits never expire.<br>
-      Prices and Stripe Price IDs are configured in <code>main.py</code> under <code>CREDIT_PACKS</code>.
-    </p>
+    <div class="card-title">Credit Packs</div>
+    <table>
+      <thead><tr><th>ID</th><th>Key</th><th>Name</th><th>Credits</th><th>Price</th><th>Stripe price</th><th>Order</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="packs-admin-body"></tbody>
+    </table>
   </div>
 </div>
 
@@ -370,14 +396,15 @@ $$('.nav-item').forEach(item => {
     if (sec === 'dashboard' && !loaded.dashboard) loadDashboard();
     if (sec === 'clients' && !loaded.clients) loadClients(1);
     if (sec === 'estimates' && !loaded.estimates) loadEstimates(1);
-    if (sec === 'plans' && !loaded.plans) loadPacks();
+    if (sec === 'plans') loadPacks();
     if (sec === 'promos' && !loaded.promos) loadPromos();
     if (sec === 'accuracy' && !loaded.accuracy) loadAccuracy();
     if (sec === 'settings' && !loaded.settings) loadSettings();
   });
 });
 
-const loaded = { dashboard: false, clients: false, estimates: false, plans: false, promos: false, accuracy: false, settings: false };
+const loaded = { dashboard: false, clients: false, estimates: false, promos: false, accuracy: false, settings: false };
+let _adminPacksCache = [];
 
 function getCsrfToken() {
   const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
@@ -749,28 +776,128 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { if ($('#li
 function openLightbox(src) { $('#lightbox-img').src = src; $('#lightbox').classList.add('open'); }
 function closeLightbox() { $('#lightbox').classList.remove('open'); $('#lightbox-img').src = ''; }
 
-// ── Credit Packs ──
-async function loadPacks() {
+// ── Credit Packs (admin CRUD) ──
+function showPackForm() {
+  $('#pack-form-card').style.display = '';
+  $('#pack-form-title').textContent = 'New Credit Pack';
+  $('#pack-edit-id').value = '';
+  $('#pack-key').disabled = false;
+  $('#pack-key').value = '';
+  $('#pack-name').value = '';
+  $('#pack-credits').value = '1';
+  $('#pack-price-dollars').value = '';
+  $('#pack-discount').value = '0';
+  $('#pack-sort').value = '0';
+  $('#pack-description').value = '';
+  $('#pack-active').checked = true;
+  $('#pack-featured').checked = false;
+}
+
+function hidePackForm() { $('#pack-form-card').style.display = 'none'; }
+
+function editPackById(id) {
+  const p = _adminPacksCache.find(x => x.id === id);
+  if (!p) return;
+  editPack(p);
+}
+
+function editPack(p) {
+  $('#pack-form-card').style.display = '';
+  $('#pack-form-title').textContent = 'Edit Credit Pack';
+  $('#pack-edit-id').value = p.id;
+  $('#pack-key').disabled = true;
+  $('#pack-key').value = p.pack_key || '';
+  $('#pack-name').value = p.name || '';
+  $('#pack-credits').value = String(p.credits ?? 1);
+  $('#pack-price-dollars').value = ((p.price_cents || 0) / 100).toFixed(2);
+  $('#pack-discount').value = String(p.discount_pct ?? 0);
+  $('#pack-sort').value = String(p.sort_order ?? 0);
+  $('#pack-description').value = p.description || '';
+  $('#pack-active').checked = !!p.is_active;
+  $('#pack-featured').checked = !!p.is_featured;
+  $('#pack-form-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function savePack() {
+  const editId = $('#pack-edit-id').value;
+  const priceDollars = parseFloat($('#pack-price-dollars').value);
+  if (!editId && !$('#pack-key').value.trim()) { toast('Pack key is required', 'error'); return; }
+  if (!$('#pack-name').value.trim()) { toast('Display name is required', 'error'); return; }
+  if (!Number.isFinite(priceDollars) || priceDollars < 0.5) { toast('Price must be at least $0.50', 'error'); return; }
+  const price_cents = Math.round(priceDollars * 100);
+  const body = {
+    name: $('#pack-name').value.trim(),
+    credits: parseInt($('#pack-credits').value, 10) || 1,
+    price_cents,
+    discount_pct: parseInt($('#pack-discount').value, 10) || 0,
+    description: $('#pack-description').value.trim(),
+    sort_order: parseInt($('#pack-sort').value, 10) || 0,
+    is_active: $('#pack-active').checked,
+    is_featured: $('#pack-featured').checked,
+  };
   try {
-    const packs = await apiFetch('/api/credits/packs');
-    $('#packs-grid').innerHTML = packs.map(p => {
-      const perCredit = (p.price_cents / p.credits / 100).toFixed(2);
-      const savings = p.credits > 1 ? Math.round((1 - (p.price_cents / p.credits / 1000)) * 100) : 0;
-      return `<div class="plan-card">
-        <h3>${p.credits === 1 ? 'Single Estimate' : p.credits + '-Pack'}</h3>
-        <div style="font-size:1.8rem;font-weight:800;color:var(--green);margin:8px 0;">$${(p.price_cents/100).toFixed(2)}</div>
-        <div style="font-size:0.85rem;color:var(--muted);margin-bottom:12px;">
-          ${p.credits} credit${p.credits > 1 ? 's' : ''} &middot; $${perCredit}/estimate
-          ${savings > 0 ? ' &middot; <span style="color:var(--green)">' + savings + '% savings</span>' : ''}
-        </div>
-        <div style="font-size:0.78rem;color:var(--muted);">
-          Pack ID: <code>${p.pack_id}</code><br>
-          Stripe: <code style="font-size:0.72rem;">${p.stripe_price_id}</code>
-        </div>
-      </div>`;
+    if (editId) {
+      await apiFetch(`/api/admin/credit-packs/${editId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      toast('Credit pack updated');
+    } else {
+      body.pack_key = $('#pack-key').value.trim().toLowerCase();
+      await apiFetch('/api/admin/credit-packs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      toast('Credit pack created');
+    }
+    hidePackForm();
+    loadPacks();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function deactivatePack(id) {
+  const p = _adminPacksCache.find(x => x.id === id);
+  const name = p ? p.name : 'this pack';
+  if (!confirm(`Deactivate "${name}"? It will no longer appear on the public site or checkout.`)) return;
+  try {
+    await apiFetch(`/api/admin/credit-packs/${id}`, { method: 'DELETE' });
+    toast('Pack deactivated');
+    loadPacks();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function loadPacks() {
+  const tbody = $('#packs-admin-body');
+  tbody.innerHTML = '<tr><td colspan="9" class="loading">Loading...</td></tr>';
+  try {
+    const data = await apiFetch('/api/admin/credit-packs');
+    const packs = data.packs || [];
+    _adminPacksCache = packs;
+    if (!packs.length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="empty">No packs — add one above.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = packs.map(p => {
+      const stripeShort = (p.stripe_price_id || '').length > 18
+        ? (p.stripe_price_id || '').slice(0, 10) + '…' + (p.stripe_price_id || '').slice(-6)
+        : (p.stripe_price_id || '—');
+      const status = [
+        p.is_active ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-red">Inactive</span>',
+        p.is_featured ? '<span class="badge" style="background:#3b3f4a">Featured</span>' : '',
+      ].filter(Boolean).join(' ');
+      return `<tr>
+        <td>${p.id}</td>
+        <td><code>${esc(p.pack_key)}</code></td>
+        <td>${esc(p.name)}</td>
+        <td>${p.credits}</td>
+        <td>$${((p.price_cents || 0) / 100).toFixed(2)}</td>
+        <td title="${esc(p.stripe_price_id || '')}"><code style="font-size:0.75rem">${esc(stripeShort)}</code></td>
+        <td>${p.sort_order ?? 0}</td>
+        <td>${status}</td>
+        <td><div class="btn-group">
+          <button class="btn btn-outline btn-sm" onclick="editPackById(${p.id})">Edit</button>
+          ${p.is_active ? `<button class="btn btn-red btn-sm" onclick="deactivatePack(${p.id})">Deactivate</button>` : ''}
+        </div></td>
+      </tr>`;
     }).join('');
-    loaded.plans = true;
-  } catch(e) { console.error(e); }
+  } catch (e) {
+    console.error(e);
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">Failed to load packs</td></tr>';
+  }
 }
 
 // ── Promo Codes ──

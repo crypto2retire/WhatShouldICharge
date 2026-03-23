@@ -332,75 +332,8 @@
       <h2 class="section-title fade-up">Simple, Transparent Pricing</h2>
       <p class="section-sub fade-up" style="margin:0 auto">Every estimate uses one credit. Buy single estimates or save with packs.</p>
     </div>
-    <div class="pricing-grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
-      <div class="pricing-card fade-up">
-        <div class="pricing-tier">Single</div>
-        <div class="pricing-price"><sup>$</sup>10</div>
-        <div class="pricing-period">per estimate</div>
-        <div class="pricing-estimates">1 credit</div>
-        <ul class="pricing-features">
-          <li>$10.00 per estimate</li>
-          <li>Try before you commit</li>
-        </ul>
-        <a href="/signup" class="btn-pricing">Get Started</a>
-      </div>
-      <div class="pricing-card fade-up fade-up-delay-1">
-        <div class="pricing-tier">10-Pack</div>
-        <div class="pricing-price"><sup>$</sup>60</div>
-        <div class="pricing-period">$6.00 each</div>
-        <div class="pricing-estimates" style="color:#22c55e">Save 40%</div>
-        <ul class="pricing-features">
-          <li>10 estimate credits</li>
-          <li>Great for getting started</li>
-        </ul>
-        <a href="/signup" class="btn-pricing">Buy 10-Pack</a>
-      </div>
-      <div class="pricing-card fade-up fade-up-delay-2">
-        <div class="pricing-tier">25-Pack</div>
-        <div class="pricing-price"><sup>$</sup>125</div>
-        <div class="pricing-period">$5.00 each</div>
-        <div class="pricing-estimates" style="color:#22c55e">Save 50%</div>
-        <ul class="pricing-features">
-          <li>25 estimate credits</li>
-          <li>Solid value for regulars</li>
-        </ul>
-        <a href="/signup" class="btn-pricing">Buy 25-Pack</a>
-      </div>
-      <div class="pricing-card popular fade-up fade-up-delay-3">
-        <div class="popular-badge">Most Popular</div>
-        <div class="pricing-tier">50-Pack</div>
-        <div class="pricing-price"><sup>$</sup>200</div>
-        <div class="pricing-period">$4.00 each</div>
-        <div class="pricing-estimates" style="color:#22c55e">Save 60%</div>
-        <ul class="pricing-features">
-          <li>50 estimate credits</li>
-          <li>Sweet spot for solo operators</li>
-        </ul>
-        <a href="/signup" class="btn-pricing">Buy 50-Pack</a>
-      </div>
-      <div class="pricing-card fade-up fade-up-delay-4">
-        <div class="pricing-tier">100-Pack</div>
-        <div class="pricing-price"><sup>$</sup>300</div>
-        <div class="pricing-period">$3.00 each</div>
-        <div class="pricing-estimates" style="color:#22c55e">Save 70%</div>
-        <ul class="pricing-features">
-          <li>100 estimate credits</li>
-          <li>For busy operators</li>
-        </ul>
-        <a href="/signup" class="btn-pricing">Buy 100-Pack</a>
-      </div>
-      <div class="pricing-card fade-up fade-up-delay-5">
-        <div class="pricing-tier">250-Pack</div>
-        <div class="pricing-price"><sup>$</sup>500</div>
-        <div class="pricing-period">$2.00 each</div>
-        <div class="pricing-estimates" style="color:#22c55e">Save 80%</div>
-        <ul class="pricing-features">
-          <li>250 estimate credits</li>
-          <li>Best value &mdash; teams &amp; fleets</li>
-        </ul>
-        <a href="/signup" class="btn-pricing">Buy 250-Pack</a>
-      </div>
-    </div>
+    <div class="pricing-grid" id="landing-pricing-grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))"></div>
+    <p id="landing-pricing-fallback" class="fade-up" style="display:none;text-align:center;color:var(--muted)">Pricing could not be loaded. Please refresh the page.</p>
     <p class="fade-up" style="text-align:center;color:var(--muted);font-size:0.9rem;margin-top:24px;max-width:600px;margin-left:auto;margin-right:auto;font-weight:500;">Credits never expire. Use them whenever you need them.</p>
     <div class="fade-up" style="text-align:center;margin-top:16px;background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.2);border-radius:10px;padding:16px 24px;max-width:520px;margin-left:auto;margin-right:auto;">
       <div style="font-weight:700;margin-bottom:4px;">Try it free &mdash; 2 estimates on us</div>
@@ -792,6 +725,61 @@ window.addEventListener('scroll', function() {
       if (cfg[key]) el.textContent = cfg[key];
     });
   }).catch(function() {});
+})();
+
+(function() {
+  function esc(s) {
+    if (s == null || s === '') return '';
+    var d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+  }
+  var grid = document.getElementById('landing-pricing-grid');
+  var fallback = document.getElementById('landing-pricing-fallback');
+  if (!grid) return;
+  fetch('/api/credits/packs').then(function(r) { return r.json(); }).then(function(data) {
+    var packs = data.packs || [];
+    grid.innerHTML = '';
+    if (!packs.length) {
+      if (fallback) { fallback.style.display = 'block'; fallback.textContent = 'Pricing is being configured. Check back soon.'; }
+      return;
+    }
+    var delays = ['', ' fade-up-delay-1', ' fade-up-delay-2', ' fade-up-delay-3', ' fade-up-delay-4', ' fade-up-delay-5'];
+    packs.forEach(function(p, i) {
+      var n = Math.max(1, parseInt(p.credits, 10) || 1);
+      var per = (p.price_cents / n / 100).toFixed(2);
+      var priceWhole = Math.round(p.price_cents / 100);
+      var card = document.createElement('div');
+      card.className = 'pricing-card fade-up' + (p.featured ? ' popular' : '') + (delays[i % 6] || '');
+      var period = n === 1 ? 'per estimate' : ('$' + per + ' each');
+      var saveRow;
+      if (n === 1) {
+        saveRow = '<div class="pricing-estimates">1 credit</div>';
+      } else if (p.discount_pct > 0) {
+        saveRow = '<div class="pricing-estimates" style="color:#22c55e">Save ' + esc(p.discount_pct) + '%</div>';
+      } else {
+        saveRow = '<div class="pricing-estimates">' + esc(n) + ' credits</div>';
+      }
+      var desc = (p.description && String(p.description).trim()) ? String(p.description).split('(')[0].trim() : '';
+      var bullet2 = desc ? esc(desc) : (n === 1 ? 'Try before you commit' : 'Credits never expire');
+      var badge = p.featured ? '<div class="popular-badge">Most Popular</div>' : '';
+      var btnLabel = n === 1 ? 'Get Started' : esc('Buy ' + (p.name || 'Pack'));
+      card.innerHTML = badge +
+        '<div class="pricing-tier">' + esc(p.name) + '</div>' +
+        '<div class="pricing-price"><sup>$</sup>' + esc(priceWhole) + '</div>' +
+        '<div class="pricing-period">' + esc(period) + '</div>' +
+        saveRow +
+        '<ul class="pricing-features">' +
+        '<li>' + esc(n) + ' estimate credit' + (n !== 1 ? 's' : '') + '</li>' +
+        '<li>' + bullet2 + '</li>' +
+        '</ul>' +
+        '<a href="/signup" class="btn-pricing">' + btnLabel + '</a>';
+      grid.appendChild(card);
+    });
+    document.querySelectorAll('#landing-pricing-grid .fade-up').forEach(function(el) { observer.observe(el); });
+  }).catch(function() {
+    if (fallback) fallback.style.display = 'block';
+  });
 })();
 </script>
 </body>

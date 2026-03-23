@@ -22,7 +22,7 @@ import stripe
 import httpx
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy import Column, Integer, Float, DateTime, Text, String, Boolean, ForeignKey, select, text, func
+from sqlalchemy import Column, Integer, Float, DateTime, Text, String, Boolean, ForeignKey, select, text, func, update
 import asyncio
 from PIL import Image
 import io
@@ -302,62 +302,65 @@ TIER_LIMITS = {
     "agency": 999,
 }
 
-CREDIT_PACKS = {
+# Seeded into `credit_packs` on first deploy (see seed_credit_packs). Runtime reads packs from the database.
+_DEFAULT_CREDIT_PACKS_SEED = {
     "single": {
         "name": "Single Estimate",
         "credits": 1,
         "price_cents": 1000,
-        "per_credit_cents": 1000,
         "discount_pct": 0,
         "stripe_price_id": "price_1TDUHaAPEzwLONiqUUjQTuTS",
-        "description": "1 estimate credit"
+        "description": "1 estimate credit",
+        "is_featured": False,
     },
     "10_pack": {
         "name": "10-Pack",
         "credits": 10,
         "price_cents": 6000,
-        "per_credit_cents": 600,
         "discount_pct": 40,
         "stripe_price_id": "price_1TDUHbAPEzwLONiqhcyemzyF",
-        "description": "10 estimate credits (40% off)"
+        "description": "10 estimate credits (40% off)",
+        "is_featured": False,
     },
     "25_pack": {
         "name": "25-Pack",
         "credits": 25,
         "price_cents": 12500,
-        "per_credit_cents": 500,
         "discount_pct": 50,
         "stripe_price_id": "price_1TDUHcAPEzwLONiqwG3OZf9I",
-        "description": "25 estimate credits (50% off)"
+        "description": "25 estimate credits (50% off)",
+        "is_featured": False,
     },
     "50_pack": {
         "name": "50-Pack",
         "credits": 50,
         "price_cents": 20000,
-        "per_credit_cents": 400,
         "discount_pct": 60,
         "stripe_price_id": "price_1TDUHdAPEzwLONiqFtviLtbK",
-        "description": "50 estimate credits (60% off)"
+        "description": "50 estimate credits (60% off)",
+        "is_featured": True,
     },
     "100_pack": {
         "name": "100-Pack",
         "credits": 100,
         "price_cents": 30000,
-        "per_credit_cents": 300,
         "discount_pct": 70,
         "stripe_price_id": "price_1TDUHeAPEzwLONiqETAdtOiz",
-        "description": "100 estimate credits (70% off)"
+        "description": "100 estimate credits (70% off)",
+        "is_featured": False,
     },
     "250_pack": {
         "name": "250-Pack",
         "credits": 250,
         "price_cents": 50000,
-        "per_credit_cents": 200,
         "discount_pct": 80,
         "stripe_price_id": "price_1TDUHeAPEzwLONiqOoqQr7UP",
-        "description": "250 estimate credits (80% off)"
-    }
+        "description": "250 estimate credits (80% off)",
+        "is_featured": False,
+    },
 }
+
+_PACK_KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_]{0,62}$")
 
 STATE_TIMEZONE_MAP = {
     "CT": "America/New_York", "DE": "America/New_York", "GA": "America/New_York",
@@ -520,6 +523,24 @@ class PlanConfig(Base):
     features_json = Column(Text, default="[]")
     stripe_price_id = Column(String, default="")
     is_active = Column(Boolean, default=True)
+
+
+class CreditPack(Base):
+    __tablename__ = "credit_packs"
+    id = Column(Integer, primary_key=True, index=True)
+    pack_key = Column(String(64), unique=True, nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    credits = Column(Integer, nullable=False)
+    price_cents = Column(Integer, nullable=False)
+    discount_pct = Column(Integer, default=0)
+    description = Column(Text, default="")
+    stripe_product_id = Column(String(120), default="")
+    stripe_price_id = Column(String(120), default="")
+    is_active = Column(Boolean, default=True)
+    is_featured = Column(Boolean, default=False)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class CreditTransaction(Base):
@@ -1015,6 +1036,136 @@ async def seed_plan_configs():
         await db.commit()
 
 
+def _validate_pack_key(raw: str) -> str:
+    key = (raw or "").strip().lower()
+    if not _PACK_KEY_RE.match(key):
+        raise HTTPException(
+            status_code=400,
+            detail="pack_key must be 1–63 chars: lowercase letters, digits, underscores only; must start with letter or digit.",
+        )
+    return key
+
+
+def _credit_pack_to_public(p: CreditPack) -> dict:
+    c = p.credits or 1
+    per = int(round(p.price_cents / c)) if c else 0
+    return {
+        "type": p.pack_key,
+        "name": p.name,
+        "credits": p.credits,
+        "price_cents": p.price_cents,
+        "per_credit_cents": per,
+        "discount_pct": p.discount_pct or 0,
+        "description": p.description or "",
+        "featured": bool(p.is_featured),
+    }
+
+
+def _credit_pack_admin_dict(p: CreditPack) -> dict:
+    return {
+        "id": p.id,
+        "pack_key": p.pack_key,
+        "name": p.name,
+        "credits": p.credits,
+        "price_cents": p.price_cents,
+        "discount_pct": p.discount_pct or 0,
+        "description": p.description or "",
+        "stripe_product_id": p.stripe_product_id or "",
+        "stripe_price_id": p.stripe_price_id or "",
+        "is_active": bool(p.is_active),
+        "is_featured": bool(p.is_featured),
+        "sort_order": p.sort_order or 0,
+        "created_at": p.created_at.isoformat() if p.created_at else None,
+        "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+    }
+
+
+def _stripe_create_product_and_price_sync(
+    name: str, description: str, price_cents: int, pack_key: str, credits: int
+) -> tuple[str, str]:
+    product = stripe.Product.create(
+        name=name[:200],
+        description=((description or "")[:500] or None),
+        metadata={"pack_key": pack_key, "credits": str(credits)},
+    )
+    price = stripe.Price.create(
+        product=product.id,
+        unit_amount=int(price_cents),
+        currency="usd",
+        metadata={"pack_key": pack_key, "credits": str(credits)},
+    )
+    return product.id, price.id
+
+
+def _stripe_create_price_on_product_sync(
+    product_id: str, price_cents: int, pack_key: str, credits: int
+) -> str:
+    price = stripe.Price.create(
+        product=product_id,
+        unit_amount=int(price_cents),
+        currency="usd",
+        metadata={"pack_key": pack_key, "credits": str(credits)},
+    )
+    return price.id
+
+
+def _stripe_update_product_sync(product_id: str, name: str, description: str) -> None:
+    stripe.Product.modify(
+        product_id,
+        name=name[:200],
+        description=((description or "")[:500] or None),
+    )
+
+
+def _stripe_deactivate_price_sync(price_id: str) -> None:
+    if not price_id:
+        return
+    try:
+        stripe.Price.modify(price_id, active=False)
+    except Exception:
+        pass
+
+
+def _stripe_product_id_from_price_sync(price_id: str) -> str:
+    pri = stripe.Price.retrieve(price_id)
+    pid = getattr(pri, "product", None)
+    if isinstance(pid, str):
+        return pid
+    if pid is not None and getattr(pid, "id", None):
+        return str(pid.id)
+    return ""
+
+
+async def seed_credit_packs():
+    import logging
+    logger = logging.getLogger("wsic")
+    async with AsyncSessionLocal() as db:
+        n = (await db.execute(select(func.count(CreditPack.id)))).scalar() or 0
+        if n > 0:
+            logger.info("[seed_credit_packs] credit_packs already populated (%s rows)", n)
+            return
+        order = 0
+        for pack_key, v in _DEFAULT_CREDIT_PACKS_SEED.items():
+            db.add(
+                CreditPack(
+                    pack_key=pack_key,
+                    name=v["name"],
+                    credits=int(v["credits"]),
+                    price_cents=int(v["price_cents"]),
+                    discount_pct=int(v.get("discount_pct", 0)),
+                    description=v.get("description", "") or "",
+                    stripe_product_id="",
+                    stripe_price_id=v.get("stripe_price_id", "") or "",
+                    is_active=True,
+                    is_featured=bool(v.get("is_featured", False)),
+                    sort_order=order,
+                )
+            )
+            order += 10
+        await db.commit()
+        logger.info("[seed_credit_packs] Inserted %s default credit packs", len(_DEFAULT_CREDIT_PACKS_SEED))
+
+
 async def seed_site_config():
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(SiteConfig).limit(1))
@@ -1091,6 +1242,7 @@ async def lifespan(app):
     await init_db()
     await seed_reference_library()
     await seed_plan_configs()
+    await seed_credit_packs()
     await seed_site_config()
     await ensure_admin_user()
     yield
@@ -1242,20 +1394,14 @@ async def get_credit_balance(request: Request):
 @app.get("/api/credits/packs")
 async def get_available_packs():
     """List available credit packs for purchase."""
-    return {
-        "packs": [
-            {
-                "type": k,
-                "name": v["name"],
-                "credits": v["credits"],
-                "price_cents": v["price_cents"],
-                "per_credit_cents": v["per_credit_cents"],
-                "discount_pct": v["discount_pct"],
-                "description": v["description"]
-            }
-            for k, v in CREDIT_PACKS.items()
-        ]
-    }
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(CreditPack)
+            .where(CreditPack.is_active == True)  # noqa: E712
+            .order_by(CreditPack.sort_order, CreditPack.id)
+        )
+        rows = result.scalars().all()
+    return {"packs": [_credit_pack_to_public(p) for p in rows]}
 
 
 @app.get("/robots.txt")
@@ -3919,15 +4065,24 @@ PRICE_TO_TIER = {
 async def create_checkout(request: Request):
     user = await require_user(request)
     body = await request.json()
-    pack_type = body.get("pack_type")
+    pack_type = (body.get("pack_type") or "").strip().lower()
 
-    if pack_type not in CREDIT_PACKS:
-        raise HTTPException(status_code=400, detail=f"Invalid pack type. Options: {list(CREDIT_PACKS.keys())}")
-
-    pack = CREDIT_PACKS[pack_type]
-
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(CreditPack).where(
+                CreditPack.pack_key == pack_type,
+                CreditPack.is_active == True,  # noqa: E712
+            )
+        )
+        pack_row = result.scalar_one_or_none()
+    if not pack_row:
+        raise HTTPException(status_code=400, detail="Invalid or inactive credit pack.")
+    pack = {
+        "credits": pack_row.credits,
+        "stripe_price_id": pack_row.stripe_price_id or "",
+    }
     if not pack["stripe_price_id"]:
-        raise HTTPException(status_code=500, detail="Stripe product not configured for this pack")
+        raise HTTPException(status_code=500, detail="Stripe price not configured for this pack")
 
     # Create or reuse Stripe customer
     async with AsyncSessionLocal() as db:
@@ -3992,16 +4147,23 @@ async def stripe_webhook(request: Request):
                     user.credits_purchased_total = (user.credits_purchased_total or 0) + credits_to_add
                     user.stripe_customer_id = customer_id or user.stripe_customer_id or ""
 
-                    pack = CREDIT_PACKS.get(pack_type, {})
+                    pr = await db.execute(select(CreditPack).where(CreditPack.pack_key == pack_type))
+                    pack_obj = pr.scalar_one_or_none()
+                    pack_name = pack_obj.name if pack_obj else pack_type
+                    amount_cents = (
+                        pack_obj.price_cents
+                        if pack_obj
+                        else int(session.get("amount_total") or 0)
+                    )
                     txn = CreditTransaction(
                         user_id=user.id,
                         transaction_type="purchase",
                         credits=credits_to_add,
                         balance_after=user.credit_balance,
-                        description=f"{pack.get('name', pack_type)} Purchase",
+                        description=f"{pack_name} Purchase",
                         stripe_session_id=session.get("id", ""),
                         pack_type=pack_type,
-                        amount_cents=pack.get("price_cents", 0)
+                        amount_cents=amount_cents,
                     )
                     db.add(txn)
                     await db.commit()
@@ -4635,6 +4797,213 @@ async def admin_reset_password(request: Request, user_id: int):
         u.password_hash = hashed
         await db.commit()
         return {"ok": True, "new_password": new_password}
+
+
+# ── Admin: Credit packs (DB + Stripe) ──
+
+@app.get("/api/admin/credit-packs")
+async def admin_list_credit_packs(request: Request):
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(CreditPack).order_by(CreditPack.sort_order, CreditPack.id))
+        rows = result.scalars().all()
+    return {"packs": [_credit_pack_admin_dict(p) for p in rows]}
+
+
+@app.post("/api/admin/credit-packs")
+async def admin_create_credit_pack(request: Request):
+    await require_admin(request)
+    body = await request.json()
+    pack_key = _validate_pack_key(body.get("pack_key", ""))
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    credits = int(body.get("credits", 0))
+    if credits < 1:
+        raise HTTPException(status_code=400, detail="credits must be at least 1")
+    price_cents = int(body.get("price_cents", 0))
+    if price_cents < 50:
+        raise HTTPException(status_code=400, detail="price_cents must be at least 50 (Stripe minimum)")
+    discount_pct = int(body.get("discount_pct", 0))
+    description = (body.get("description") or "").strip()
+    sort_order = int(body.get("sort_order", 0))
+    is_active = bool(body.get("is_active", True))
+    is_featured = bool(body.get("is_featured", False))
+
+    stripe_key = bool(stripe.api_key)
+    manual_prod = (body.get("stripe_product_id") or "").strip()
+    manual_price = (body.get("stripe_price_id") or "").strip()
+
+    prod_id = ""
+    pri_id = ""
+    if stripe_key:
+        prod_id, pri_id = await asyncio.to_thread(
+            _stripe_create_product_and_price_sync,
+            name,
+            description,
+            price_cents,
+            pack_key,
+            credits,
+        )
+    elif manual_prod and manual_price:
+        prod_id, pri_id = manual_prod, manual_price
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Set STRIPE_SECRET_KEY for auto-created Stripe products, or pass stripe_product_id and stripe_price_id.",
+        )
+
+    async with AsyncSessionLocal() as db:
+        exists = await db.execute(select(CreditPack).where(CreditPack.pack_key == pack_key))
+        if exists.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="A pack with this pack_key already exists")
+        if is_featured:
+            await db.execute(update(CreditPack).values(is_featured=False))
+        pack = CreditPack(
+            pack_key=pack_key,
+            name=name,
+            credits=credits,
+            price_cents=price_cents,
+            discount_pct=discount_pct,
+            description=description,
+            stripe_product_id=prod_id,
+            stripe_price_id=pri_id,
+            is_active=is_active,
+            is_featured=is_featured,
+            sort_order=sort_order,
+        )
+        db.add(pack)
+        await db.commit()
+        await db.refresh(pack)
+    return {"ok": True, "pack": _credit_pack_admin_dict(pack)}
+
+
+@app.put("/api/admin/credit-packs/{pack_id}")
+async def admin_update_credit_pack(request: Request, pack_id: int):
+    await require_admin(request)
+    body = await request.json()
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(CreditPack).where(CreditPack.id == pack_id))
+        p = result.scalar_one_or_none()
+        if not p:
+            raise HTTPException(status_code=404, detail="Credit pack not found")
+
+        old_price_cents = p.price_cents
+        old_stripe_price_id = p.stripe_price_id or ""
+
+        if "name" in body and body.get("name") is not None:
+            nm = str(body.get("name") or "").strip()
+            if nm:
+                p.name = nm
+        if "credits" in body:
+            cr = int(body["credits"])
+            if cr < 1:
+                raise HTTPException(status_code=400, detail="credits must be at least 1")
+            p.credits = cr
+        if "price_cents" in body:
+            pc = int(body["price_cents"])
+            if pc < 50:
+                raise HTTPException(status_code=400, detail="price_cents must be at least 50")
+            p.price_cents = pc
+        if "discount_pct" in body:
+            p.discount_pct = int(body["discount_pct"])
+        if "description" in body:
+            p.description = (body.get("description") or "").strip()
+        if "sort_order" in body:
+            p.sort_order = int(body["sort_order"])
+        if "is_active" in body:
+            p.is_active = bool(body["is_active"])
+        if "is_featured" in body:
+            if bool(body["is_featured"]):
+                await db.execute(update(CreditPack).values(is_featured=False))
+                p.is_featured = True
+            else:
+                p.is_featured = False
+
+        stripe_key = bool(stripe.api_key)
+        new_price_cents = p.price_cents
+
+        if stripe_key and new_price_cents != old_price_cents:
+            if not p.stripe_price_id and not p.stripe_product_id:
+                prod_id, pri_id = await asyncio.to_thread(
+                    _stripe_create_product_and_price_sync,
+                    p.name,
+                    p.description or "",
+                    new_price_cents,
+                    p.pack_key,
+                    p.credits,
+                )
+                p.stripe_product_id = prod_id
+                p.stripe_price_id = pri_id
+            else:
+                product_id = (p.stripe_product_id or "").strip()
+                if not product_id and old_stripe_price_id:
+                    product_id = await asyncio.to_thread(
+                        _stripe_product_id_from_price_sync, old_stripe_price_id
+                    )
+                    p.stripe_product_id = product_id
+                if not product_id:
+                    prod_id, pri_id = await asyncio.to_thread(
+                        _stripe_create_product_and_price_sync,
+                        p.name,
+                        p.description or "",
+                        new_price_cents,
+                        p.pack_key,
+                        p.credits,
+                    )
+                    if old_stripe_price_id:
+                        await asyncio.to_thread(_stripe_deactivate_price_sync, old_stripe_price_id)
+                    p.stripe_product_id = prod_id
+                    p.stripe_price_id = pri_id
+                else:
+                    await asyncio.to_thread(
+                        _stripe_update_product_sync,
+                        product_id,
+                        p.name,
+                        p.description or "",
+                    )
+                    new_pid = await asyncio.to_thread(
+                        _stripe_create_price_on_product_sync,
+                        product_id,
+                        new_price_cents,
+                        p.pack_key,
+                        p.credits,
+                    )
+                    if old_stripe_price_id:
+                        await asyncio.to_thread(_stripe_deactivate_price_sync, old_stripe_price_id)
+                    p.stripe_price_id = new_pid
+        elif stripe_key:
+            product_id = (p.stripe_product_id or "").strip()
+            if not product_id and p.stripe_price_id:
+                product_id = await asyncio.to_thread(
+                    _stripe_product_id_from_price_sync, p.stripe_price_id
+                )
+                p.stripe_product_id = product_id
+            if product_id:
+                await asyncio.to_thread(
+                    _stripe_update_product_sync,
+                    product_id,
+                    p.name,
+                    p.description or "",
+                )
+
+        await db.commit()
+        await db.refresh(p)
+    return {"ok": True, "pack": _credit_pack_admin_dict(p)}
+
+
+@app.delete("/api/admin/credit-packs/{pack_id}")
+async def admin_delete_credit_pack(request: Request, pack_id: int):
+    """Deactivate pack (soft delete)."""
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(CreditPack).where(CreditPack.id == pack_id))
+        p = result.scalar_one_or_none()
+        if not p:
+            raise HTTPException(status_code=404, detail="Credit pack not found")
+        p.is_active = False
+        await db.commit()
+    return {"ok": True}
 
 
 # ── Promo Code API ──

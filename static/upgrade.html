@@ -88,7 +88,7 @@ async function buyPack(packType) {
   const grid = document.getElementById('packGrid');
 
   packsData.packs.forEach(p => {
-    const isPopular = p.type === '25_pack';
+    const isPopular = p.featured === true;
     const priceStr = (p.price_cents / 100).toFixed(0);
     const perStr = (p.per_credit_cents / 100).toFixed(2);
     const card = document.createElement('div');

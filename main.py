@@ -608,6 +608,12 @@ class Estimate(Base):
     output_tokens = Column(Integer, default=0)
     api_cost_cents = Column(Integer, default=0)
     model_used = Column(String(50), default="")
+    appointment_requested = Column(Boolean, default=False)
+    appointment_contact_method = Column(String, default="")
+    appointment_preferred_day = Column(String, default="")
+    appointment_preferred_time = Column(String, default="")
+    appointment_requested_at = Column(DateTime, default=None)
+    additional_items_text = Column(Text, default="")
 
 
 class ItemReferenceLibrary(Base):
@@ -702,6 +708,12 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS output_tokens INTEGER DEFAULT 0",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS api_cost_cents INTEGER DEFAULT 0",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS model_used VARCHAR(50) DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_requested BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_contact_method VARCHAR DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_preferred_day VARCHAR DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_preferred_time VARCHAR DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_requested_at TIMESTAMP DEFAULT NULL",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS additional_items_text TEXT DEFAULT ''",
         ]
     else:
         alter_statements = [
@@ -748,6 +760,12 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN output_tokens INTEGER DEFAULT 0",
             "ALTER TABLE estimates ADD COLUMN api_cost_cents INTEGER DEFAULT 0",
             "ALTER TABLE estimates ADD COLUMN model_used TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN appointment_requested BOOLEAN DEFAULT 0",
+            "ALTER TABLE estimates ADD COLUMN appointment_contact_method TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN appointment_preferred_day TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN appointment_preferred_time TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN appointment_requested_at TIMESTAMP DEFAULT NULL",
+            "ALTER TABLE estimates ADD COLUMN additional_items_text TEXT DEFAULT ''",
         ]
 
     async with engine.begin() as conn:
@@ -1752,9 +1770,27 @@ input::placeholder{{color:#94a3b8}}
 .special-note{{margin-top:16px;padding:16px;border-radius:14px;background:#fffbeb;border:1px solid #fde68a;font-size:0.82rem;color:#92400e;line-height:1.6}}
 .dupe-note{{margin-top:12px;padding:16px;border-radius:14px;background:#fefce8;border:1px solid #fde68a;font-size:0.82rem;color:#854d0e;line-height:1.6}}
 
-/* --- CTA --- */
+/* --- CTA / Appointment Form --- */
 .cta-section{{text-align:center;padding:28px 20px;margin-top:8px}}
 .cta-section .subtext{{font-size:0.9rem;color:#475569;margin-bottom:14px;font-weight:500}}
+.appt-form{{text-align:left;max-width:400px;margin:0 auto}}
+.appt-form .form-label{{font-size:0.82rem;font-weight:600;color:#334155;margin-bottom:8px;display:block}}
+.appt-form .form-group{{margin-bottom:18px}}
+.toggle-row{{display:flex;gap:8px}}
+.toggle-btn{{flex:1;padding:12px 8px;border:2px solid #e2e8f0;border-radius:12px;background:#fff;color:#475569;font-size:0.88rem;font-weight:600;cursor:pointer;text-align:center;transition:all .2s;font-family:inherit}}
+.toggle-btn:hover{{border-color:#16a34a;color:#16a34a}}
+.toggle-btn.selected{{background:#f0fdf4;border-color:#16a34a;color:#16a34a}}
+.toggle-btn svg{{width:16px;height:16px;vertical-align:-3px;margin-right:4px}}
+.appt-form input[type="date"]{{width:100%;padding:12px 16px;border:2px solid #e2e8f0;border-radius:12px;font-size:0.92rem;font-family:inherit;color:#1e293b;background:#fff;transition:border-color .2s}}
+.appt-form input[type="date"]:focus{{outline:none;border-color:#16a34a}}
+.appt-success{{display:none;text-align:center;padding:24px 16px}}
+.appt-success svg{{width:48px;height:48px;color:#16a34a;margin-bottom:12px}}
+.appt-success .success-title{{font-size:1.1rem;font-weight:700;color:#0f172a;margin-bottom:6px}}
+.appt-success .success-sub{{font-size:0.88rem;color:#64748b}}
+.appt-or{{font-size:0.82rem;color:#94a3b8;margin:16px 0 12px;position:relative}}
+.appt-or::before,.appt-or::after{{content:'';position:absolute;top:50%;width:calc(50% - 20px);height:1px;background:#e2e8f0}}
+.appt-or::before{{left:0}}
+.appt-or::after{{right:0}}
 
 /* --- Divider --- */
 .section-divider{{border:none;border-top:1px solid #f1f5f9;margin:28px 0}}
@@ -1943,7 +1979,41 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
 
     <div class="cta-section" id="cta-section">
       <div class="subtext">Ready to schedule your pickup?</div>
-      {f"""<a href="tel:{phone}" class="btn btn-call"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>Schedule an Appointment — {phone}</a>""" if phone else ''}
+      <div id="appt-form-wrap" class="appt-form">
+        <div class="form-group">
+          <label class="form-label">How should we contact you?</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn selected" id="appt-text" onclick="selectContact('text')">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+              Text Me
+            </button>
+            <button type="button" class="toggle-btn" id="appt-email" onclick="selectContact('email')">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              Email Me
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Preferred Day</label>
+          <input type="date" id="appt-day" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Preferred Time</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn selected" id="appt-morning" onclick="selectTime('morning')">Morning (8am–12pm)</button>
+            <button type="button" class="toggle-btn" id="appt-afternoon" onclick="selectTime('afternoon')">Afternoon (12–5pm)</button>
+          </div>
+        </div>
+        <button class="btn" id="appt-submit-btn" onclick="submitAppointment()">Request Appointment</button>
+        <div id="appt-error" style="display:none;color:#ef4444;font-size:0.85rem;margin-top:10px;text-align:center"></div>
+        {f"""<div class="appt-or">or</div>
+        <a href="tel:{phone}" class="btn btn-call" style="margin:0 auto"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>Call Us — {phone}</a>""" if phone else ''}
+      </div>
+      <div id="appt-success" class="appt-success">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <div class="success-title">Appointment Request Sent!</div>
+        <div class="success-sub" id="appt-confirm-msg">We'll text you to confirm your appointment.</div>
+      </div>
     </div>
     <div style="font-size:0.75rem;color:#94a3b8;text-align:center;padding:12px;line-height:1.5;border-top:1px solid #f1f5f9;margin-top:8px">This estimate covers only the items visible in your uploaded photos. Any additional items not shown in the photos will be priced at our standard rates upon arrival. Recycling fees apply to items containing freon (refrigerators, freezers, AC units), tires, TVs, and certain electronics. This estimate is AI-generated and approximate only. Actual pricing may vary based on item weight, accessibility, and on-site conditions. This is not a binding quote. See <a href="/terms" target="_blank" style="color:#94a3b8;text-decoration:underline">Terms of Service</a> and <a href="/privacy" target="_blank" style="color:#94a3b8;text-decoration:underline">Privacy Policy</a>.</div>
   </div>
@@ -2201,9 +2271,65 @@ function showResults(r){{
     }});
     document.getElementById('res-photos-card').style.display='block';
   }}
-  if(!companyPhone){{document.getElementById('cta-section').style.display='none'}}
+  // Appointment form always shows; phone call link is conditional via server template
   // Scroll to results
   el.scrollIntoView({{behavior:'smooth',block:'start'}});
+}}
+
+// --- Appointment form ---
+var apptContact='text';
+var apptTime='morning';
+
+// Set min date to tomorrow
+(function(){{
+  var d=new Date();d.setDate(d.getDate()+1);
+  var dd=d.toISOString().split('T')[0];
+  var el=document.getElementById('appt-day');
+  if(el){{el.min=dd;el.value=dd}}
+}})();
+
+function selectContact(method){{
+  apptContact=method;
+  document.getElementById('appt-text').classList.toggle('selected',method==='text');
+  document.getElementById('appt-email').classList.toggle('selected',method==='email');
+}}
+function selectTime(time){{
+  apptTime=time;
+  document.getElementById('appt-morning').classList.toggle('selected',time==='morning');
+  document.getElementById('appt-afternoon').classList.toggle('selected',time==='afternoon');
+}}
+
+async function submitAppointment(){{
+  var btn=document.getElementById('appt-submit-btn');
+  var errEl=document.getElementById('appt-error');
+  errEl.style.display='none';
+  var day=document.getElementById('appt-day').value;
+  if(!day){{errEl.textContent='Please select a preferred day.';errEl.style.display='block';return}}
+  if(!lastResult||!lastResult.id){{errEl.textContent='No estimate found. Please get an estimate first.';errEl.style.display='block';return}}
+  btn.disabled=true;btn.textContent='Submitting...';
+  var additionalItems=(document.getElementById('additional-items')||{{}}).value||'';
+  try{{
+    var resp=await fetch('/api/public/appointment-request',{{
+      method:'POST',
+      headers:{{'Content-Type':'application/json'}},
+      body:JSON.stringify({{
+        estimate_id:lastResult.id,
+        slug:slug,
+        contact_method:apptContact,
+        preferred_day:day,
+        preferred_time:apptTime,
+        additional_items:additionalItems
+      }})
+    }});
+    if(!resp.ok){{var err=await resp.json();throw new Error(err.detail||'Failed to submit')}}
+    document.getElementById('appt-form-wrap').style.display='none';
+    var confirmMsg=apptContact==='text'?"We'll text you to confirm your appointment.":"We'll email you to confirm your appointment.";
+    document.getElementById('appt-confirm-msg').textContent=confirmMsg;
+    document.getElementById('appt-success').style.display='block';
+  }}catch(e){{
+    errEl.textContent=e.message;errEl.style.display='block';
+    btn.disabled=false;btn.textContent='Request Appointment';
+  }}
 }}
 
 if(window.parent!==window){{
@@ -2502,6 +2628,107 @@ async def public_estimate_status(request: Request, job_id: str):
             }
         }
     return {"status": job["status"], "message": job["message"], "result": None}
+
+
+@app.post("/api/public/appointment-request")
+@limiter.limit("10/minute")
+async def public_appointment_request(request: Request):
+    """Customer requests an appointment after receiving an estimate."""
+    body = await request.json()
+    estimate_id = body.get("estimate_id")
+    slug = body.get("slug", "")
+    contact_method = body.get("contact_method", "text")
+    preferred_day = body.get("preferred_day", "")
+    preferred_time = body.get("preferred_time", "morning")
+    additional_items = body.get("additional_items", "")
+
+    if not estimate_id:
+        raise HTTPException(status_code=400, detail="Missing estimate ID")
+    if not preferred_day:
+        raise HTTPException(status_code=400, detail="Please select a preferred day")
+
+    async with AsyncSessionLocal() as db:
+        # Find the estimate
+        result = await db.execute(
+            select(Estimate).where(Estimate.id == estimate_id)
+        )
+        est = result.scalar_one_or_none()
+        if not est:
+            raise HTTPException(status_code=404, detail="Estimate not found")
+
+        # Update the estimate with appointment details
+        est.appointment_requested = True
+        est.appointment_contact_method = contact_method
+        est.appointment_preferred_day = preferred_day
+        est.appointment_preferred_time = preferred_time
+        est.appointment_requested_at = datetime.utcnow()
+        if additional_items:
+            est.additional_items_text = additional_items
+
+        # Get the operator info
+        user_result = await db.execute(
+            select(User).where(User.id == est.user_id)
+        )
+        user = user_result.scalar_one_or_none()
+
+        await db.commit()
+
+        # Send appointment notification email to operator
+        if user and user.email:
+            cust_name = est.customer_name or "Customer"
+            cust_email = est.customer_email or "N/A"
+            cust_phone = est.customer_phone or "N/A"
+            price_low = est.price_low or 0
+            price_high = est.price_high or 0
+            contact_label = "Text" if contact_method == "text" else "Email"
+            contact_value = cust_phone if contact_method == "text" else cust_email
+            time_label = "Morning (8am–12pm)" if preferred_time == "morning" else "Afternoon (12–5pm)"
+            additional_html = ""
+            if additional_items:
+                additional_html = f"""
+                    <tr><td style="padding:8px 0;color:#64748b;vertical-align:top">Additional Items</td>
+                    <td style="padding:8px 0;font-weight:500">{additional_items}</td></tr>"""
+
+            appt_html = f"""
+                <div style="max-width:500px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+                  <div style="background:#16a34a;padding:24px;border-radius:12px 12px 0 0;text-align:center">
+                    <h1 style="margin:0;color:#fff;font-size:1.4rem">Appointment Request</h1>
+                    <p style="margin:4px 0 0;opacity:0.9;color:#fff;font-size:0.9rem">via WhatShouldICharge</p>
+                  </div>
+                  <div style="background:#fff;border:1px solid #e2e8f0;padding:24px;border-radius:0 0 12px 12px">
+                    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;text-align:center;margin-bottom:20px">
+                      <div style="font-size:0.85rem;color:#64748b;margin-bottom:4px">Estimate</div>
+                      <div style="font-size:1.6rem;font-weight:800;color:#16a34a">${price_low:,.0f} — ${price_high:,.0f}</div>
+                    </div>
+                    <h2 style="margin:0 0 12px;font-size:1.1rem;color:#0f172a">Customer Information</h2>
+                    <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+                      <tr><td style="padding:8px 0;color:#64748b;width:120px">Name</td><td style="padding:8px 0;font-weight:600">{cust_name}</td></tr>
+                      <tr><td style="padding:8px 0;color:#64748b">Phone</td><td style="padding:8px 0"><a href="tel:{cust_phone}">{cust_phone}</a></td></tr>
+                      <tr><td style="padding:8px 0;color:#64748b">Email</td><td style="padding:8px 0"><a href="mailto:{cust_email}">{cust_email}</a></td></tr>
+                    </table>
+                    <h2 style="margin:0 0 12px;font-size:1.1rem;color:#0f172a">Appointment Details</h2>
+                    <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+                      <tr><td style="padding:8px 0;color:#64748b;width:120px">Contact Via</td><td style="padding:8px 0;font-weight:600">{contact_label}: {contact_value}</td></tr>
+                      <tr><td style="padding:8px 0;color:#64748b">Preferred Day</td><td style="padding:8px 0;font-weight:600">{preferred_day}</td></tr>
+                      <tr><td style="padding:8px 0;color:#64748b">Preferred Time</td><td style="padding:8px 0;font-weight:600">{time_label}</td></tr>{additional_html}
+                    </table>
+                    <div style="margin-top:20px;padding:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;text-align:center">
+                      <p style="margin:0 0 6px;font-weight:700;color:#92400e">Action Required</p>
+                      <p style="margin:0;font-size:0.88rem;color:#78350f">{contact_label} the customer to confirm the appointment.</p>
+                    </div>
+                  </div>
+                </div>"""
+
+            try:
+                send_email(
+                    user.email,
+                    f"Appointment Request: {cust_name} — {preferred_day} {time_label}",
+                    appt_html,
+                )
+            except Exception:
+                pass  # Don't fail if email fails
+
+    return {"ok": True, "message": "Appointment request submitted"}
 
 
 @app.post("/api/auth/signup")

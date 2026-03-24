@@ -268,7 +268,7 @@ def _get_database_url() -> str:
         return url
 
     # Method 3: Local dev fallback to SQLite
-    logger.warning("[db] No PostgreSQL config found â falling back to SQLite (DATA WILL BE LOST ON DEPLOY)")
+    logger.warning("[db] No PostgreSQL config found — falling back to SQLite (DATA WILL BE LOST ON DEPLOY)")
     return "sqlite+aiosqlite:///./estimates.db"
 
 
@@ -290,7 +290,7 @@ Base = declarative_base()
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
-# Legacy â kept for reference but no longer used for gating
+# Legacy — kept for reference but no longer used for gating
 TIER_LIMITS = {
     "free": 3,
     "solo": 999,
@@ -409,7 +409,7 @@ def _check_usage_limit(user):
     if used < limit:
         return True, None
 
-    # Over limit â check overage mode
+    # Over limit — check overage mode
     mode = getattr(user, 'overage_mode', 'warn_and_charge') or 'warn_and_charge'
 
     if mode == 'hard_stop':
@@ -639,7 +639,7 @@ async def init_db():
     logger.warning(f"[init_db] Database URL prefix: {DATABASE_URL[:40]}...")
     logger.warning(f"[init_db] Environment variables found: {env_keys}")
     if not _is_postgres:
-        logger.error("[init_db] â ï¸ USING SQLITE â ALL DATA WILL BE LOST ON NEXT DEPLOY. Set DATABASE_URL to PostgreSQL!")
+        logger.error("[init_db] ⚠️ USING SQLITE — ALL DATA WILL BE LOST ON NEXT DEPLOY. Set DATABASE_URL to PostgreSQL!")
 
     for attempt in range(5):
         try:
@@ -656,7 +656,7 @@ async def init_db():
                 logger.error(f"DB init failed after 5 attempts: {e}")
                 raise
 
-    # Run migrations â use IF NOT EXISTS for PostgreSQL, try/except for SQLite
+    # Run migrations — use IF NOT EXISTS for PostgreSQL, try/except for SQLite
     if _is_postgres:
         alter_statements = [
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE",
@@ -838,109 +838,109 @@ SEED_ITEMS = [
     # Volumes audited 2026-03-12. Calibrated against: 33-gal bag=0.15 CY, contractor bag=0.30 CY.
     # 1 CY = 46,656 cubic inches = 27 cubic feet.
     # Mattresses & bedding
-    ("king mattress", "furniture", 1.50, True, 25.0, "76Ã80Ã11 in"),
-    ("queen mattress", "furniture", 1.25, True, 25.0, "60Ã80Ã11 in"),
-    ("full mattress", "furniture", 1.00, True, 25.0, "54Ã75Ã11 in"),
-    ("twin mattress", "furniture", 0.75, True, 25.0, "38Ã75Ã11 in"),
-    ("box spring", "furniture", 1.00, True, 25.0, "60Ã80Ã9 in"),
+    ("king mattress", "furniture", 1.50, True, 25.0, "76×80×11 in"),
+    ("queen mattress", "furniture", 1.25, True, 25.0, "60×80×11 in"),
+    ("full mattress", "furniture", 1.00, True, 25.0, "54×75×11 in"),
+    ("twin mattress", "furniture", 0.75, True, 25.0, "38×75×11 in"),
+    ("box spring", "furniture", 1.00, True, 25.0, "60×80×9 in"),
     # Seating
-    ("large sectional sofa", "furniture", 5.50, False, 0, "120Ã90Ã36 in"),
-    ("sofa", "furniture", 2.00, False, 0, "84Ã36Ã34 in"),
-    ("loveseat", "furniture", 1.50, False, 0, "60Ã36Ã34 in"),
-    ("recliner", "furniture", 1.25, False, 0, "36Ã38Ã40 in"),
-    ("armchair", "furniture", 0.75, False, 0, "32Ã34Ã34 in"),
+    ("large sectional sofa", "furniture", 5.50, False, 0, "120×90×36 in"),
+    ("sofa", "furniture", 2.00, False, 0, "84×36×34 in"),
+    ("loveseat", "furniture", 1.50, False, 0, "60×36×34 in"),
+    ("recliner", "furniture", 1.25, False, 0, "36×38×40 in"),
+    ("armchair", "furniture", 0.75, False, 0, "32×34×34 in"),
     # Bed frames
-    ("king bed frame", "furniture", 1.50, False, 0, "80Ã76Ã14 in"),
-    ("queen bed frame", "furniture", 1.25, False, 0, "80Ã60Ã14 in"),
-    ("twin bed frame", "furniture", 0.75, False, 0, "75Ã38Ã14 in"),
+    ("king bed frame", "furniture", 1.50, False, 0, "80×76×14 in"),
+    ("queen bed frame", "furniture", 1.25, False, 0, "80×60×14 in"),
+    ("twin bed frame", "furniture", 0.75, False, 0, "75×38×14 in"),
     # Bedroom furniture
-    ("large dresser", "furniture", 1.25, False, 0, "60Ã18Ã34 in"),
-    ("small dresser", "furniture", 0.75, False, 0, "36Ã18Ã30 in"),
-    ("nightstand", "furniture", 0.25, False, 0, "24Ã16Ã26 in"),
+    ("large dresser", "furniture", 1.25, False, 0, "60×18×34 in"),
+    ("small dresser", "furniture", 0.75, False, 0, "36×18×30 in"),
+    ("nightstand", "furniture", 0.25, False, 0, "24×16×26 in"),
     # Tables
-    ("coffee table", "furniture", 0.50, False, 0, "48Ã24Ã18 in"),
-    ("dining table large", "furniture", 1.75, False, 0, "72Ã42Ã30 in"),
-    ("dining table small", "furniture", 0.75, False, 0, "48Ã30Ã30 in"),
-    ("dining chair", "furniture", 0.25, False, 0, "18Ã20Ã38 in"),
+    ("coffee table", "furniture", 0.50, False, 0, "48×24×18 in"),
+    ("dining table large", "furniture", 1.75, False, 0, "72×42×30 in"),
+    ("dining table small", "furniture", 0.75, False, 0, "48×30×30 in"),
+    ("dining chair", "furniture", 0.25, False, 0, "18×20×38 in"),
     # Workbenches & desks
-    ("large workbench", "furniture", 2.50, False, 0, "96Ã30Ã36 in"),
-    ("small workbench", "furniture", 1.25, False, 0, "60Ã24Ã34 in"),
-    ("bookshelf large", "furniture", 0.75, False, 0, "36Ã12Ã72 in"),
-    ("bookshelf small", "furniture", 0.35, False, 0, "30Ã10Ã48 in"),
-    ("desk large", "furniture", 1.25, False, 0, "60Ã30Ã30 in"),
-    ("desk small", "furniture", 0.75, False, 0, "42Ã24Ã30 in"),
+    ("large workbench", "furniture", 2.50, False, 0, "96×30×36 in"),
+    ("small workbench", "furniture", 1.25, False, 0, "60×24×34 in"),
+    ("bookshelf large", "furniture", 0.75, False, 0, "36×12×72 in"),
+    ("bookshelf small", "furniture", 0.35, False, 0, "30×10×48 in"),
+    ("desk large", "furniture", 1.25, False, 0, "60×30×30 in"),
+    ("desk small", "furniture", 0.75, False, 0, "42×24×30 in"),
     # Appliances
-    ("refrigerator large", "appliance", 2.00, True, 25.0, "36Ã30Ã70 in"),
-    ("refrigerator small", "appliance", 1.25, True, 25.0, "28Ã28Ã60 in"),
-    ("washing machine", "appliance", 1.00, True, 25.0, "27Ã27Ã38 in"),
-    ("dryer", "appliance", 1.00, False, 0, "27Ã29Ã38 in"),
-    ("dishwasher", "appliance", 0.75, False, 0, "24Ã24Ã35 in"),
-    ("stove", "appliance", 1.00, False, 0, "30Ã26Ã36 in"),
-    ("microwave large", "appliance", 0.25, False, 0, "24Ã18Ã14 in"),
-    ("microwave small", "appliance", 0.15, False, 0, "18Ã14Ã11 in"),
-    ("air conditioner window unit", "appliance", 0.35, True, 25.0, "24Ã20Ã16 in"),
-    ("dehumidifier", "appliance", 0.25, False, 0, "16Ã12Ã24 in"),
-    ("water heater", "appliance", 0.75, True, 25.0, "22Ã22Ã54 in"),
+    ("refrigerator large", "appliance", 2.00, True, 25.0, "36×30×70 in"),
+    ("refrigerator small", "appliance", 1.25, True, 25.0, "28×28×60 in"),
+    ("washing machine", "appliance", 1.00, True, 25.0, "27×27×38 in"),
+    ("dryer", "appliance", 1.00, False, 0, "27×29×38 in"),
+    ("dishwasher", "appliance", 0.75, False, 0, "24×24×35 in"),
+    ("stove", "appliance", 1.00, False, 0, "30×26×36 in"),
+    ("microwave large", "appliance", 0.25, False, 0, "24×18×14 in"),
+    ("microwave small", "appliance", 0.15, False, 0, "18×14×11 in"),
+    ("air conditioner window unit", "appliance", 0.35, True, 25.0, "24×20×16 in"),
+    ("dehumidifier", "appliance", 0.25, False, 0, "16×12×24 in"),
+    ("water heater", "appliance", 0.75, True, 25.0, "22×22×54 in"),
     # Electronics
-    ("large flat screen tv 55+", "electronics", 0.50, True, 25.0, "49Ã4Ã29 in"),
-    ("medium flat screen tv 32-54", "electronics", 0.35, True, 25.0, "37Ã3Ã22 in"),
-    ("small flat screen tv under 32", "electronics", 0.20, True, 25.0, "28Ã3Ã17 in"),
-    ("crt television", "electronics", 0.50, True, 25.0, "24Ã20Ã20 in"),
-    ("desktop computer tower", "electronics", 0.15, False, 0, "18Ã8Ã17 in"),
-    ("monitor", "electronics", 0.20, False, 0, "24Ã8Ã18 in"),
-    ("printer large", "electronics", 0.20, False, 0, "20Ã18Ã14 in"),
+    ("large flat screen tv 55+", "electronics", 0.50, True, 25.0, "49×4×29 in"),
+    ("medium flat screen tv 32-54", "electronics", 0.35, True, 25.0, "37×3×22 in"),
+    ("small flat screen tv under 32", "electronics", 0.20, True, 25.0, "28×3×17 in"),
+    ("crt television", "electronics", 0.50, True, 25.0, "24×20×20 in"),
+    ("desktop computer tower", "electronics", 0.15, False, 0, "18×8×17 in"),
+    ("monitor", "electronics", 0.20, False, 0, "24×8×18 in"),
+    ("printer large", "electronics", 0.20, False, 0, "20×18×14 in"),
     # Boxes & containers
-    ("large cardboard box", "debris", 0.15, False, 0, "24Ã18Ã18 in"),
-    ("medium cardboard box", "debris", 0.10, False, 0, "18Ã14Ã14 in"),
-    ("small cardboard box", "debris", 0.05, False, 0, "12Ã12Ã12 in"),
-    ("large plastic tote with lid", "debris", 0.20, False, 0, "30Ã20Ã16 in"),
-    ("small plastic tote", "debris", 0.10, False, 0, "22Ã16Ã12 in"),
-    # Trash bags (calibration anchors â used for scale reference)
-    ("contractor trash bag full", "debris", 0.30, False, 0, "24Ã24Ã30 in"),
-    ("standard trash bag full 33 gal", "debris", 0.15, False, 0, "22Ã20Ã26 in"),
-    ("small trash bag full", "debris", 0.10, False, 0, "18Ã18Ã24 in"),
+    ("large cardboard box", "debris", 0.15, False, 0, "24×18×18 in"),
+    ("medium cardboard box", "debris", 0.10, False, 0, "18×14×14 in"),
+    ("small cardboard box", "debris", 0.05, False, 0, "12×12×12 in"),
+    ("large plastic tote with lid", "debris", 0.20, False, 0, "30×20×16 in"),
+    ("small plastic tote", "debris", 0.10, False, 0, "22×16×12 in"),
+    # Trash bags (calibration anchors — used for scale reference)
+    ("contractor trash bag full", "debris", 0.30, False, 0, "24×24×30 in"),
+    ("standard trash bag full 33 gal", "debris", 0.15, False, 0, "22×20×26 in"),
+    ("small trash bag full", "debris", 0.10, False, 0, "18×18×24 in"),
     # Outdoor furniture
-    ("plastic outdoor chair", "outdoor", 0.25, False, 0, "22Ã24Ã34 in"),
-    ("metal outdoor chair", "outdoor", 0.35, False, 0, "22Ã24Ã34 in"),
-    ("outdoor dining set 4 chairs table", "outdoor", 2.50, False, 0, "48Ã48Ã30 in + 4 chairs"),
-    ("plastic outdoor table", "outdoor", 0.60, False, 0, "36Ã36Ã28 in"),
+    ("plastic outdoor chair", "outdoor", 0.25, False, 0, "22×24×34 in"),
+    ("metal outdoor chair", "outdoor", 0.35, False, 0, "22×24×34 in"),
+    ("outdoor dining set 4 chairs table", "outdoor", 2.50, False, 0, "48×48×30 in + 4 chairs"),
+    ("plastic outdoor table", "outdoor", 0.60, False, 0, "36×36×28 in"),
     # Outdoor equipment
-    ("riding lawn mower", "outdoor", 3.00, False, 0, "66Ã42Ã44 in"),
-    ("push lawn mower", "outdoor", 1.00, False, 0, "56Ã22Ã42 in"),
-    ("gas grill large", "outdoor", 1.25, False, 0, "56Ã22Ã44 in"),
-    ("gas grill small", "outdoor", 0.75, False, 0, "40Ã18Ã38 in"),
-    ("trampoline", "outdoor", 4.00, False, 0, "144 in diameter Ã 36 in tall"),
-    ("swing set", "outdoor", 6.00, False, 0, "144Ã96Ã84 in"),
-    ("hot tub", "outdoor", 6.00, False, 0, "84Ã84Ã36 in"),
-    ("above ground pool", "outdoor", 8.00, False, 0, "180 in diameter Ã 52 in tall"),
+    ("riding lawn mower", "outdoor", 3.00, False, 0, "66×42×44 in"),
+    ("push lawn mower", "outdoor", 1.00, False, 0, "56×22×42 in"),
+    ("gas grill large", "outdoor", 1.25, False, 0, "56×22×44 in"),
+    ("gas grill small", "outdoor", 0.75, False, 0, "40×18×38 in"),
+    ("trampoline", "outdoor", 4.00, False, 0, "144 in diameter × 36 in tall"),
+    ("swing set", "outdoor", 6.00, False, 0, "144×96×84 in"),
+    ("hot tub", "outdoor", 6.00, False, 0, "84×84×36 in"),
+    ("above ground pool", "outdoor", 8.00, False, 0, "180 in diameter × 52 in tall"),
     # Office
-    ("4 drawer file cabinet", "other", 0.75, False, 0, "15Ã25Ã52 in"),
-    ("2 drawer file cabinet", "other", 0.40, False, 0, "15Ã25Ã29 in"),
-    ("lateral file cabinet", "other", 0.75, False, 0, "36Ã18Ã28 in"),
+    ("4 drawer file cabinet", "other", 0.75, False, 0, "15×25×52 in"),
+    ("2 drawer file cabinet", "other", 0.40, False, 0, "15×25×29 in"),
+    ("lateral file cabinet", "other", 0.75, False, 0, "36×18×28 in"),
     # Exercise equipment
-    ("treadmill", "sports", 2.50, False, 0, "72Ã34Ã56 in"),
-    ("elliptical", "sports", 2.50, False, 0, "70Ã28Ã64 in"),
-    ("stationary bike", "sports", 1.00, False, 0, "42Ã22Ã48 in"),
-    ("weight bench", "sports", 1.25, False, 0, "56Ã26Ã46 in"),
-    ("weight set with rack", "sports", 2.00, False, 0, "48Ã24Ã52 in"),
-    ("ping pong table", "sports", 2.50, False, 0, "108Ã60Ã30 in"),
-    ("pool table", "sports", 5.00, False, 0, "100Ã56Ã32 in"),
+    ("treadmill", "sports", 2.50, False, 0, "72×34×56 in"),
+    ("elliptical", "sports", 2.50, False, 0, "70×28×64 in"),
+    ("stationary bike", "sports", 1.00, False, 0, "42×22×48 in"),
+    ("weight bench", "sports", 1.25, False, 0, "56×26×46 in"),
+    ("weight set with rack", "sports", 2.00, False, 0, "48×24×52 in"),
+    ("ping pong table", "sports", 2.50, False, 0, "108×60×30 in"),
+    ("pool table", "sports", 5.00, False, 0, "100×56×32 in"),
     # Medical
-    ("wheelchair", "medical", 0.50, False, 0, "26Ã16Ã36 in"),
-    ("hospital bed", "medical", 2.50, False, 0, "84Ã36Ã24 in"),
-    ("walker", "medical", 0.25, False, 0, "22Ã18Ã34 in"),
+    ("wheelchair", "medical", 0.50, False, 0, "26×16×36 in"),
+    ("hospital bed", "medical", 2.50, False, 0, "84×36×24 in"),
+    ("walker", "medical", 0.25, False, 0, "22×18×34 in"),
     # Hazardous
-    ("propane tank large", "hazardous", 0.25, True, 50.0, "12Ã12Ã48 in"),
-    ("propane tank small", "hazardous", 0.10, True, 25.0, "12Ã12Ã18 in"),
-    ("paint cans box", "hazardous", 0.15, True, 25.0, "18Ã12Ã12 in"),
-    ("car battery", "hazardous", 0.10, True, 15.0, "10Ã7Ã8 in"),
-    ("tire car", "hazardous", 0.25, True, 15.0, "26 in diameter Ã 8 in wide"),
-    ("tire truck", "hazardous", 0.35, True, 25.0, "34 in diameter Ã 12 in wide"),
+    ("propane tank large", "hazardous", 0.25, True, 50.0, "12×12×48 in"),
+    ("propane tank small", "hazardous", 0.10, True, 25.0, "12×12×18 in"),
+    ("paint cans box", "hazardous", 0.15, True, 25.0, "18×12×12 in"),
+    ("car battery", "hazardous", 0.10, True, 15.0, "10×7×8 in"),
+    ("tire car", "hazardous", 0.25, True, 15.0, "26 in diameter × 8 in wide"),
+    ("tire truck", "hazardous", 0.35, True, 25.0, "34 in diameter × 12 in wide"),
     # Construction debris
-    ("lumber pile small", "debris", 0.75, False, 0, "48Ã24Ã24 in"),
-    ("lumber pile large", "debris", 1.75, False, 0, "96Ã24Ã36 in"),
-    ("drywall sheets", "debris", 0.15, False, 0, "96Ã48Ã0.5 in per sheet"),
-    ("carpet room", "debris", 1.25, False, 0, "rolled: 12 ft Ã 18 in diameter"),
+    ("lumber pile small", "debris", 0.75, False, 0, "48×24×24 in"),
+    ("lumber pile large", "debris", 1.75, False, 0, "96×24×36 in"),
+    ("drywall sheets", "debris", 0.15, False, 0, "96×48×0.5 in per sheet"),
+    ("carpet room", "debris", 1.25, False, 0, "rolled: 12 ft × 18 in diameter"),
 ]
 
 
@@ -1041,7 +1041,7 @@ def _validate_pack_key(raw: str) -> str:
     if not _PACK_KEY_RE.match(key):
         raise HTTPException(
             status_code=400,
-            detail="pack_key must be 1â63 chars: lowercase letters, digits, underscores only; must start with letter or digit.",
+            detail="pack_key must be 1–63 chars: lowercase letters, digits, underscores only; must start with letter or digit.",
         )
     return key
 
@@ -1172,13 +1172,13 @@ async def seed_site_config():
         if result.scalar_one_or_none():
             updates = {
                 "hero_subtitle": "AI-Assisted Estimates.",
-                "hero_description": "Upload customer photos. Get an AI-assisted price range with cubic yard estimates. Close more jobs â without the guesswork.",
+                "hero_description": "Upload customer photos. Get an AI-assisted price range with cubic yard estimates. Close more jobs — without the guesswork.",
                 "feature_1_title": "Photo-Based Estimates",
                 "feature_1_desc": "No site visit needed. Upload up to 6 photos and let the AI do the heavy lifting. Works with any phone camera.",
                 "feature_2_title": "AI-Assisted Pricing",
-                "feature_2_desc": "Purpose-built for junk removal â not generic object detection. The AI uses a reference library of 86+ items with real dimensions to estimate volume.",
+                "feature_2_desc": "Purpose-built for junk removal — not generic object detection. The AI uses a reference library of 86+ items with real dimensions to estimate volume.",
                 "feature_3_title": "Premium Detection",
-                "feature_3_desc": "Automatically flags hoarder situations, heavy items, stairs, and outdoor piles â and switches to premium pricing rates.",
+                "feature_3_desc": "Automatically flags hoarder situations, heavy items, stairs, and outdoor piles — and switches to premium pricing rates.",
             }
             for k, v in updates.items():
                 row = await db.execute(select(SiteConfig).where(SiteConfig.config_key == k))
@@ -1192,15 +1192,15 @@ async def seed_site_config():
         defaults = {
             "hero_title": "Junk Removal Pricing.",
             "hero_subtitle": "AI-Assisted Estimates.",
-            "hero_description": "Upload customer photos. Get an AI-assisted price range with cubic yard estimates. Close more jobs â without the guesswork.",
-            "cta_primary": "Try It Free â",
+            "hero_description": "Upload customer photos. Get an AI-assisted price range with cubic yard estimates. Close more jobs — without the guesswork.",
+            "cta_primary": "Try It Free →",
             "cta_secondary": "See How It Works",
             "feature_1_title": "Photo-Based Estimates",
             "feature_1_desc": "No site visit needed. Upload up to 6 photos and let the AI do the heavy lifting. Works with any phone camera.",
             "feature_2_title": "AI-Assisted Pricing",
-            "feature_2_desc": "Purpose-built for junk removal â not generic object detection. The AI uses a reference library of 86+ items with real dimensions to estimate volume.",
+            "feature_2_desc": "Purpose-built for junk removal — not generic object detection. The AI uses a reference library of 86+ items with real dimensions to estimate volume.",
             "feature_3_title": "Premium Detection",
-            "feature_3_desc": "Automatically flags hoarder situations, heavy items, stairs, and outdoor piles â and switches to premium pricing rates.",
+            "feature_3_desc": "Automatically flags hoarder situations, heavy items, stairs, and outdoor piles — and switches to premium pricing rates.",
             "faq_1_q": "How accurate are the estimates?",
             "faq_1_a": "Our AI-assisted estimates give you a solid starting point for pricing conversations. Accuracy improves with more photos from different angles.",
             "faq_2_q": "What types of junk can it estimate?",
@@ -1317,7 +1317,7 @@ def send_email(to_email: str, subject: str, html_content: str):
     api_key = os.environ.get("SENDGRID_API_KEY")
     from_email = os.environ.get("SENDGRID_FROM_EMAIL", "noreply@whatshouldicharge.app")
     if not api_key:
-        logger.error("[send_email] SENDGRID_API_KEY not set â email not sent")
+        logger.error("[send_email] SENDGRID_API_KEY not set — email not sent")
         return False
     try:
         from sendgrid import SendGridAPIClient
@@ -1342,7 +1342,7 @@ def send_email(to_email: str, subject: str, html_content: str):
 
 @app.get("/api/health")
 async def health_check():
-    """Minimal health check for load balancers â no DB URLs, counts, or env metadata."""
+    """Minimal health check for load balancers — no DB URLs, counts, or env metadata."""
     try:
         async with AsyncSessionLocal() as db:
             await db.execute(text("SELECT 1"))
@@ -1513,7 +1513,7 @@ async def payment_success_page():
 
 @app.get("/estimate/{slug}", response_class=HTMLResponse)
 async def customer_estimate_page(slug: str):
-    """Public customer-facing estimate page â server-side rendered for SEO."""
+    """Public customer-facing estimate page — server-side rendered for SEO."""
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.company_slug == slug.lower().strip()))
         u = result.scalar_one_or_none()
@@ -1546,15 +1546,15 @@ async def customer_estimate_page(slug: str):
     faq_items = [
         (
             f"How much does junk removal cost in {city or 'my area'}?",
-            f"Junk removal pricing{loc_phrase} typically ranges from $75 for a minimum load to $500 or more for a full truckload. The exact cost depends on the volume of items, the type of materials being removed, and whether any items require special handling such as appliances with refrigerants or electronics that need proper recycling. {name} uses an AI-powered photo estimate system that calculates your specific price based on the actual items in your photos â so you get a personalized quote, not a generic range. Most single-item pickups like a couch or mattress fall between $75 and $150, while full garage cleanouts or estate cleanouts can range from $1,000 to $3,000+ depending on volume."
+            f"Junk removal pricing{loc_phrase} typically ranges from $75 for a minimum load to $500 or more for a full truckload. The exact cost depends on the volume of items, the type of materials being removed, and whether any items require special handling such as appliances with refrigerants or electronics that need proper recycling. {name} uses an AI-powered photo estimate system that calculates your specific price based on the actual items in your photos — so you get a personalized quote, not a generic range. Most single-item pickups like a couch or mattress fall between $75 and $150, while full garage cleanouts or estate cleanouts can range from $1,000 to $3,000+ depending on volume."
         ),
         (
             f"What is the cheapest way to get rid of junk in {city or 'my area'}?",
-            f"The most affordable option depends on what you're removing and how much of it there is. For small amounts, you could haul items to the local transfer station yourself, but you'll need a truck, pay dump fees, and spend your own time loading and driving. For larger jobs, hiring a professional junk removal service like {name} is often more cost-effective when you factor in your time, vehicle rental, and disposal fees. {name} offers a free photo-based estimate so you can see the exact cost before committing â no surprises. We also handle the sorting, loading, hauling, and responsible disposal so you don't have to."
+            f"The most affordable option depends on what you're removing and how much of it there is. For small amounts, you could haul items to the local transfer station yourself, but you'll need a truck, pay dump fees, and spend your own time loading and driving. For larger jobs, hiring a professional junk removal service like {name} is often more cost-effective when you factor in your time, vehicle rental, and disposal fees. {name} offers a free photo-based estimate so you can see the exact cost before committing — no surprises. We also handle the sorting, loading, hauling, and responsible disposal so you don't have to."
         ),
         (
             f"Does {name} offer same-day junk removal?",
-            f"Yes, {name} offers same-day and next-day junk removal{loc_phrase} based on availability. For the fastest service, {contact_phrase} directly after getting your photo estimate. We understand that junk removal is often time-sensitive â whether you're preparing for a move, finishing a renovation, or just need items gone quickly. Our photo estimate tool gives you a price in under 60 seconds so you can make a decision and book immediately."
+            f"Yes, {name} offers same-day and next-day junk removal{loc_phrase} based on availability. For the fastest service, {contact_phrase} directly after getting your photo estimate. We understand that junk removal is often time-sensitive — whether you're preparing for a move, finishing a renovation, or just need items gone quickly. Our photo estimate tool gives you a price in under 60 seconds so you can make a decision and book immediately."
         ),
         (
             "What items can't be removed?",
@@ -1562,19 +1562,19 @@ async def customer_estimate_page(slug: str):
         ),
         (
             f"How does {name}'s photo estimate work?",
-            f"Our AI-powered photo estimate system uses advanced image recognition to identify every item in your photos, calculate the total volume in cubic yards, and generate an accurate price range â all in under 60 seconds. Here's how it works: you upload one or more photos of the items you need removed. Our AI identifies each item (furniture, appliances, boxes, debris, etc.), measures the approximate dimensions using reference objects in the photo for scale, and calculates the total truck space required. The system then applies {name}'s pricing rates to give you a low-to-high price range. This estimate is based on the same volume-based pricing that professional junk removal companies use industry-wide."
+            f"Our AI-powered photo estimate system uses advanced image recognition to identify every item in your photos, calculate the total volume in cubic yards, and generate an accurate price range — all in under 60 seconds. Here's how it works: you upload one or more photos of the items you need removed. Our AI identifies each item (furniture, appliances, boxes, debris, etc.), measures the approximate dimensions using reference objects in the photo for scale, and calculates the total truck space required. The system then applies {name}'s pricing rates to give you a low-to-high price range. This estimate is based on the same volume-based pricing that professional junk removal companies use industry-wide."
         ),
         (
             f"Is there a minimum charge for junk removal{loc_phrase}?",
-            f"Yes, {name} has a minimum charge that covers the base cost of dispatching a truck and crew to your location. This minimum typically applies to very small jobs â a single item or a few bags of junk. The minimum charge covers labor, fuel, truck operation, and disposal fees. Even for minimum-charge jobs, we handle all the lifting, loading, and hauling. Your photo estimate will automatically show if the minimum charge applies and what the exact amount is, so you'll know the cost before you book."
+            f"Yes, {name} has a minimum charge that covers the base cost of dispatching a truck and crew to your location. This minimum typically applies to very small jobs — a single item or a few bags of junk. The minimum charge covers labor, fuel, truck operation, and disposal fees. Even for minimum-charge jobs, we handle all the lifting, loading, and hauling. Your photo estimate will automatically show if the minimum charge applies and what the exact amount is, so you'll know the cost before you book."
         ),
         (
             f"Does {name} donate or recycle items?",
-            f"{name} is committed to responsible disposal. Whenever possible, we divert items from landfills by donating usable furniture, clothing, and household goods to local charities and thrift stores{loc_phrase}. Recyclable materials like metal, cardboard, electronics, and appliances are taken to appropriate recycling facilities. Construction debris is sorted for recycling where available. Our goal is to recycle or donate as much as possible from every job. Responsible disposal is not just good for the environment â it's the right thing to do for our community."
+            f"{name} is committed to responsible disposal. Whenever possible, we divert items from landfills by donating usable furniture, clothing, and household goods to local charities and thrift stores{loc_phrase}. Recyclable materials like metal, cardboard, electronics, and appliances are taken to appropriate recycling facilities. Construction debris is sorted for recycling where available. Our goal is to recycle or donate as much as possible from every job. Responsible disposal is not just good for the environment — it's the right thing to do for our community."
         ),
         (
             f"How do I schedule a junk removal pickup{loc_phrase}?",
-            f"Scheduling is simple. Start by uploading photos of your items on this page to get a free instant estimate. Once you see your price range and decide to move forward, {contact_phrase} to book your pickup. We offer flexible scheduling including weekday, evening, and weekend availability{loc_phrase}. On the day of your appointment, our crew will arrive at the scheduled time, confirm the items and pricing with you on-site, then handle all the loading and hauling. You don't need to move anything â just point to what needs to go and we take care of the rest."
+            f"Scheduling is simple. Start by uploading photos of your items on this page to get a free instant estimate. Once you see your price range and decide to move forward, {contact_phrase} to book your pickup. We offer flexible scheduling including weekday, evening, and weekend availability{loc_phrase}. On the day of your appointment, our crew will arrive at the scheduled time, confirm the items and pricing with you on-site, then handle all the loading and hauling. You don't need to move anything — just point to what needs to go and we take care of the rest."
         ),
     ]
 
@@ -1610,7 +1610,7 @@ async def customer_estimate_page(slug: str):
 
     logo_html = f'<img src="{logo}" alt="{name}" class="logo">' if logo else ""
     phone_header = f'<div class="phone"><a href="tel:{phone}">{phone}</a></div>' if phone else ""
-    phone_cta = f'<a href="tel:{phone}" class="btn btn-outline">{phone} â Call Now</a>' if phone else ""
+    phone_cta = f'<a href="tel:{phone}" class="btn btn-outline">{phone} — Call Now</a>' if phone else ""
 
     faq_html = ""
     for q, a in faq_items:
@@ -1869,7 +1869,7 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
       <button class="btn" id="continue-btn" onclick="verifyAndContinue()">Continue to Estimate</button>
       <div style="font-size:0.72rem;color:#94a3b8;text-align:center;margin-top:14px;line-height:1.6">By continuing, you agree to the <a href="/terms" target="_blank" style="color:#94a3b8;text-decoration:underline">Terms of Service</a> and <a href="/privacy" target="_blank" style="color:#94a3b8;text-decoration:underline">Privacy Policy</a>.<br>Estimates are AI-generated approximations and not binding quotes.</div>
     </div>
-    <div style="text-align:center;padding:12px;font-size:0.72rem;color:#cbd5e1;line-height:1.5;margin-top:4px">This tool is currently in <strong>beta</strong>. Estimates may contain errors. {name} is not liable for differences between estimated and actual pricing. This estimate covers items shown in your photos only â additional items will be priced at standard rates. Recycling fees apply to freon-containing appliances, tires, TVs, and some electronics. Final pricing is confirmed on-site.</div>
+    <div style="text-align:center;padding:12px;font-size:0.72rem;color:#cbd5e1;line-height:1.5;margin-top:4px">This tool is currently in <strong>beta</strong>. Estimates may contain errors. {name} is not liable for differences between estimated and actual pricing. This estimate covers items shown in your photos only — additional items will be priced at standard rates. Recycling fees apply to freon-containing appliances, tires, TVs, and some electronics. Final pricing is confirmed on-site.</div>
   </div>
 
   <!-- Step 2: Upload Section (hidden until verified) -->
@@ -1877,12 +1877,12 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
     <div class="card">
       <div class="card-title">Upload Photos of Items for Removal</div>
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:0.82rem;color:#166534;line-height:1.5;">
-        <strong>Tip:</strong> Take photos of the area â our AI will identify all items. After the estimate, you can uncheck anything you're keeping and add items that weren't in the photos.
+        <strong>Tip:</strong> Take photos of the area — our AI will identify all items. After the estimate, you can uncheck anything you're keeping and add items that weren't in the photos.
       </div>
       <div class="drop-zone" id="drop-zone">
         <div class="drop-zone-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
         <div class="drop-label">Tap to upload or drag photos here</div>
-        <div class="drop-sub">Up to 10 photos â JPG, PNG, WEBP</div>
+        <div class="drop-sub">Up to 10 photos — JPG, PNG, WEBP</div>
       </div>
       <input type="file" id="file-input" accept="image/*" multiple style="display:none">
       <div class="previews" id="previews"></div>
@@ -1943,7 +1943,7 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
 
     <div class="cta-section" id="cta-section">
       <div class="subtext">Ready to schedule your pickup?</div>
-      {f"""<a href="tel:{phone}" class="btn btn-call"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>Schedule an Appointment â {phone}</a>""" if phone else ''}
+      {f"""<a href="tel:{phone}" class="btn btn-call"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>Schedule an Appointment — {phone}</a>""" if phone else ''}
     </div>
     <div style="font-size:0.75rem;color:#94a3b8;text-align:center;padding:12px;line-height:1.5;border-top:1px solid #f1f5f9;margin-top:8px">This estimate covers only the items visible in your uploaded photos. Any additional items not shown in the photos will be priced at our standard rates upon arrival. Recycling fees apply to items containing freon (refrigerators, freezers, AC units), tires, TVs, and certain electronics. This estimate is AI-generated and approximate only. Actual pricing may vary based on item weight, accessibility, and on-site conditions. This is not a binding quote. See <a href="/terms" target="_blank" style="color:#94a3b8;text-decoration:underline">Terms of Service</a> and <a href="/privacy" target="_blank" style="color:#94a3b8;text-decoration:underline">Privacy Policy</a>.</div>
   </div>
@@ -1952,31 +1952,31 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
 
   <!-- Quick Facts (LLM-optimized structured data for quick answers) -->
   <section class="quick-facts" aria-label="Quick Facts">
-    <h2><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>Quick Facts â {name}</h2>
+    <h2><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>Quick Facts — {name}</h2>
     <dl>
       <dt>Business</dt><dd>{name}</dd>
       {f'<dt>Location</dt><dd>{location}</dd>' if location else ''}
       {f'<dt>Phone</dt><dd><a href="tel:{phone}" style="color:#16a34a;text-decoration:none">{phone}</a></dd>' if phone else ''}
       <dt>Service</dt><dd>Junk Removal &amp; Hauling</dd>
-      <dt>Estimate</dt><dd>Free â AI photo analysis in 60 seconds</dd>
+      <dt>Estimate</dt><dd>Free — AI photo analysis in 60 seconds</dd>
       <dt>Items Accepted</dt><dd>Furniture, appliances, electronics, mattresses, yard waste, construction debris, and more</dd>
-      <dt>Pricing</dt><dd>Volume-based â get your exact price from photos</dd>
+      <dt>Pricing</dt><dd>Volume-based — get your exact price from photos</dd>
     </dl>
   </section>
 
   <!-- About Section -->
   <section class="content-section">
     <h2>About {name}</h2>
-    <p>{name} is a professional junk removal service{f' based in {location}' if location else ''} dedicated to making cleanouts fast, affordable, and stress-free for homeowners and businesses. We specialize in residential and commercial junk removal â from single-item pickups to full property cleanouts, estate cleanouts, and post-renovation debris removal.</p>
-    <p>What sets {name} apart is our technology-first approach to pricing. Instead of vague phone quotes, we use AI-powered photo analysis to identify exactly what you need removed, measure the volume, and calculate a fair price â all before we arrive. This means no surprises on pickup day, no hidden fees, and no haggling. You see the price upfront and decide on your terms.</p>
-    <p>{f'{name} proudly serves {city} and the surrounding {state} communities' if city and state else f'{name} serves local homes and businesses'}, handling everything from routine furniture removal to complex cleanout projects. Whether you{"'" + "re moving out of a home in " + city + ", renovating a space" if city else "'re moving, renovating"}, or finally clearing out that garage â we make it easy.</p>
+    <p>{name} is a professional junk removal service{f' based in {location}' if location else ''} dedicated to making cleanouts fast, affordable, and stress-free for homeowners and businesses. We specialize in residential and commercial junk removal — from single-item pickups to full property cleanouts, estate cleanouts, and post-renovation debris removal.</p>
+    <p>What sets {name} apart is our technology-first approach to pricing. Instead of vague phone quotes, we use AI-powered photo analysis to identify exactly what you need removed, measure the volume, and calculate a fair price — all before we arrive. This means no surprises on pickup day, no hidden fees, and no haggling. You see the price upfront and decide on your terms.</p>
+    <p>{f'{name} proudly serves {city} and the surrounding {state} communities' if city and state else f'{name} serves local homes and businesses'}, handling everything from routine furniture removal to complex cleanout projects. Whether you{"'" + "re moving out of a home in " + city + ", renovating a space" if city else "'re moving, renovating"}, or finally clearing out that garage — we make it easy.</p>
   </section>
 
   <!-- What We Remove Section -->
   <section class="content-section">
     <h2>What We Remove{f' in {city}' if city else ''}</h2>
-    <p>{name} removes a wide range of household, commercial, and outdoor items. Common items include couches, recliners, dining tables, desks, dressers, bed frames, and mattresses of all sizes â twin, full, queen, and king. We also haul away large appliances including refrigerators, washing machines, dryers, dishwashers, stoves, water heaters, and window AC units.</p>
-    <p>For electronics, we handle TVs, monitors, computers, printers, and other e-waste that requires proper recycling. Outdoor and yard items include patio furniture, grills, swing sets, fencing, lumber, branches, and bagged yard waste. We also take on heavier items like hot tubs, pianos, pool tables, exercise equipment, and safes â items that most haulers won't touch.</p>
+    <p>{name} removes a wide range of household, commercial, and outdoor items. Common items include couches, recliners, dining tables, desks, dressers, bed frames, and mattresses of all sizes — twin, full, queen, and king. We also haul away large appliances including refrigerators, washing machines, dryers, dishwashers, stoves, water heaters, and window AC units.</p>
+    <p>For electronics, we handle TVs, monitors, computers, printers, and other e-waste that requires proper recycling. Outdoor and yard items include patio furniture, grills, swing sets, fencing, lumber, branches, and bagged yard waste. We also take on heavier items like hot tubs, pianos, pool tables, exercise equipment, and safes — items that most haulers won't touch.</p>
     <p>Construction and renovation debris is another specialty: drywall, flooring, tile, cabinets, carpet, roofing materials, and general contractor debris. For estate cleanouts and hoarding situations, {name} can handle large-volume jobs that require multiple truck loads. If you're unsure whether we can take something, upload a photo and our AI will identify it instantly.</p>
   </section>
 
@@ -1984,20 +1984,20 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
   <section class="content-section">
     <h2>How Our Pricing Works</h2>
     <p>{name} uses volume-based pricing, which is the industry standard for junk removal. The cost is determined by how much space your items take up in the truck, measured in cubic yards. A single piece of furniture like a couch takes about 2 cubic yards, while a full garage cleanout might be 10 to 15 cubic yards.</p>
-    <p>Our AI photo estimate calculates the exact volume by identifying each item in your photos and measuring its dimensions using reference objects in the scene for scale. The system then applies per-cubic-yard pricing rates to generate a low-to-high price range. Factors that can affect your final price include total volume, the presence of heavy items (concrete, dirt, large appliances), items that require special disposal (refrigerators, TVs, mattresses), and accessibility â whether items are at ground level or require stair carries.</p>
+    <p>Our AI photo estimate calculates the exact volume by identifying each item in your photos and measuring its dimensions using reference objects in the scene for scale. The system then applies per-cubic-yard pricing rates to generate a low-to-high price range. Factors that can affect your final price include total volume, the presence of heavy items (concrete, dirt, large appliances), items that require special disposal (refrigerators, TVs, mattresses), and accessibility — whether items are at ground level or require stair carries.</p>
     <p>There are no hidden fees with {name}. The estimate you receive is based on the same pricing our crew uses on-site. If the actual volume on pickup day differs from the photos, the crew will confirm the adjusted price before starting work. Most estimates are within 10-15% of the final price.</p>
   </section>
 
   <!-- Service Area Section -->
   {f"""<section class="content-section">
-    <h2>Junk Removal Service Area â {location}</h2>
+    <h2>Junk Removal Service Area — {location}</h2>
     <p>{name} provides junk removal services throughout {city}, {state} and the surrounding area. We serve residential neighborhoods, commercial districts, apartment complexes, and construction sites across the {city} metro area. Whether you're in downtown {city} or the surrounding suburbs, our team can reach you for same-day or next-day pickup.</p>
     <p>If you're located near {city} but outside the immediate area, {contact_phrase} to confirm service availability. We accommodate most locations within a reasonable driving distance and can often provide same-week scheduling for areas just outside our primary service zone.</p>
   </section>""" if city and state else ""}
 
   <!-- FAQ Section -->
   <section class="faq-section">
-    <h2>Junk Removal FAQ{f' â {city}, {state}' if city and state else ''}</h2>
+    <h2>Junk Removal FAQ{f' — {city}, {state}' if city and state else ''}</h2>
     {faq_html}
   </section>
 
@@ -2159,7 +2159,7 @@ function recalcPrice(){{
   var minCharge=lastResult.min_charge||75;
   var newLow=Math.max(minCharge,Math.round(totalCY*rateLow));
   var newHigh=Math.max(minCharge,Math.round(totalCY*rateHigh));
-  document.getElementById('res-price').textContent='$'+newLow.toLocaleString()+' â $'+newHigh.toLocaleString();
+  document.getElementById('res-price').textContent='$'+newLow.toLocaleString()+' — $'+newHigh.toLocaleString();
   document.getElementById('res-cy').textContent=totalCY+' cubic yards estimated';
 }}
 
@@ -2169,7 +2169,7 @@ function showResults(r){{
   el.style.display='block';
   el.classList.add('show');
   var pL=r.price_low||0,pH=r.price_high||0;
-  document.getElementById('res-price').textContent='$'+pL.toLocaleString()+' â $'+pH.toLocaleString();
+  document.getElementById('res-price').textContent='$'+pL.toLocaleString()+' — $'+pH.toLocaleString();
   if(r.min_charge_applied){{var m=document.getElementById('min-charge-msg');m.textContent='Minimum charge applied';m.style.display='block'}}
   document.getElementById('res-cy').textContent=(r.cy_estimate||0)+' cubic yards estimated';
   var bl={{standard:'Standard Load',premium:'Premium Items',hoarder:'Heavy Cleanout',truck_load:'Full Truck'}};
@@ -2218,7 +2218,7 @@ if(window.parent!==window){{
     return HTMLResponse(content=page_html)
 
 
-# ââ Email Verification for Customer Estimates ââââââââââââââââââââââââââââââ
+# ── Email Verification for Customer Estimates ──────────────────────────────
 # In-memory store for verification codes (keyed by email, TTL 10 minutes)
 _verify_codes: dict[str, dict] = {}
 
@@ -2285,7 +2285,7 @@ async def public_verify_check(request: Request):
     if stored["code"] != code:
         raise HTTPException(status_code=400, detail="Invalid code. Please try again.")
 
-    # Code is valid â generate a short-lived token
+    # Code is valid — generate a short-lived token
     del _verify_codes[email]
     token = secrets.token_urlsafe(32)
     # Store token with 30-minute expiry
@@ -2295,7 +2295,7 @@ async def public_verify_check(request: Request):
 
 @app.get("/api/public/company/{slug}")
 async def public_company_info(slug: str):
-    """Public endpoint â returns company branding info, no auth required."""
+    """Public endpoint — returns company branding info, no auth required."""
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.company_slug == slug.lower().strip()))
         u = result.scalar_one_or_none()
@@ -2324,7 +2324,7 @@ def validate_magic_bytes(raw: bytes, content_type: str) -> bool:
     """Check actual file header bytes match declared MIME type."""
     signatures = MAGIC_BYTES.get(content_type)
     if not signatures:
-        return True  # HEIC/HEIF â no simple magic byte check, allow through
+        return True  # HEIC/HEIF — no simple magic byte check, allow through
     return any(raw[:len(sig)] == sig for sig in signatures)
 
 
@@ -2340,7 +2340,7 @@ async def public_create_estimate(
     customer_phone: str = Form(default=""),
     preferred_contact: str = Form(default="phone"),
 ):
-    """Public estimate endpoint â customer submits photos, charges against company's estimate count."""
+    """Public estimate endpoint — customer submits photos, charges against company's estimate count."""
     cleanup_expired_jobs()
     check_concurrent_limit()
 
@@ -2426,7 +2426,7 @@ async def public_create_estimate(
         if len(group_photos) > 1:
             image_content.append({
                 "type": "text",
-                "text": f"\n--- ROOM: {room} ({len(group_photos)} photos â SAME space, different angles. Do NOT double-count.) ---"
+                "text": f"\n--- ROOM: {room} ({len(group_photos)} photos — SAME space, different angles. Do NOT double-count.) ---"
             })
         for pd in group_photos:
             label = f"Photo {pd['index']} (Room: {room})"
@@ -2473,7 +2473,7 @@ async def public_create_estimate(
 @app.get("/api/public/estimate/status/{job_id}")
 @limiter.limit("120/minute")
 async def public_estimate_status(request: Request, job_id: str):
-    """Public status check â no auth, but limited response."""
+    """Public status check — no auth, but limited response."""
     job = estimate_jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found or expired")
@@ -2573,7 +2573,7 @@ async def auth_signup(request: Request):
         f"<h2>Welcome, {company_name or 'there'}!</h2>"
         "<p>You have <strong>3 free estimates</strong> to try out the platform.</p>"
         "<p>Upload customer photos and get AI-assisted pricing in seconds.</p>"
-        "<p>â The WhatShouldICharge Team</p>"
+        "<p>— The WhatShouldICharge Team</p>"
     )
 
     # Send to settings first if pricing not set during signup
@@ -2658,7 +2658,7 @@ async def auth_forgot_password(request: Request):
         f"<div style='background:#f4f4f4;padding:16px;border-radius:8px;font-family:monospace;font-size:18px;margin:16px 0;text-align:center;'>{new_password}</div>"
         f"<p>Please log in with this password. We recommend changing it after logging in.</p>"
         f"<p>If you did not request this reset, please contact support immediately.</p>"
-        f"<p>â The WhatShouldICharge Team</p>"
+        f"<p>— The WhatShouldICharge Team</p>"
     )
 
     return JSONResponse({"success": True, "message": "If an account with that email exists, a new password has been sent."})
@@ -2868,7 +2868,7 @@ async def update_settings(request: Request):
 
 @app.post("/api/settings/check-market-rates")
 async def check_market_rates(request: Request):
-    """On-demand market rate lookup via Tavily â not used in estimates."""
+    """On-demand market rate lookup via Tavily — not used in estimates."""
     user = await require_user(request)
     rates = await get_market_rates(user.company_city, user.company_state)
     return rates
@@ -3239,27 +3239,27 @@ SYSTEM_PROMPT_BASE = get_system_prompt("junk_removal")
 
 
 
-# Items with standardized/manufactured dimensions â reliable calibration anchors.
+# Items with standardized/manufactured dimensions — reliable calibration anchors.
 # Variable items (furniture, tables, etc.) are measured from the photo instead.
 FIXED_REFERENCE_ITEMS = {
-    # Trash bags â exact standard sizes
+    # Trash bags — exact standard sizes
     "contractor trash bag full", "standard trash bag full 33 gal", "small trash bag full",
-    # Boxes & containers â standard moving/storage sizes
+    # Boxes & containers — standard moving/storage sizes
     "large cardboard box", "medium cardboard box", "small cardboard box",
     "large plastic tote with lid", "small plastic tote",
-    # Appliances â manufactured to published specs
+    # Appliances — manufactured to published specs
     "refrigerator large", "refrigerator small", "washing machine", "dryer",
     "dishwasher", "stove", "microwave large", "microwave small",
     "air conditioner window unit", "dehumidifier", "water heater",
-    # Mattresses â industry standard sizes
+    # Mattresses — industry standard sizes
     "king mattress", "queen mattress", "full mattress", "twin mattress", "box spring",
-    # Electronics â manufactured sizes
+    # Electronics — manufactured sizes
     "large flat screen tv 55+", "medium flat screen tv 32-54", "small flat screen tv under 32",
     "crt television", "desktop computer tower", "monitor", "printer large",
-    # Hazardous â standard sizes
+    # Hazardous — standard sizes
     "propane tank large", "propane tank small", "car battery",
     "tire car", "tire truck", "paint cans box",
-    # Office â standard sizes
+    # Office — standard sizes
     "4 drawer file cabinet", "2 drawer file cabinet", "lateral file cabinet",
 }
 
@@ -3293,7 +3293,7 @@ async def get_library_context() -> str:
     lines = [
         "\nITEM REFERENCE LIBRARY:",
         "",
-        "=== FIXED REFERENCE ITEMS (use as calibration anchors â dimensions are exact) ===",
+        "=== FIXED REFERENCE ITEMS (use as calibration anchors — dimensions are exact) ===",
         "These items have standardized sizes. When you spot one in a photo, you know its",
         "exact real-world dimensions. Use the CY value directly and use the dimensions",
         "to calibrate the scale of nearby items.",
@@ -3301,7 +3301,7 @@ async def get_library_context() -> str:
     ]
     lines.extend(fixed_lines)
     lines.append("")
-    lines.append("=== VARIABLE ITEMS (measure from photo â sizes vary widely) ===")
+    lines.append("=== VARIABLE ITEMS (measure from photo — sizes vary widely) ===")
     lines.append("These items come in many sizes. The CY listed is only a rough average.")
     lines.append("Do NOT use the default CY. Instead, measure actual dimensions from the")
     lines.append("photo using nearby fixed anchors, then calculate CY from those measurements.")
@@ -3311,7 +3311,7 @@ async def get_library_context() -> str:
     return "\n".join(lines)
 
 
-# Anthropic $/million tokens â baseline for admin cost tracking (published rates, Mar 2026).
+# Anthropic $/million tokens — baseline for admin cost tracking (published rates, Mar 2026).
 ANTHROPIC_PRICING_PER_MILLION = {
     "claude-sonnet-4-20250514": (3.0, 15.0),
     "claude-sonnet-4-6-20250311": (3.0, 15.0),
@@ -3591,7 +3591,7 @@ async def create_estimate(
         if len(group_photos) > 1:
             image_content.append({
                 "type": "text",
-                "text": f"\n--- ROOM: {room} ({len(group_photos)} photos â these show DIFFERENT ANGLES of the SAME space. DO NOT double-count items visible in multiple photos.) ---"
+                "text": f"\n--- ROOM: {room} ({len(group_photos)} photos — these show DIFFERENT ANGLES of the SAME space. DO NOT double-count items visible in multiple photos.) ---"
             })
         for pd in group_photos:
             label = f"Photo {pd['index']} (Room: {room})"
@@ -3846,9 +3846,9 @@ async def run_estimate(
             ]
             cy_mid = round(cy_mid, 1)
             market_context = {"source": "custom_company_rate", "rate": rate, "is_heavy": is_heavy}
-            logger.info(f"[run_estimate] Job {job_id}: custom rate ${rate}/CY ({'heavy' if is_heavy else 'standard'}) â ${price_low}-${price_high}")
+            logger.info(f"[run_estimate] Job {job_id}: custom rate ${rate}/CY ({'heavy' if is_heavy else 'standard'}) → ${price_low}-${price_high}")
         else:
-            # Fall back to user's stored rates (no Tavily â users set their own rates)
+            # Fall back to user's stored rates (no Tavily — users set their own rates)
             market_context = None
             price_low, price_high, cy_mid, special_items, min_charge_applied = calculate_price(
                 result_data,
@@ -3932,7 +3932,7 @@ async def run_estimate(
         except Exception:
             pass
 
-        # ââ Send lead email to company with photos, customer info, and estimate ââ
+        # ── Send lead email to company with photos, customer info, and estimate ──
         try:
             company_email = job.get("company_email", "")
             cust_name = job.get("customer_name", "Unknown")
@@ -3947,7 +3947,7 @@ async def run_estimate(
 
                 special_html = ""
                 if special_items:
-                    special_html = "<p style='color:#d97706;font-weight:600;margin-top:12px'>â ï¸ Special disposal items detected:</p><ul>"
+                    special_html = "<p style='color:#d97706;font-weight:600;margin-top:12px'>⚠️ Special disposal items detected:</p><ul>"
                     for si in special_items:
                         special_html += f"<li>{si.get('name','')} x{si.get('quantity',1)}</li>"
                     special_html += "</ul>"
@@ -3973,7 +3973,7 @@ async def run_estimate(
 
                     <h2 style="margin:0 0 12px;font-size:1.1rem;color:#0f172a">Estimate Summary</h2>
                     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;text-align:center;margin-bottom:16px">
-                      <div style="font-size:2rem;font-weight:800;color:#16a34a">${price_low:,.0f} â ${price_high:,.0f}</div>
+                      <div style="font-size:2rem;font-weight:800;color:#16a34a">${price_low:,.0f} — ${price_high:,.0f}</div>
                       <div style="color:#64748b;font-size:0.85rem;margin-top:4px">{cy_mid} cubic yards estimated</div>
                     </div>
 
@@ -3997,7 +3997,7 @@ async def run_estimate(
 
                 send_email(
                     company_email,
-                    f"New Estimate Lead: {cust_name} â ${price_low:,.0f}-${price_high:,.0f}",
+                    f"New Estimate Lead: {cust_name} — ${price_low:,.0f}-${price_high:,.0f}",
                     lead_html,
                 )
         except Exception:
@@ -4067,7 +4067,7 @@ async def estimate_status(request: Request, job_id: str):
     return resp
 
 
-# Legacy mapping â kept for reference, no longer used for gating
+# Legacy mapping — kept for reference, no longer used for gating
 PRICE_TO_TIER = {
     "price_1TDJ2wAPEzwLONiqTut1n11W": "solo",
     "price_1TDJ2xAPEzwLONiq56jpA1fH": "team",
@@ -4816,7 +4816,7 @@ async def admin_reset_password(request: Request, user_id: int):
         return {"ok": True, "new_password": new_password}
 
 
-# ââ Admin: Credit packs (DB + Stripe) ââ
+# ── Admin: Credit packs (DB + Stripe) ──
 
 @app.get("/api/admin/credit-packs")
 async def admin_list_credit_packs(request: Request):
@@ -5023,7 +5023,7 @@ async def admin_delete_credit_pack(request: Request, pack_id: int):
     return {"ok": True}
 
 
-# ââ Promo Code API ââ
+# ── Promo Code API ──
 
 @app.get("/api/admin/promos")
 async def admin_list_promos(request: Request):
@@ -5126,7 +5126,7 @@ async def validate_promo_code(request: Request):
         return {"valid": True, "discount_type": p.discount_type, "discount_value": p.discount_value}
 
 
-# ââ Accuracy API ââ
+# ── Accuracy API ──
 
 @app.get("/api/admin/accuracy")
 async def admin_accuracy(request: Request):
@@ -5228,7 +5228,7 @@ async def admin_accuracy(request: Request):
         }
 
 
-# ââ Env Status API ââ
+# ── Env Status API ──
 
 @app.get("/api/admin/env-status")
 async def admin_env_status(request: Request) -> dict[str, bool]:
@@ -5533,7 +5533,7 @@ async def team_create_estimate(
         if len(group_photos) > 1:
             image_content.append({
                 "type": "text",
-                "text": f"\n--- ROOM: {room} ({len(group_photos)} photos â these show DIFFERENT ANGLES of the SAME space. DO NOT double-count items visible in multiple photos.) ---"
+                "text": f"\n--- ROOM: {room} ({len(group_photos)} photos — these show DIFFERENT ANGLES of the SAME space. DO NOT double-count items visible in multiple photos.) ---"
             })
         for pd in group_photos:
             label = f"Photo {pd['index']} (Room: {room})"
@@ -5685,7 +5685,7 @@ def generate_estimate_pdf(estimate, user, items, special_items):
     elements.append(Spacer(1, 16))
 
     price_data = [[
-        Paragraph(f"<b>${estimate.price_low:,.0f} â ${estimate.price_high:,.0f}</b>",
+        Paragraph(f"<b>${estimate.price_low:,.0f} — ${estimate.price_high:,.0f}</b>",
                   ParagraphStyle('Price', fontSize=20, textColor=colors.HexColor('#16a34a'), alignment=1))
     ]]
     price_table = Table(price_data, colWidths=[6.8*inch])
@@ -5731,7 +5731,7 @@ def generate_estimate_pdf(estimate, user, items, special_items):
             body_style
         ))
         for si in special_items:
-            elements.append(Paragraph(f"â¢ {si.get('name', 'Unknown')} Ã {si.get('quantity', 1)}", body_style))
+            elements.append(Paragraph(f"• {si.get('name', 'Unknown')} × {si.get('quantity', 1)}", body_style))
 
     elements.append(Spacer(1, 24))
     elements.append(Paragraph("Important Notes", heading_style))
@@ -5820,7 +5820,7 @@ async def send_estimate(request: Request, estimate_id: int):
         f"Your Junk Removal Estimate from {company}",
         f"<h2>Junk Removal Estimate</h2>"
         f"<p>Thank you for choosing <strong>{company}</strong>.</p>"
-        f"<p><strong>Estimated Price Range: ${estimate.price_low:,.0f} â ${estimate.price_high:,.0f}</strong></p>"
+        f"<p><strong>Estimated Price Range: ${estimate.price_low:,.0f} — ${estimate.price_high:,.0f}</strong></p>"
         f"<p>Estimated Volume: {estimate.cy_estimate or 0} CY</p>"
         f"<p>Photos Analyzed: {estimate.photos_count or 0}</p>"
         f"<hr>"

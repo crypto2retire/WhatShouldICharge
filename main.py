@@ -3143,6 +3143,13 @@ def calculate_price(result_data: dict, rate_low=35.0, rate_high=40.0, rate_premi
     price_low = max(price_low, min_charge)
     price_high = max(price_high, min_charge)
 
+    # Ensure there's always a meaningful price range (at least 50% spread)
+    if price_high <= price_low:
+        price_high = round(price_low * 1.5, 2)
+    elif price_high < price_low * 1.15:
+        # Range too narrow — widen to at least 15% spread
+        price_high = round(price_low * 1.5, 2)
+
     special_items = [
         {"name": item.get("name", "Unknown"), "quantity": int(item.get("quantity", 1))}
         for item in items if item.get("is_special")
@@ -3725,35 +3732,18 @@ async def run_estimate(
 
         result_data = pass1_result
 
-        # ── Post-processing validation: reconcile item sum vs spatial total ──
+        # ── Post-processing validation: enforce item sum = spatial total ──
         totals = result_data.get("totals", {})
         spatial_mid = totals.get("cubic_yards_mid", 0)
         items = result_data.get("items", [])
         item_sum = sum((it.get("cubic_yards", 0) * it.get("quantity", 1)) for it in items)
 
         if spatial_mid > 0 and item_sum > 0 and abs(item_sum - spatial_mid) > 0.5:
-            ratio = spatial_mid / item_sum
-            if ratio > 2.0:
-                # Sparse scene: AI items are probably right, spatial box is just big
-                # Trust item sum, adjust totals DOWN to match items (with modest headroom)
-                capped_total = round(item_sum * 1.5, 1)
-                totals["cubic_yards_mid"] = capped_total
-                totals["cubic_yards_low"] = round(capped_total * 0.85, 1)
-                totals["cubic_yards_high"] = round(capped_total * 1.15, 1)
-                logger.info(f"[run_estimate] Job {job_id}: sparse scene detected (ratio={ratio:.1f}x). "
-                            f"Capped totals to {capped_total} CY (item_sum={item_sum:.1f}, spatial={spatial_mid:.1f})")
-            elif ratio < 0.5:
-                # Items exceed spatial by >2x — something is wrong, trust spatial
-                scale_factor = spatial_mid / item_sum
-                for it in items:
-                    it["cubic_yards"] = round(it.get("cubic_yards", 0) * scale_factor, 2)
-                logger.info(f"[run_estimate] Job {job_id}: items overshot spatial, scaled down by {scale_factor:.2f}")
-            else:
-                # Normal mismatch within 2x — scale items to fit spatial
-                scale_factor = spatial_mid / item_sum
-                for it in items:
-                    it["cubic_yards"] = round(it.get("cubic_yards", 0) * scale_factor, 2)
-                logger.info(f"[run_estimate] Job {job_id}: scaled items by {scale_factor:.2f} (item_sum={item_sum:.1f} → spatial={spatial_mid:.1f})")
+            # Items don't match spatial total — scale items to fit
+            scale_factor = spatial_mid / item_sum if item_sum > 0 else 1.0
+            for it in items:
+                it["cubic_yards"] = round(it.get("cubic_yards", 0) * scale_factor, 2)
+            logger.info(f"[run_estimate] Job {job_id}: scaled items by {scale_factor:.2f} (item_sum={item_sum:.1f} → spatial={spatial_mid:.1f})")
 
         # Sanity check: no single non-truck item should exceed 5 CY
         for it in items:
@@ -3838,6 +3828,12 @@ async def run_estimate(
             min_charge_applied = price_low < min_ch or price_high < min_ch
             price_low = max(price_low, min_ch)
             price_high = max(price_high, min_ch)
+
+            # Ensure there's always a meaningful price range (at least 50% spread)
+            if price_high <= price_low:
+                price_high = round(price_low * 1.5, 2)
+            elif price_high < price_low * 1.15:
+                price_high = round(price_low * 1.5, 2)
 
             items = result_data.get("items", [])
             special_items = [

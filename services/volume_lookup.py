@@ -7,8 +7,11 @@ bulk/debris line items so totals stay honest.
 from __future__ import annotations
 
 import copy
+import logging
 import re
 from typing import Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 # Per-unit cubic yards for standardized items (calibrated to field / lookup values).
 def _is_five_gallon_bucket(n: str) -> bool:
@@ -192,6 +195,25 @@ def validate_estimate(result_data: dict) -> dict:
     if target <= 0:
         return out
 
+    # ── Sparse-scene cap: don't let target inflate items beyond reason ──
+    pre_item_sum = 0.0
+    for raw in items:
+        if isinstance(raw, dict):
+            try:
+                cy = float(raw.get("cubic_yards") or 0)
+                qty = int(raw.get("quantity") or 1)
+                pre_item_sum += cy * max(1, qty)
+            except (TypeError, ValueError):
+                pass
+    if pre_item_sum > 0 and target / pre_item_sum > 2.0:
+        old_target = target
+        target = round(pre_item_sum * 1.5, 2)
+        logger.info(
+            "[validate_estimate] Sparse cap: target %.1f -> %.1f "
+            "(item_sum=%.1f, ratio was %.1fx)",
+            old_target, target, pre_item_sum, old_target / pre_item_sum,
+        )
+
     # Classify rows and apply lookup CY per unit
     lookup_flags: list[bool] = []
     redist_flags: list[bool] = []
@@ -265,6 +287,32 @@ def validate_estimate(result_data: dict) -> dict:
         share = (weights[j] / total_w) * remaining
         item["cubic_yards"] = round(share / qty, 4)
         item["volume_redistributed"] = True
+
+    # ── Remove phantom misc items that are clearly AI padding ──
+    items_to_remove = []
+    for i in redist_indices:
+        if i >= len(items):
+            continue
+        item = items[i]
+        name = _norm(str(item.get("name", "")))
+        qty = int(item.get("quantity") or 1)
+        item_vol = float(item.get("cubic_yards", 0)) * max(1, qty)
+        if ("miscellaneous" in name or "misc" in name) and item_vol > target * 0.6:
+            items_to_remove.append(i)
+            logger.info(
+                "[validate_estimate] Removing phantom misc: %s (%.2f CY)",
+                item.get("name"), item_vol,
+            )
+
+    for i in sorted(items_to_remove, reverse=True):
+        items.pop(i)
+
+    if items_to_remove:
+        new_sum = sum(
+            float(it.get("cubic_yards", 0)) * max(1, int(it.get("quantity") or 1))
+            for it in items if isinstance(it, dict)
+        )
+        target = round(new_sum, 2)
 
     _sync_totals_from_target(out, target)
     return out

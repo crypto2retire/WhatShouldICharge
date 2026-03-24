@@ -1769,6 +1769,9 @@ input::placeholder{{color:#94a3b8}}
 .item-qty{{color:#64748b;font-size:0.8rem;min-width:32px;text-align:right;font-weight:600}}
 .special-note{{margin-top:16px;padding:16px;border-radius:14px;background:#fffbeb;border:1px solid #fde68a;font-size:0.82rem;color:#92400e;line-height:1.6}}
 .dupe-note{{margin-top:12px;padding:16px;border-radius:14px;background:#fefce8;border:1px solid #fde68a;font-size:0.82rem;color:#854d0e;line-height:1.6}}
+.followup-notice{{display:none;margin-top:16px;padding:18px 20px;border-radius:14px;background:linear-gradient(135deg,#eff6ff 0%,#f0f9ff 100%);border:1px solid #bfdbfe;font-size:0.85rem;color:#1e40af;line-height:1.6;text-align:center}}
+.followup-notice svg{{width:20px;height:20px;vertical-align:middle;margin-right:6px;stroke:#2563eb}}
+.followup-notice strong{{color:#1e3a8a}}
 
 /* --- CTA / Appointment Form --- */
 .cta-section{{text-align:center;padding:28px 20px;margin-top:8px}}
@@ -1950,6 +1953,11 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
       <div id="min-charge-msg" class="min-charge-note"></div>
       <div class="price-note">Based on AI photo analysis of your items</div>
       <div class="cy-display" id="res-cy"></div>
+    </div>
+
+    <div class="followup-notice" id="followup-notice">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <strong>Whole house cleanouts &amp; hoarding situations:</strong> For accuracy on larger jobs, we will follow up within 24 hours to confirm pricing or ask a few additional questions.
     </div>
 
     <div class="card" id="res-photos-card" style="display:none">
@@ -2258,6 +2266,9 @@ function showResults(r){{
   var dp=r.potential_duplicates||[];
   if(dp.length>0){{var dh='<strong>Items to verify (may be duplicates):</strong><br>';dp.forEach(function(d){{dh+=esc(d.item_a)+' vs '+esc(d.item_b)+'<br>'}});document.getElementById('res-dupes').innerHTML=dh;document.getElementById('res-dupes').style.display='block'}}
   if(r.notes){{document.getElementById('res-notes').textContent=r.notes;document.getElementById('res-notes-card').style.display='block'}}
+  // Show follow-up notice for large/hoarding jobs
+  var fn=document.getElementById('followup-notice');
+  if(fn){{var cy=r.cy_estimate||0;if(jt==='hoarder'||jt==='truck_load'||cy>=10){{fn.style.display='block'}}else{{fn.style.display='none'}}}}
   // Show customer photos
   var photos=r.photos||[];
   if(photos.length>0){{

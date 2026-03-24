@@ -14,22 +14,22 @@ Usage:
 Folder structure:
   tests/images/
   ├── garage_cleanout/
-  │   ├── garage1.jpg
-  │   ├── garage1_expected.txt     ← optional: "4.5" (expected CY)
-  │   └── garage2.jpg
+  │   ├── garage1.jpg               ← no expected value, just runs estimate
+  │   └── garage2_4.5cy.jpg         ← expects 4.5 CY (number before "cy" in filename)
   ├── single_items/
-  │   ├── couch.jpg
-  │   └── couch_expected.txt       ← "1.8"
+  │   └── couch_1.8cy.jpg           ← expects 1.8 CY
   ├── truck_loads/
-  │   ├── half_truck.jpg
-  │   ├── half_truck_expected.txt  ← "8"
-  │   └── full_truck.jpg
+  │   ├── half_truck_8cy.jpg        ← expects 8 CY
+  │   └── full_truck_15cy.jpg       ← expects 15 CY
   └── misc/
       └── yard_waste.jpg
 
-Each _expected.txt file is optional. If present, it should contain a single
-number (the expected CY). The harness compares the AI estimate vs expected
-and flags large deviations.
+To set an expected volume, just put the number before "cy" in the filename:
+  half_truck_8cy.jpg     → expects 8 CY
+  garage_4.5cy.jpg       → expects 4.5 CY
+  random_stuff.jpg       → no expected value, just shows the estimate
+
+The harness compares the AI estimate vs expected and flags large deviations.
 
 Environment:
   ANTHROPIC_API_KEY must be set (or in .env file in project root)
@@ -182,7 +182,27 @@ def find_test_images(folder: str = None, single_image: str = None) -> list[dict]
 
 
 def _read_expected(image_path: Path) -> float | None:
-    """Read expected CY from companion _expected.txt file."""
+    """
+    Get expected CY from the filename or a companion text file.
+
+    Filename method (easiest):
+      half_truck_8cy.jpg      → expects 8.0 CY
+      garage_cleanout_4.5cy.jpg → expects 4.5 CY
+      single_couch.jpg        → no expected value (just runs estimate)
+
+    Text file method (also works):
+      Create a file named  photo1_expected.txt  containing just a number like  4.5
+    """
+    # Method 1: Parse from filename  (e.g. "half_truck_8cy.jpg" → 8.0)
+    stem = image_path.stem.lower()
+    match = re.search(r'(\d+(?:\.\d+)?)cy', stem)
+    if match:
+        try:
+            return float(match.group(1))
+        except ValueError:
+            pass
+
+    # Method 2: Companion _expected.txt file
     expected_file = image_path.parent / f"{image_path.stem}_expected.txt"
     if expected_file.exists():
         try:
@@ -578,17 +598,14 @@ def main():
     if not images:
         print("No test images found.")
         print(f"\nTo get started:")
-        print(f"  1. Create folder:  mkdir -p {IMAGES_DIR}")
-        print(f"  2. Add subfolders by category:")
-        print(f"     mkdir -p {IMAGES_DIR}/garage_cleanout")
-        print(f"     mkdir -p {IMAGES_DIR}/single_items")
-        print(f"     mkdir -p {IMAGES_DIR}/truck_loads")
-        print(f"     mkdir -p {IMAGES_DIR}/yard_waste")
-        print(f"     mkdir -p {IMAGES_DIR}/construction")
-        print(f"  3. Drop photos into the folders")
-        print(f"  4. (Optional) Create expected files:")
-        print(f"     echo '4.5' > {IMAGES_DIR}/garage_cleanout/photo1_expected.txt")
-        print(f"  5. Run:  python tests/run_volume_tests.py")
+        print(f"  1. Drop photos into subfolders under tests/images/")
+        print(f"     (folders already exist: garage_cleanout, single_items,")
+        print(f"      truck_loads, yard_waste, construction, basement, mixed_piles)")
+        print(f"  2. To track accuracy, put the known CY in the filename:")
+        print(f"     half_truck_8cy.jpg  →  expects 8 CY")
+        print(f"     garage_4.5cy.jpg    →  expects 4.5 CY")
+        print(f"     random_pile.jpg     →  no expected, just shows result")
+        print(f"  3. Run:  python tests/run_volume_tests.py")
         sys.exit(0)
 
     print(f"WSIC Volume Calculator Test Harness")

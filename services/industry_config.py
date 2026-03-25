@@ -34,6 +34,12 @@ PRIORITY 2 â LARGE ITEMS WITH KNOWN DIMENSIONS:
 - Wooden pallet: 48" Ã 40" Ã 6"
 - 32-gallon trash can: 22" diameter Ã 27"H
 - 5-gallon bucket: 14.5"H Ã 12" diameter
+- Standard railroad tie: 7" Ã 9" Ã 8.5ft = 3.7 cf = 0.14 CY raw, 0.17 CY effective in truck
+- Landscape timber (4x4): 4" Ã 4" Ã 8ft = 0.05 CY each
+- Landscape timber (6x6): 6" Ã 6" Ã 8ft = 0.11 CY each
+- Standard chain-link fence: typically 4ft, 5ft, or 6ft tall (use as height reference)
+
+COUNTING RULE FOR STANDARDIZED ITEMS: When you see railroad ties, landscape timbers, pallets, or other countable standardized items, COUNT INDIVIDUAL PIECES and report quantity = actual count with per-unit cubic_yards. Do NOT group them as "1 pile." Example: 25 railroad ties = {"name": "railroad tie", "quantity": 25, "cubic_yards": 0.17}. If some are hidden behind visible ones, estimate total count based on pile dimensions and stacking pattern.
 
 DO NOT use cardboard boxes, trash bags, or other variable-sized items as primary spatial references. These have no standard size and lead to inaccurate measurements.
 
@@ -146,7 +152,7 @@ CRITICAL RULES:
 
         # Business rules
         "rules": {
-            "max_item_cy": 5.0,  # Cap single items at 5 CY (except truck_load)
+            "max_item_cy": 16.0,  # Cap single items at truck capacity (was 5.0, too aggressive for bulk items)
             "packing_factor_default": 1.0,
             "packing_factor_hoarding": 1.25,
             "price_range_low_multiplier": 0.90,  # -10%

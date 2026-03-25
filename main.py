@@ -3983,10 +3983,12 @@ async def run_estimate(
                 it["cubic_yards"] = round(it.get("cubic_yards", 0) * scale_factor, 2)
             logger.info(f"[run_estimate] Job {job_id}: scaled items by {scale_factor:.2f} (item_sum={item_sum:.1f} → spatial={spatial_mid:.1f})")
 
-        # Sanity check: no single non-truck item should exceed 5 CY
+        # Sanity check: cap single items at truck capacity (16 CY)
+        # Was 5.0 CY which was too aggressive — bulk items like railroad ties,
+        # lumber piles, and debris often exceed 5 CY legitimately
         for it in items:
-            if it.get("cubic_yards", 0) > 5.0 and result_data.get("job_type") != "truck_load":
-                it["cubic_yards"] = min(it["cubic_yards"], 5.0)
+            if it.get("cubic_yards", 0) > 16.0:
+                it["cubic_yards"] = min(it["cubic_yards"], 16.0)
 
         items_needing_lookup = result_data.get("items_needing_lookup", [])
         lookups_done = []

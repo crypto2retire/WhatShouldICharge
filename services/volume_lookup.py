@@ -38,6 +38,12 @@ _LOOKUP_RULES: list[tuple[Callable[[str], bool], float]] = [
         or ("plastic" in n and "sheet" in n),
         0.03,
     ),
+    # Railroad ties / landscape timbers — standard dimensions, per-unit volumes
+    (lambda n: "railroad tie" in n or "railroad ties" in n, 0.17),
+    (
+        lambda n: "landscape timber" in n or "landscape timbers" in n,
+        0.11,  # 6x6 default; 4x4 is 0.05 but 6x6 is more common in removal
+    ),
 ]
 
 # Do not reallocate volume onto named furniture / fixtures.
@@ -195,24 +201,10 @@ def validate_estimate(result_data: dict) -> dict:
     if target <= 0:
         return out
 
-    # ── Sparse-scene cap: don't let target inflate items beyond reason ──
-    pre_item_sum = 0.0
-    for raw in items:
-        if isinstance(raw, dict):
-            try:
-                cy = float(raw.get("cubic_yards") or 0)
-                qty = int(raw.get("quantity") or 1)
-                pre_item_sum += cy * max(1, qty)
-            except (TypeError, ValueError):
-                pass
-    if pre_item_sum > 0 and target / pre_item_sum > 2.0:
-        old_target = target
-        target = round(pre_item_sum * 1.5, 2)
-        logger.info(
-            "[validate_estimate] Sparse cap: target %.1f -> %.1f "
-            "(item_sum=%.1f, ratio was %.1fx)",
-            old_target, target, pre_item_sum, old_target / pre_item_sum,
-        )
+    # NOTE: Sparse-scene cap REMOVED (2026-03-25). Was capping target to
+    # item_sum * 1.5 when ratio > 2x, but this destroyed legitimate estimates
+    # where AI's per-item CY values were low but spatial math was correct
+    # (e.g., railroad ties, lumber piles). Trust spatial math from notes.
 
     # Classify rows and apply lookup CY per unit
     lookup_flags: list[bool] = []

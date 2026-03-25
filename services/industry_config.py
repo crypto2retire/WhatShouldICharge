@@ -39,7 +39,7 @@ PRIORITY 2 â LARGE ITEMS WITH KNOWN DIMENSIONS:
 - Landscape timber (6x6): 6" Ã 6" Ã 8ft = 0.11 CY each
 - Standard chain-link fence: typically 4ft, 5ft, or 6ft tall (use as height reference)
 
-COUNTING RULE FOR STANDARDIZED ITEMS: When you see railroad ties, landscape timbers, pallets, or other countable standardized items, COUNT INDIVIDUAL PIECES and report quantity = actual count with per-unit cubic_yards. Do NOT group them as "1 pile." Example: 25 railroad ties = {"name": "railroad tie", "quantity": 25, "cubic_yards": 0.17}. If some are hidden behind visible ones, estimate total count based on pile dimensions and stacking pattern.
+COUNTING RULE FOR STANDARDIZED ITEMS: When you see railroad ties, landscape timbers, pallets, or other countable standardized items, COUNT INDIVIDUAL PIECES and report quantity = actual count with per-unit cubic_yards. Do NOT group them as "1 pile." You MUST estimate TOTAL count including hidden items using pile dimensions. For railroad ties: a standard tie is 9 inches wide, so divide pile depth by 9 inches to get layers deep, then multiply by ties visible per layer. Example: pile is 8ft deep and you see 7 ties across the front face stacked 5 high = 8ft/0.75ft = roughly 11 ties deep, so total = 7 x 5 x 11 = 385 ties... but realistically count the face and multiply by estimated depth layers. If spatial bounding box volume / per-unit volume gives a HIGHER count than what you can see, USE THE HIGHER COUNT — piles always have hidden items in the middle and back.
 
 DO NOT use cardboard boxes, trash bags, or other variable-sized items as primary spatial references. These have no standard size and lead to inaccurate measurements.
 

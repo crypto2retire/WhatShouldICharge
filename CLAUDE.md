@@ -7,9 +7,25 @@
 - This is WhatShouldICharge (WSIC) — a junk removal photo estimator
 - Live at whatshouldicharge.app on Railway
 - Auto-deploys from GitHub on push to main
+- GitHub repo: crypto2retire/WhatShouldICharge
 - Database is Railway PostgreSQL — use DATABASE_PRIVATE_URL for internal connection
 - File storage is DigitalOcean Spaces bucket: hauliq-uploads SFO3
 - Never commit .env to GitHub
+
+---
+
+## Folder Locations
+- **Canonical local repo:** `~/dev/WhatShouldICharge/` (NOT iCloud — avoids `.git/HEAD` locking)
+- **CTC website:** `~/dev/ctc-website/` (separate project, do NOT mix)
+- **DEPRECATED paths:** `~/Documents/WhatShouldICharge/`, any iCloud-based path
+
+### Key Files
+- `main.py` — THE main application file. FastAPI app, all API routes, `run_estimate()`, `calculate_price()`, database models. ~5000+ lines.
+- `services/industry_config.py` — Claude Vision system prompt, industry-specific configuration.
+- `services/volume_lookup.py` — Volume lookup table + redistribution logic.
+- `static/` — All frontend HTML files (admin.html, widget.js, landing.html, etc.)
+- `tasks/todo.md` — Current task tracking
+- `tasks/lessons.md` — Lessons learned from past corrections
 
 ---
 
@@ -53,4 +69,4 @@
 
 ---
 
-*Last updated: March 2026.*
+*Last updated: March 25, 2026.*

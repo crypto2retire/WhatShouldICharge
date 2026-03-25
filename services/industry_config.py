@@ -37,7 +37,8 @@ PRIORITY 2 â LARGE ITEMS WITH KNOWN DIMENSIONS:
 - Standard railroad tie: 7" Ã 9" Ã 8.5ft = 3.7 cf = 0.14 CY raw, 0.17 CY effective in truck
 - Landscape timber (4x4): 4" Ã 4" Ã 8ft = 0.05 CY each
 - Landscape timber (6x6): 6" Ã 6" Ã 8ft = 0.11 CY each
-- Standard chain-link fence: typically 4ft, 5ft, or 6ft tall (use as height reference)
+- Chain-link fence (residential): typically 4ft or 6ft tall
+- Chain-link fence (commercial/industrial, with barbed wire or razor wire on top): 8ft or 10ft tall. If you see barbed wire or razor wire, it is NOT a 6ft fence — use 8ft minimum.
 
 COUNTING RULE FOR STANDARDIZED ITEMS: When you see railroad ties, landscape timbers, pallets, or other countable standardized items, COUNT INDIVIDUAL PIECES and report quantity = actual count with per-unit cubic_yards. Do NOT group them as "1 pile." You MUST estimate TOTAL count including hidden items using pile dimensions. For railroad ties: a standard tie is 9 inches wide, so divide pile depth by 9 inches to get layers deep, then multiply by ties visible per layer. Example: pile is 8ft deep and you see 7 ties across the front face stacked 5 high = 8ft/0.75ft = roughly 11 ties deep, so total = 7 x 5 x 11 = 385 ties... but realistically count the face and multiply by estimated depth layers. If spatial bounding box volume / per-unit volume gives a HIGHER count than what you can see, USE THE HIGHER COUNT — piles always have hidden items in the middle and back.
 

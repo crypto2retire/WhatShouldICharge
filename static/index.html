@@ -1055,7 +1055,7 @@
         <input type="url" id="set-logo" placeholder="https://example.com/logo.png" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;">
       </div>
 
-      <div id="embed-code-section" style="display:none;margin-bottom:14px;">
+      <hr style="border-color:var(--border);margin:18px 0;"><div style="font-size:0.85rem;color:var(--text);font-weight:600;margin-bottom:8px;">Tracking &amp; Analytics</div><div style="font-size:0.75rem;color:var(--muted);margin-bottom:12px;">Add your tracking IDs to measure ad performance on your customer estimate page.</div><div style="margin-bottom:14px;"><label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">Google Tag ID (optional)</label><input type="text" id="set-google-tag" placeholder="AW-1234567890 or G-XXXXXXXXXX" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;"><div style="font-size:0.7rem;color:var(--muted);margin-top:3px;">From Google Ads or Analytics. Enables conversion tracking.</div></div><div style="margin-bottom:14px;"><label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">Facebook Pixel ID (optional)</label><input type="text" id="set-fb-pixel" placeholder="1234567890123456" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;"><div style="font-size:0.7rem;color:var(--muted);margin-top:3px;">From Meta/Facebook Ads. Tracks page views and leads.</div></div><div id="embed-code-section" style="display:none;margin-bottom:14px;">
         <label style="display:block;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">Embed Code (paste into your website)</label>
         <textarea id="embed-code" readonly rows="3" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--accent);font-size:0.75rem;font-family:monospace;resize:none;"></textarea>
         <button id="copy-embed" style="margin-top:6px;padding:6px 14px;background:var(--border);color:var(--text);border:none;border-radius:6px;font-size:0.78rem;cursor:pointer;">Copy</button>
@@ -1186,6 +1186,8 @@ document.getElementById('nav-logout').addEventListener('click', async () => {
         document.getElementById('set-slug').value = s.company_slug || '';
         document.getElementById('set-phone').value = s.company_phone || '';
         document.getElementById('set-logo').value = s.company_logo_url || '';
+        document.getElementById('set-google-tag').value = s.google_tag_id || '';
+        document.getElementById('set-fb-pixel').value = s.fb_pixel_id || '';
         updateSlugPreview();
       }
     } catch(e) {}
@@ -1238,6 +1240,8 @@ document.getElementById('nav-logout').addEventListener('click', async () => {
         company_slug: document.getElementById('set-slug').value.trim(),
         company_phone: document.getElementById('set-phone').value.trim(),
         company_logo_url: document.getElementById('set-logo').value.trim(),
+        google_tag_id: document.getElementById('set-google-tag').value.trim(),
+        fb_pixel_id: document.getElementById('set-fb-pixel').value.trim(),
       };
       var csrfToken = getCsrfToken();
       if (!csrfToken) {

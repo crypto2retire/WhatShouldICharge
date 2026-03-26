@@ -482,6 +482,8 @@ class User(Base):
     credits_used_total = Column(Integer, default=0)
     free_trial_used = Column(Integer, default=0)
     free_trial_email = Column(String, nullable=True)
+    google_tag_id = Column(String, default="")
+    fb_pixel_id = Column(String, default="")
 
 
 class TeamMember(Base):
@@ -756,6 +758,8 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN credits_used_total INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN free_trial_used INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN free_trial_email TEXT",
+            "ALTER TABLE users ADD COLUMN google_tag_id TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN fb_pixel_id TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN input_tokens INTEGER DEFAULT 0",
             "ALTER TABLE estimates ADD COLUMN output_tokens INTEGER DEFAULT 0",
             "ALTER TABLE estimates ADD COLUMN api_cost_cents INTEGER DEFAULT 0",
@@ -1634,6 +1638,15 @@ async def customer_estimate_page(slug: str):
     for q, a in faq_items:
         faq_html += f'<details><summary>{html_mod.escape(q)}</summary><div class="faq-answer">{html_mod.escape(a)}</div></details>\n'
 
+    # Build tracking scripts from user's configured IDs
+    tracking_head = ""
+    if u.google_tag_id:
+        gtid = html_mod.escape(u.google_tag_id.strip())
+        tracking_head += f'<!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id={gtid}"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){{dataLayer.push(arguments)}}gtag("js",new Date());gtag("config","{gtid}");</script>'
+    if u.fb_pixel_id:
+        fbid = html_mod.escape(u.fb_pixel_id.strip())
+        tracking_head += f'<!-- Facebook Pixel --><script>!function(f,b,e,v,n,t,s){{if(f.fbq)return;n=f.fbq=function(){{n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)}};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version="2.0";n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}}(window,document,"script","https://connect.facebook.net/en_US/fbevents.js");fbq("init","{fbid}");fbq("track","PageView");</script><noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id={fbid}&amp;ev=PageView&amp;noscript=1"/></noscript>'
+
     page_html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1659,6 +1672,7 @@ async def customer_estimate_page(slug: str):
   "mainEntity":{faq_schema}
 }}</script>
 <script type="application/ld+json">{jsonld_speakable}</script>
+{tracking_head}
 <style>
 *{{margin:0;padding:0;box-sizing:border-box}}
 body{{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#ffffff;color:#1e293b;min-height:100vh;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}}
@@ -3017,7 +3031,7 @@ async def get_settings(request: Request):
         return cached
     async with AsyncSessionLocal() as db:
         raw = await db.execute(
-            text("SELECT id, company_name, company_city, company_state, company_phone, company_slug, company_logo_url, price_per_cy_low, price_per_cy_high, price_per_cy_premium, min_charge, truck_capacity_cy, price_per_cy_standard, price_per_cy_heavy FROM users WHERE id = :uid"),
+            text("SELECT id, company_name, company_city, company_state, company_phone, company_slug, company_logo_url, price_per_cy_low, price_per_cy_high, price_per_cy_premium, min_charge, truck_capacity_cy, price_per_cy_standard, price_per_cy_heavy, google_tag_id, fb_pixel_id FROM users WHERE id = :uid"),
             {"uid": user.id}
         )
         row = raw.mappings().first()
@@ -3037,6 +3051,8 @@ async def get_settings(request: Request):
         "company_logo_url": row["company_logo_url"] or "",
         "price_per_cy_standard": row["price_per_cy_standard"],
         "price_per_cy_heavy": row["price_per_cy_heavy"],
+        "google_tag_id": row["google_tag_id"] or "",
+        "fb_pixel_id": row["fb_pixel_id"] or "",
         "credit_balance": getattr(user, 'credit_balance', 0) or 0,
         "free_trial_remaining": max(0, 2 - (getattr(user, 'free_trial_used', 0) or 0)),
     }
@@ -3066,6 +3082,8 @@ async def update_settings(request: Request):
         "price_per_cy_standard": float,
         "price_per_cy_heavy": float,
         "timezone": str,
+        "google_tag_id": str,
+        "fb_pixel_id": str,
     }
 
     # Auto-detect timezone from state if state is being updated and timezone isn't explicitly set
@@ -3134,7 +3152,7 @@ async def update_settings(request: Request):
 
         # Read back the saved values via raw SQL
         verify = await db.execute(
-            text("SELECT company_name, company_city, company_state, company_phone, company_slug, company_logo_url, price_per_cy_low, price_per_cy_high, price_per_cy_premium, min_charge, truck_capacity_cy, price_per_cy_standard, price_per_cy_heavy, timezone FROM users WHERE id = :uid"),
+            text("SELECT company_name, company_city, company_state, company_phone, company_slug, company_logo_url, price_per_cy_low, price_per_cy_high, price_per_cy_premium, min_charge, truck_capacity_cy, price_per_cy_standard, price_per_cy_heavy, timezone, google_tag_id, fb_pixel_id FROM users WHERE id = :uid"),
             {"uid": user.id}
         )
         row = verify.mappings().first()

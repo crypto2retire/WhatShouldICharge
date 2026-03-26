@@ -716,6 +716,8 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_preferred_time VARCHAR DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_requested_at TIMESTAMP DEFAULT NULL",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS additional_items_text TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_tag_id VARCHAR DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS fb_pixel_id VARCHAR DEFAULT ''",
         ]
     else:
         alter_statements = [

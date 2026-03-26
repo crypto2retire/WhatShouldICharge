@@ -2684,48 +2684,103 @@ async def public_appointment_request(request: Request):
 
         await db.commit()
 
-        # Send appointment notification email to operator
+        # Send comprehensive appointment notification email to operator
+        # This includes full estimate details (items, photos) + scheduling info
         if user and user.email:
             cust_name = est.customer_name or "Customer"
             cust_email = est.customer_email or "N/A"
             cust_phone = est.customer_phone or "N/A"
             price_low = est.price_low or 0
             price_high = est.price_high or 0
+            cy_mid = est.cy_estimate or 0
             contact_label = "Text" if contact_method == "text" else "Email"
             contact_value = cust_phone if contact_method == "text" else cust_email
-            time_label = "Morning (8am–12pm)" if preferred_time == "morning" else "Afternoon (12–5pm)"
+            time_label = "Morning (8am\u201312pm)" if preferred_time == "morning" else "Afternoon (12\u20135pm)"
             additional_html = ""
             if additional_items:
                 additional_html = f"""
                     <tr><td style="padding:8px 0;color:#64748b;vertical-align:top">Additional Items</td>
                     <td style="padding:8px 0;font-weight:500">{additional_items}</td></tr>"""
 
+            # Load full estimate data for items + photos
+            items_html = ""
+            special_html = ""
+            photos_html = ""
+            try:
+                import json as _json
+                if est.result_json:
+                    result_data = _json.loads(est.result_json)
+                    for item in result_data.get("items", []):
+                        items_html += f"<tr><td style='padding:6px 12px;border-bottom:1px solid #eee'>{item.get('name','Item')}</td><td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center'>{item.get('quantity',1)}</td><td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:right'>{item.get('cubic_yards',0)} CY</td></tr>"
+                    special_items = [it for it in result_data.get("items", []) if it.get("is_special")]
+                    if special_items:
+                        special_html = "<p style='color:#d97706;font-weight:600;margin-top:12px'>\u26a0\ufe0f Special disposal items detected:</p><ul>"
+                        for si in special_items:
+                            special_html += f"<li>{si.get('name','')} x{si.get('quantity',1)}</li>"
+                        special_html += "</ul>"
+                if est.photos_json:
+                    photo_list = _json.loads(est.photos_json)
+                    for idx, photo_b64 in enumerate(photo_list[:5]):
+                        if isinstance(photo_b64, dict):
+                            photo_b64 = photo_b64.get("b64", "")
+                        if photo_b64:
+                            photos_html += f'<img src="data:image/jpeg;base64,{photo_b64}" style="width:150px;height:150px;object-fit:cover;border-radius:8px;margin:4px;border:1px solid #ddd" alt="Photo {idx+1}">'
+            except Exception:
+                pass  # If we can't load items/photos, still send the email
+
+            items_section = ""
+            if items_html:
+                items_section = f"""
+                    <h2 style="margin:20px 0 12px;font-size:1.1rem;color:#0f172a">Items Detected</h2>
+                    <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+                      <tr style="background:#f8fafc"><th style="padding:8px 12px;text-align:left;font-size:0.85rem">Item</th><th style="padding:8px 12px;text-align:center;font-size:0.85rem">Qty</th><th style="padding:8px 12px;text-align:right;font-size:0.85rem">Volume</th></tr>
+                      {items_html}
+                    </table>
+                    {special_html}"""
+
+            photos_section = ""
+            if photos_html:
+                num_photos = est.photos_count or 0
+                photos_section = f"""
+                    <h2 style="margin:20px 0 12px;font-size:1.1rem;color:#0f172a">Customer Photos</h2>
+                    <div style="margin-bottom:16px">{photos_html}</div>
+                    <p style="font-size:0.8rem;color:#94a3b8">View all {num_photos} photo(s) and full details in your <a href="https://whatshouldicharge.app/estimate">WSIC dashboard</a>.</p>"""
+
             appt_html = f"""
-                <div style="max-width:500px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
-                  <div style="background:#16a34a;padding:24px;border-radius:12px 12px 0 0;text-align:center">
-                    <h1 style="margin:0;color:#fff;font-size:1.4rem">Appointment Request</h1>
-                    <p style="margin:4px 0 0;opacity:0.9;color:#fff;font-size:0.9rem">via WhatShouldICharge</p>
+                <div style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+                  <div style="background:#dc2626;padding:24px;border-radius:12px 12px 0 0;text-align:center">
+                    <h1 style="margin:0;color:#fff;font-size:1.4rem">\U0001f514 Schedule Request</h1>
+                    <p style="margin:4px 0 0;opacity:0.9;color:#fff;font-size:0.9rem">Customer wants to book — respond ASAP</p>
                   </div>
                   <div style="background:#fff;border:1px solid #e2e8f0;padding:24px;border-radius:0 0 12px 12px">
-                    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;text-align:center;margin-bottom:20px">
-                      <div style="font-size:0.85rem;color:#64748b;margin-bottom:4px">Estimate</div>
-                      <div style="font-size:1.6rem;font-weight:800;color:#16a34a">${price_low:,.0f} — ${price_high:,.0f}</div>
+                    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px;margin-bottom:20px">
+                      <h2 style="margin:0 0 12px;font-size:1.1rem;color:#991b1b">\u23f0 Appointment Details</h2>
+                      <table style="width:100%;border-collapse:collapse">
+                        <tr><td style="padding:8px 0;color:#64748b;width:120px">Preferred Day</td><td style="padding:8px 0;font-weight:700;font-size:1.05rem">{preferred_day}</td></tr>
+                        <tr><td style="padding:8px 0;color:#64748b">Preferred Time</td><td style="padding:8px 0;font-weight:700;font-size:1.05rem">{time_label}</td></tr>
+                        <tr><td style="padding:8px 0;color:#64748b">Contact Via</td><td style="padding:8px 0;font-weight:600">{contact_label}: {contact_value}</td></tr>{additional_html}
+                      </table>
                     </div>
+
                     <h2 style="margin:0 0 12px;font-size:1.1rem;color:#0f172a">Customer Information</h2>
                     <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
-                      <tr><td style="padding:8px 0;color:#64748b;width:120px">Name</td><td style="padding:8px 0;font-weight:600">{cust_name}</td></tr>
-                      <tr><td style="padding:8px 0;color:#64748b">Phone</td><td style="padding:8px 0"><a href="tel:{cust_phone}">{cust_phone}</a></td></tr>
-                      <tr><td style="padding:8px 0;color:#64748b">Email</td><td style="padding:8px 0"><a href="mailto:{cust_email}">{cust_email}</a></td></tr>
+                      <tr><td style="padding:6px 0;color:#64748b;width:100px">Name</td><td style="padding:6px 0;font-weight:600">{cust_name}</td></tr>
+                      <tr><td style="padding:6px 0;color:#64748b">Email</td><td style="padding:6px 0"><a href="mailto:{cust_email}">{cust_email}</a></td></tr>
+                      <tr><td style="padding:6px 0;color:#64748b">Phone</td><td style="padding:6px 0"><a href="tel:{cust_phone}">{cust_phone}</a></td></tr>
                     </table>
-                    <h2 style="margin:0 0 12px;font-size:1.1rem;color:#0f172a">Appointment Details</h2>
-                    <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
-                      <tr><td style="padding:8px 0;color:#64748b;width:120px">Contact Via</td><td style="padding:8px 0;font-weight:600">{contact_label}: {contact_value}</td></tr>
-                      <tr><td style="padding:8px 0;color:#64748b">Preferred Day</td><td style="padding:8px 0;font-weight:600">{preferred_day}</td></tr>
-                      <tr><td style="padding:8px 0;color:#64748b">Preferred Time</td><td style="padding:8px 0;font-weight:600">{time_label}</td></tr>{additional_html}
-                    </table>
-                    <div style="margin-top:20px;padding:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;text-align:center">
-                      <p style="margin:0 0 6px;font-weight:700;color:#92400e">Action Required</p>
-                      <p style="margin:0;font-size:0.88rem;color:#78350f">{contact_label} the customer to confirm the appointment.</p>
+
+                    <h2 style="margin:0 0 12px;font-size:1.1rem;color:#0f172a">Estimate Summary</h2>
+                    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;text-align:center;margin-bottom:16px">
+                      <div style="font-size:2rem;font-weight:800;color:#16a34a">${price_low:,.0f} \u2014 ${price_high:,.0f}</div>
+                      <div style="color:#64748b;font-size:0.85rem;margin-top:4px">{cy_mid} cubic yards estimated</div>
+                    </div>
+
+                    {items_section}
+                    {photos_section}
+
+                    <div style="margin-top:20px;padding:16px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;text-align:center">
+                      <p style="margin:0 0 6px;font-weight:700;color:#991b1b">\u26a1 Action Required</p>
+                      <p style="margin:0;font-size:0.88rem;color:#78350f">{contact_label} the customer ASAP to confirm the {preferred_day} appointment.</p>
                     </div>
                   </div>
                 </div>"""
@@ -2733,7 +2788,7 @@ async def public_appointment_request(request: Request):
             try:
                 send_email(
                     user.email,
-                    f"Appointment Request: {cust_name} — {preferred_day} {time_label}",
+                    f"\U0001f514 SCHEDULE REQUEST: {cust_name} \u2014 {preferred_day} {time_label}",
                     appt_html,
                 )
             except Exception:

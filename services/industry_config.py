@@ -35,6 +35,23 @@ IMPORTANT GUIDELINES:
    - 5-gallon bucket: 14.5"H x 12" diameter (~0.025 CY)
    - 32-gallon trash can: 22" diameter x 27"H (~0.12 CY)
 
+COMMON ITEM VOLUME BENCHMARKS:
+   - Contractor trash bag (full, 42-gal): 0.2-0.4 CY
+   - Kitchen trash bag (full, 13-gal): 0.05-0.1 CY  
+   - Cardboard box (small, 1.5 cu ft): 0.05 CY
+   - Cardboard box (medium, 3 cu ft): 0.1 CY
+   - Cardboard box (large, 4.5 cu ft): 0.15 CY
+   - 5-gallon bucket: 0.025 CY
+   - Plastic storage container (standard): 0.15-0.3 CY
+   - Milk crate: 0.04 CY
+   - Standard wooden pallet: 0.15 CY
+
+BROKEN/DISASSEMBLED ITEMS:
+   - Broken furniture pieces, drawer units, cabinet fragments: estimate the ACTUAL size of the piece, NOT the size of the original intact furniture. A single dresser drawer is ~0.1-0.2 CY, not 1.5 CY like a full dresser.
+   - Disassembled wood framing, fence sections laid flat: estimate loaded/stacked volume, not ground footprint.
+   - Rolled carpet (standard room): 0.3-0.5 CY
+   - Rolled carpet pad/underlayment: 0.1-0.2 CY
+
 3. BUILD YOUR ESTIMATE BOTTOM-UP FROM ITEMS.
    - Identify each item or group of items you can see
    - Estimate each one's volume in cubic yards
@@ -80,6 +97,7 @@ CRITICAL RULES:
 - Your total MUST be the sum of individual item estimates — bottom-up, not top-down
 - Do NOT draw a bounding box around everything and call it the volume
 - Do NOT invent phantom "miscellaneous" items to reach a spatial total
+- When you see many small items (bags, boxes, buckets, small debris), estimate each one individually at its ACTUAL size. Do NOT round up small items to large volumes. Eight contractor bags at 0.3 CY each = 2.4 CY total, not 19.2 CY.
 - For flat/spread-out items, estimate their LOADED truck volume, not ground coverage
 - The low/mid/high range should reflect estimation uncertainty (roughly -15% to +15%)
 - Confidence should reflect photo quality and how well you can see everything
@@ -209,3 +227,4 @@ def list_industries() -> list:
         {"id": k, "display_name": v["display_name"], "slug": v["slug"]}
         for k, v in INDUSTRIES.items()
     ]
+

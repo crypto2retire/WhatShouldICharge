@@ -253,58 +253,40 @@ def validate_estimate(result_data: dict) -> dict:
             continue
         other_vol += line_volume(item)
 
-    remaining = target - known_lookup_vol - other_vol
+    # ── Bottom-up approach: trust item volumes, don't inflate to spatial total ──
+    # The new prompt generates bottom-up estimates where item sum IS the total.
+    # We only apply lookup corrections (above), then sync totals to item sum.
+    # We do NOT redistribute remaining spatial volume onto debris items,
+    # as this was the primary cause of massive overestimation.
 
-    redist_indices = [
-        i
-        for i in range(len(items))
-        if isinstance(items[i], dict) and redist_flags[i] and not lookup_flags[i]
-    ]
+    # Recalculate item sum after lookup corrections
+    corrected_sum = sum(line_volume(it) for it in items if isinstance(it, dict))
 
-    if remaining < 0 or not redist_indices:
-        # No bulk rows to absorb remainder, or overshoot — keep lookup fixes only
-        _sync_totals_from_target(out, target)
-        return out
+    # Remove phantom misc items that exceed all real items combined
+    non_misc = [it for it in items if isinstance(it, dict)
+                and "misc" not in _norm(str(it.get("name", "")))]
+    misc = [it for it in items if isinstance(it, dict)
+            and "misc" in _norm(str(it.get("name", "")))]
+    non_misc_vol = sum(line_volume(it) for it in non_misc)
 
-    weights = []
-    for i in redist_indices:
-        w = line_volume(items[i])
-        weights.append(max(w, 1e-6))
-
-    total_w = sum(weights)
-    for j, i in enumerate(redist_indices):
-        item = items[i]
-        qty = int(item.get("quantity") or 1)
-        qty = max(1, qty)
-        share = (weights[j] / total_w) * remaining
-        item["cubic_yards"] = round(share / qty, 4)
-        item["volume_redistributed"] = True
-
-    # ── Remove phantom misc items that are clearly AI padding ──
     items_to_remove = []
-    for i in redist_indices:
-        if i >= len(items):
-            continue
-        item = items[i]
-        name = _norm(str(item.get("name", "")))
-        qty = int(item.get("quantity") or 1)
-        item_vol = float(item.get("cubic_yards", 0)) * max(1, qty)
-        if ("miscellaneous" in name or "misc" in name) and item_vol > target * 0.6:
-            items_to_remove.append(i)
+    for mi in misc:
+        mv = line_volume(mi)
+        if mv > non_misc_vol and non_misc_vol > 0:
             logger.info(
-                "[validate_estimate] Removing phantom misc: %s (%.2f CY)",
-                item.get("name"), item_vol,
+                "[validate_estimate] Removing phantom misc: %s (%.2f CY) > all real items (%.2f CY)",
+                mi.get("name"), mv, non_misc_vol,
             )
+            items_to_remove.append(mi)
 
-    for i in sorted(items_to_remove, reverse=True):
-        items.pop(i)
+    for mi in items_to_remove:
+        if mi in items:
+            items.remove(mi)
 
-    if items_to_remove:
-        new_sum = sum(
-            float(it.get("cubic_yards", 0)) * max(1, int(it.get("quantity") or 1))
-            for it in items if isinstance(it, dict)
-        )
-        target = round(new_sum, 2)
+    # Final total = sum of remaining items (bottom-up)
+    final_sum = sum(line_volume(it) for it in items if isinstance(it, dict))
+    if final_sum > 0:
+        target = round(final_sum, 2)
 
     _sync_totals_from_target(out, target)
     return out

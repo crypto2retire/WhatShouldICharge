@@ -4045,18 +4045,33 @@ async def run_estimate(
 
         result_data = pass1_result
 
-        # ── Post-processing validation: enforce item sum = spatial total ──
+        # ── Post-processing: use item-based total (bottom-up), not spatial bounding box ──
+        # The new prompt generates bottom-up estimates (sum of items = total).
+        # We trust the item sum and update totals to match, rather than scaling items
+        # to match a spatial bounding box that often overestimates.
         totals = result_data.get("totals", {})
         spatial_mid = totals.get("cubic_yards_mid", 0)
         items = result_data.get("items", [])
         item_sum = sum((it.get("cubic_yards", 0) * it.get("quantity", 1)) for it in items)
 
-        if spatial_mid > 0 and item_sum > 0 and abs(item_sum - spatial_mid) > 0.5:
-            # Items don't match spatial total — scale items to fit
-            scale_factor = spatial_mid / item_sum if item_sum > 0 else 1.0
-            for it in items:
-                it["cubic_yards"] = round(it.get("cubic_yards", 0) * scale_factor, 2)
-            logger.info(f"[run_estimate] Job {job_id}: scaled items by {scale_factor:.2f} (item_sum={item_sum:.1f} → spatial={spatial_mid:.1f})")
+        if item_sum > 0 and spatial_mid > 0 and spatial_mid > item_sum * 1.5:
+            # Spatial total is significantly larger than items — trust items (bottom-up)
+            logger.info(
+                f"[run_estimate] Job {job_id}: spatial ({spatial_mid:.1f} CY) > 1.5x items "
+                f"({item_sum:.1f} CY). Using item total instead of inflating."
+            )
+            result_data["totals"]["cubic_yards_mid"] = round(item_sum, 1)
+            result_data["totals"]["cubic_yards_low"] = round(item_sum * 0.85, 1)
+            result_data["totals"]["cubic_yards_high"] = round(item_sum * 1.15, 1)
+        elif item_sum > 0 and abs(item_sum - spatial_mid) > 0.5:
+            # Items and spatial are close-ish — use item sum as the truth
+            logger.info(
+                f"[run_estimate] Job {job_id}: syncing totals to item sum "
+                f"({item_sum:.1f} CY) instead of spatial ({spatial_mid:.1f} CY)"
+            )
+            result_data["totals"]["cubic_yards_mid"] = round(item_sum, 1)
+            result_data["totals"]["cubic_yards_low"] = round(item_sum * 0.85, 1)
+            result_data["totals"]["cubic_yards_high"] = round(item_sum * 1.15, 1)
 
         # Sanity check: cap single items at truck capacity (16 CY)
         # Was 5.0 CY which was too aggressive — bulk items like railroad ties,

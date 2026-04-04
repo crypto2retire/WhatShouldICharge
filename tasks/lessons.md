@@ -59,6 +59,11 @@ In `static/admin.html`, a timezone block used `\`` and `\${` (literal backslash 
 ### 1. Where to call `validate_estimate` in WSIC
 This repo runs the AI pipeline in `main.py` (`run_estimate`), not `wsic_ai_router.py`. Call validation **after** optional `items_needing_lookup` adjustments (so Tavily-updated CY is included) and **before** `calculate_price`, so stored `result_json` and prices match reconciled volumes.
 
+## Calibration review fields — 2026-04-04
+
+### 1. Extend the existing admin estimate modal instead of adding a second review flow
+WSIC already stores `actual_price`, `actual_cy`, and `accuracy_notes` through the admin estimate detail modal. Add calibration fields like `actual_truck_fraction` and `correction_reason` to that same payload and modal so review data stays in one place and the admin UX does not fragment.
+
 ## Railway Deployment — 2026-03-12
 
 ### 1. Railway PostgreSQL Networking

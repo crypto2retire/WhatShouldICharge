@@ -328,6 +328,29 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
   <div class="page-title">Accuracy Tracking</div>
   <div class="stats-grid" id="acc-stats"></div>
   <div class="card">
+    <div class="card-title">Calibration Breakdown</div>
+    <div class="summary-grid">
+      <div>
+        <div class="summary-label">By Scene Type</div>
+        <table><thead><tr><th>Scene</th><th>Count</th><th>Price</th><th>CY</th></tr></thead><tbody id="acc-scene-body"></tbody></table>
+      </div>
+      <div>
+        <div class="summary-label">By Confidence Bucket</div>
+        <table><thead><tr><th>Confidence</th><th>Count</th><th>Price</th><th>CY</th></tr></thead><tbody id="acc-confidence-body"></tbody></table>
+      </div>
+    </div>
+    <div class="summary-grid" style="margin-top:16px">
+      <div>
+        <div class="summary-label">By Capture Mode</div>
+        <table><thead><tr><th>Mode</th><th>Count</th><th>Price</th><th>CY</th></tr></thead><tbody id="acc-capture-body"></tbody></table>
+      </div>
+      <div>
+        <div class="summary-label">Recorded Miss Reasons</div>
+        <table><thead><tr><th>Reason</th><th>Count</th></tr></thead><tbody id="acc-miss-reasons-body"></tbody></table>
+      </div>
+    </div>
+  </div>
+  <div class="card">
     <div class="card-title">Accuracy by Company</div>
     <table><thead><tr><th>Company</th><th># With Actuals</th><th>Avg Price Accuracy</th><th>Avg CY Accuracy</th></tr></thead><tbody id="acc-company-body"></tbody></table>
   </div>
@@ -681,6 +704,14 @@ async function openEstimate(id) {
       <div><div class="summary-label">AI Confidence</div><div class="summary-val" style="color:${confColor}">${confidence}%</div><div class="confidence-bar-wrap"><div class="confidence-bar" style="width:${confidence}%;background:${confColor}"></div></div></div>
     </div></div>`;
 
+    html += `<div class="modal-section"><div class="modal-section-title">Estimate Context</div><div class="btn-group">
+      ${d.scene_label ? `<span class="badge badge-condition">Scene: ${esc(d.scene_label)}</span>` : ''}
+      ${d.confidence_bucket ? `<span class="badge badge-condition">Confidence: ${esc(d.confidence_bucket)}</span>` : ''}
+      ${d.capture_mode ? `<span class="badge badge-condition">Capture: ${esc((d.capture_mode||'').replace(/_/g,' '))}</span>` : ''}
+      ${d.occupancy_class ? `<span class="badge badge-condition">Occupancy: ${esc((d.occupancy_class||'').replace(/_/g,' '))}</span>` : ''}
+    </div>
+    ${d.geometry_summary ? `<div class="notes-block" style="margin-top:10px">${esc(d.geometry_summary)}</div>` : ''}</div>`;
+
     // Conditions
     if (conditions.length) {
       const ce = {'premium':'\u26a1','outdoor':'\ud83c\udf33','hazardous':'\u2623\ufe0f','hoarder':'\ud83c\udfe0','stairs':'\ud83e\udea8','heavy_items':'\ud83c\udfcb\ufe0f','construction':'\ud83d\udea7','tight_access':'\ud83d\udeaa','demo_required':'\ud83d\udca5'};
@@ -735,6 +766,19 @@ async function openEstimate(id) {
         <div class="form-group"><label class="form-label">Actual Job Price ($)</label><input class="form-input" type="number" id="actual-price-input" step="0.01" value="${d.actual_price||''}"></div>
         <div class="form-group"><label class="form-label">Actual CY</label><input class="form-input" type="number" id="actual-cy-input" step="0.1" value="${d.actual_cy||''}"></div>
       </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Actual Truck Fraction (0-1)</label><input class="form-input" type="number" id="actual-truck-fraction-input" min="0" max="1" step="0.05" value="${d.actual_truck_fraction == null ? '' : d.actual_truck_fraction}"></div>
+        <div class="form-group"><label class="form-label">Estimate Assessment</label><select class="form-select" id="correction-reason-input">
+          <option value="" ${!d.correction_reason?'selected':''}>Not set</option>
+          <option value="accurate" ${d.correction_reason==='accurate'?'selected':''}>Accurate</option>
+          <option value="estimate_high" ${d.correction_reason==='estimate_high'?'selected':''}>Estimate High</option>
+          <option value="estimate_low" ${d.correction_reason==='estimate_low'?'selected':''}>Estimate Low</option>
+          <option value="dense_load" ${d.correction_reason==='dense_load'?'selected':''}>Dense Load</option>
+          <option value="bulky_items_hidden" ${d.correction_reason==='bulky_items_hidden'?'selected':''}>Bulky Items Hidden</option>
+          <option value="photos_missed_items" ${d.correction_reason==='photos_missed_items'?'selected':''}>Photos Missed Items</option>
+          <option value="onsite_scope_change" ${d.correction_reason==='onsite_scope_change'?'selected':''}>On-Site Scope Change</option>
+        </select></div>
+      </div>
       <div class="form-group"><label class="form-label">Accuracy Notes</label><textarea class="form-textarea" id="accuracy-notes-input">${esc(d.accuracy_notes||'')}</textarea></div>
       <button class="btn btn-primary btn-sm" onclick="saveActualData(${d.id})">Save</button>
       <div id="accuracy-result-${d.id}">${d.actual_price?buildAccuracyResult(d.actual_price,d.price_low,d.price_high):''}</div>
@@ -760,6 +804,8 @@ async function saveActualData(estId) {
       body: JSON.stringify({
         actual_price: $('#actual-price-input').value || null,
         actual_cy: $('#actual-cy-input').value || null,
+        actual_truck_fraction: $('#actual-truck-fraction-input').value || null,
+        correction_reason: $('#correction-reason-input').value || '',
         accuracy_notes: $('#accuracy-notes-input').value || '',
       })
     });
@@ -974,17 +1020,27 @@ async function deletePromo(id, code) {
 }
 
 // ── Accuracy ──
+function renderAccuracyBreakdownRows(rows, labelKey='label') {
+  if (!rows || !rows.length) return '<tr><td colspan="4" class="empty">No calibration data yet</td></tr>';
+  return rows.map(row => `<tr><td>${esc(row[labelKey]||'Unknown')}</td><td>${row.count||0}</td><td>${row.avg_price_accuracy||0}%</td><td>${row.avg_cy_accuracy||0}%</td></tr>`).join('');
+}
+
 async function loadAccuracy() {
   try {
     const d = await apiFetch('/api/admin/accuracy');
     $('#acc-stats').innerHTML = `
       <div class="stat-card"><div class="stat-label">Estimates w/ Actuals</div><div class="stat-value">${d.total_with_actuals}</div></div>
+      <div class="stat-card"><div class="stat-label">Any Calibration Data</div><div class="stat-value">${d.calibrated_count||0}</div></div>
       <div class="stat-card"><div class="stat-label">Avg Price Accuracy</div><div class="stat-value" style="color:${d.avg_price_accuracy>=80?'var(--green)':d.avg_price_accuracy>=60?'var(--orange)':'var(--red)'}">${d.avg_price_accuracy}%</div></div>
       <div class="stat-card"><div class="stat-label">Avg CY Accuracy</div><div class="stat-value" style="color:${d.avg_cy_accuracy>=80?'var(--green)':d.avg_cy_accuracy>=60?'var(--orange)':'var(--red)'}">${d.avg_cy_accuracy}%</div></div>
       <div class="stat-card"><div class="stat-label">Overestimate Rate</div><div class="stat-value">${d.overestimate_rate}%</div></div>
       <div class="stat-card"><div class="stat-label">Underestimate Rate</div><div class="stat-value">${d.underestimate_rate}%</div></div>
     `;
     $('#acc-company-body').innerHTML = d.by_company.length ? d.by_company.map(c => `<tr><td>${esc(c.company)}</td><td>${c.count}</td><td>${c.avg_price_accuracy}%</td><td>${c.avg_cy_accuracy}%</td></tr>`).join('') : '<tr><td colspan="4" class="empty">No accuracy data yet</td></tr>';
+    $('#acc-scene-body').innerHTML = renderAccuracyBreakdownRows(d.by_scene_type || []);
+    $('#acc-confidence-body').innerHTML = renderAccuracyBreakdownRows(d.by_confidence_bucket || []);
+    $('#acc-capture-body').innerHTML = renderAccuracyBreakdownRows(d.by_capture_mode || []);
+    $('#acc-miss-reasons-body').innerHTML = (d.miss_reasons||[]).length ? (d.miss_reasons||[]).map(r => `<tr><td>${esc(r.reason||'Unspecified')}</td><td>${r.count||0}</td></tr>`).join('') : '<tr><td colspan="2" class="empty">No miss reasons recorded yet</td></tr>';
     $('#acc-needs-body').innerHTML = d.needs_data.length ? d.needs_data.map(e => `<tr class="clickable-row" onclick="openEstimate(${e.id})"><td>#${e.id}</td><td>${fmtShortDate(e.created_at)}</td><td>${esc(e.user_email)}</td><td>${e.cy_estimate?e.cy_estimate.toFixed(1):'--'}</td><td>$${e.price_low?Math.round(e.price_low):'--'}&ndash;$${e.price_high?Math.round(e.price_high):'--'}</td></tr>`).join('') : '<tr><td colspan="5" class="empty">All caught up!</td></tr>';
     loaded.accuracy = true;
   } catch(e) { console.error(e); }

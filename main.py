@@ -22,7 +22,7 @@ import stripe
 import httpx
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy import Column, Integer, Float, DateTime, Text, String, Boolean, ForeignKey, select, text, func, update
+from sqlalchemy import Column, Integer, Float, DateTime, Text, String, Boolean, ForeignKey, select, text, func, update, or_
 import asyncio
 from PIL import Image, ImageFilter, ImageStat
 import io
@@ -604,7 +604,9 @@ class Estimate(Base):
     photos_json = Column(Text, default="")
     actual_price = Column(Float, default=None)
     actual_cy = Column(Float, default=None)
+    actual_truck_fraction = Column(Float, default=None)
     accuracy_notes = Column(Text, default="")
+    correction_reason = Column(String(40), default="")
     preferred_contact = Column(String, default="phone")
     input_tokens = Column(Integer, default=0)
     output_tokens = Column(Integer, default=0)
@@ -696,7 +698,9 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS price_per_cy_heavy DOUBLE PRECISION DEFAULT NULL",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS actual_price DOUBLE PRECISION DEFAULT NULL",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS actual_cy DOUBLE PRECISION DEFAULT NULL",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS actual_truck_fraction DOUBLE PRECISION DEFAULT NULL",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS accuracy_notes TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS correction_reason VARCHAR(40) DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS preferred_contact VARCHAR DEFAULT 'phone'",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_notes TEXT DEFAULT ''",
@@ -758,7 +762,9 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN price_per_cy_heavy REAL DEFAULT NULL",
             "ALTER TABLE estimates ADD COLUMN actual_price REAL DEFAULT NULL",
             "ALTER TABLE estimates ADD COLUMN actual_cy REAL DEFAULT NULL",
+            "ALTER TABLE estimates ADD COLUMN actual_truck_fraction REAL DEFAULT NULL",
             "ALTER TABLE estimates ADD COLUMN accuracy_notes TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN correction_reason TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN preferred_contact TEXT DEFAULT 'phone'",
             "ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1",
             "ALTER TABLE users ADD COLUMN admin_notes TEXT DEFAULT ''",
@@ -5648,7 +5654,9 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
             "lookups": lookups,
             "actual_price": e.actual_price,
             "actual_cy": getattr(e, 'actual_cy', None),
+            "actual_truck_fraction": getattr(e, "actual_truck_fraction", None),
             "accuracy_notes": getattr(e, 'accuracy_notes', '') or "",
+            "correction_reason": getattr(e, "correction_reason", "") or "",
             "company_timezone": company_timezone,
             "capture_mode": getattr(e, "capture_mode", "remote") or "remote",
             "confidence_bucket": getattr(e, "confidence_bucket", "") or "",
@@ -5677,10 +5685,25 @@ async def admin_update_actual_price(request: Request, estimate_id: int):
         if "actual_cy" in body:
             val = body["actual_cy"]
             e.actual_cy = float(val) if val is not None and val != "" else None
+        if "actual_truck_fraction" in body:
+            val = body["actual_truck_fraction"]
+            if val is None or val == "":
+                e.actual_truck_fraction = None
+            else:
+                e.actual_truck_fraction = max(0.0, min(1.0, float(val)))
         if "accuracy_notes" in body:
             e.accuracy_notes = str(body["accuracy_notes"] or "")
+        if "correction_reason" in body:
+            e.correction_reason = str(body["correction_reason"] or "").strip()[:40]
         await db.commit()
-        return {"ok": True, "actual_price": e.actual_price, "actual_cy": e.actual_cy, "accuracy_notes": e.accuracy_notes or ""}
+        return {
+            "ok": True,
+            "actual_price": e.actual_price,
+            "actual_cy": e.actual_cy,
+            "actual_truck_fraction": getattr(e, "actual_truck_fraction", None),
+            "accuracy_notes": e.accuracy_notes or "",
+            "correction_reason": getattr(e, "correction_reason", "") or "",
+        }
 
 
 @app.get("/api/admin/users/{user_id}")
@@ -6103,6 +6126,44 @@ async def validate_promo_code(request: Request):
 async def admin_accuracy(request: Request):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
+        def _price_accuracy(e: Estimate) -> float | None:
+            mid = (e.price_low + e.price_high) / 2 if e.price_low and e.price_high else 0
+            if e.actual_price and mid > 0:
+                return 1 - abs(mid - e.actual_price) / e.actual_price
+            return None
+
+        def _cy_accuracy(e: Estimate) -> float | None:
+            if e.actual_cy and e.cy_estimate and e.actual_cy > 0:
+                return 1 - abs(e.cy_estimate - e.actual_cy) / e.actual_cy
+            return None
+
+        def _avg_pct(vals: list[float]) -> float:
+            return round(sum(vals) / len(vals) * 100, 1) if vals else 0
+
+        def _build_breakdown(estimates: list[Estimate], key_fn, label_fn):
+            buckets: dict[str, dict] = {}
+            for e in estimates:
+                key = str(key_fn(e) or "").strip() or "unknown"
+                bucket = buckets.setdefault(key, {"count": 0, "price_accs": [], "cy_accs": []})
+                bucket["count"] += 1
+                price_acc = _price_accuracy(e)
+                cy_acc = _cy_accuracy(e)
+                if price_acc is not None:
+                    bucket["price_accs"].append(price_acc)
+                if cy_acc is not None:
+                    bucket["cy_accs"].append(cy_acc)
+            rows = []
+            for key, data in buckets.items():
+                rows.append({
+                    "key": key,
+                    "label": label_fn(key),
+                    "count": data["count"],
+                    "avg_price_accuracy": _avg_pct(data["price_accs"]),
+                    "avg_cy_accuracy": _avg_pct(data["cy_accs"]),
+                })
+            rows.sort(key=lambda row: (-row["count"], row["label"]))
+            return rows
+
         # Estimates with actual data
         with_price = await db.execute(
             select(Estimate).where(Estimate.actual_price.isnot(None))
@@ -6114,16 +6175,16 @@ async def admin_accuracy(request: Request):
         over_count = 0
         under_count = 0
         for e in price_estimates:
-            mid = (e.price_low + e.price_high) / 2 if e.price_low and e.price_high else 0
-            if e.actual_price and mid > 0:
-                acc = 1 - abs(mid - e.actual_price) / e.actual_price
+            acc = _price_accuracy(e)
+            if acc is not None:
                 price_accuracies.append(acc)
+                mid = (e.price_low + e.price_high) / 2 if e.price_low and e.price_high else 0
                 if mid > e.actual_price:
                     over_count += 1
                 elif mid < e.actual_price:
                     under_count += 1
 
-        avg_price_accuracy = round(sum(price_accuracies) / len(price_accuracies) * 100, 1) if price_accuracies else 0
+        avg_price_accuracy = _avg_pct(price_accuracies)
 
         # CY accuracy
         with_cy = await db.execute(
@@ -6132,10 +6193,21 @@ async def admin_accuracy(request: Request):
         cy_estimates = with_cy.scalars().all()
         cy_accuracies = []
         for e in cy_estimates:
-            if e.actual_cy and e.cy_estimate and e.actual_cy > 0:
-                acc = 1 - abs(e.cy_estimate - e.actual_cy) / e.actual_cy
+            acc = _cy_accuracy(e)
+            if acc is not None:
                 cy_accuracies.append(acc)
-        avg_cy_accuracy = round(sum(cy_accuracies) / len(cy_accuracies) * 100, 1) if cy_accuracies else 0
+        avg_cy_accuracy = _avg_pct(cy_accuracies)
+
+        actuals_result = await db.execute(
+            select(Estimate).where(
+                or_(
+                    Estimate.actual_price.isnot(None),
+                    Estimate.actual_cy.isnot(None),
+                    Estimate.actual_truck_fraction.isnot(None),
+                )
+            )
+        )
+        calibrated_estimates = actuals_result.scalars().all()
 
         # Needs data queue: estimates older than 7 days without actual_price
         cutoff = datetime.utcnow() - timedelta(days=7)
@@ -6159,12 +6231,13 @@ async def admin_accuracy(request: Request):
         for e in price_estimates:
             if e.user_id not in company_map:
                 company_map[e.user_id] = {"price_accs": [], "cy_accs": [], "count": 0}
-            mid = (e.price_low + e.price_high) / 2 if e.price_low and e.price_high else 0
-            if e.actual_price and mid > 0:
-                company_map[e.user_id]["price_accs"].append(1 - abs(mid - e.actual_price) / e.actual_price)
+            price_acc = _price_accuracy(e)
+            if price_acc is not None:
+                company_map[e.user_id]["price_accs"].append(price_acc)
                 company_map[e.user_id]["count"] += 1
-            if e.actual_cy and e.cy_estimate and e.actual_cy > 0:
-                company_map[e.user_id]["cy_accs"].append(1 - abs(e.cy_estimate - e.actual_cy) / e.actual_cy)
+            cy_acc = _cy_accuracy(e)
+            if cy_acc is not None:
+                company_map[e.user_id]["cy_accs"].append(cy_acc)
 
         all_user_ids = list(company_map.keys())
         company_names = {}
@@ -6178,14 +6251,40 @@ async def admin_accuracy(request: Request):
             by_company.append({
                 "company": company_names.get(uid, "Unknown"),
                 "count": data["count"],
-                "avg_price_accuracy": round(sum(data["price_accs"]) / len(data["price_accs"]) * 100, 1) if data["price_accs"] else 0,
-                "avg_cy_accuracy": round(sum(data["cy_accs"]) / len(data["cy_accs"]) * 100, 1) if data["cy_accs"] else 0,
+                "avg_price_accuracy": _avg_pct(data["price_accs"]),
+                "avg_cy_accuracy": _avg_pct(data["cy_accs"]),
             })
+
+        by_scene_type = _build_breakdown(
+            calibrated_estimates,
+            lambda e: getattr(e, "scene_type", "") or "",
+            lambda key: SCENE_DISPLAY_NAMES.get(key, key.replace("_", " ").title() if key != "unknown" else "Unknown"),
+        )
+        by_confidence_bucket = _build_breakdown(
+            calibrated_estimates,
+            lambda e: getattr(e, "confidence_bucket", "") or "",
+            lambda key: key.replace("_", " ").title() if key != "unknown" else "Unknown",
+        )
+        by_capture_mode = _build_breakdown(
+            calibrated_estimates,
+            lambda e: getattr(e, "capture_mode", "") or "remote",
+            lambda key: key.replace("_", " ").title() if key != "unknown" else "Unknown",
+        )
+
+        miss_reason_counts: dict[str, int] = {}
+        for e in calibrated_estimates:
+            reason = (getattr(e, "correction_reason", "") or "").strip() or "unspecified"
+            miss_reason_counts[reason] = miss_reason_counts.get(reason, 0) + 1
+        miss_reasons = [
+            {"reason": reason.replace("_", " ").title() if reason != "unspecified" else "Unspecified", "count": count}
+            for reason, count in sorted(miss_reason_counts.items(), key=lambda item: (-item[1], item[0]))
+        ]
 
         return {
             "total_with_actuals": total_with_actuals,
             "avg_price_accuracy": avg_price_accuracy,
             "avg_cy_accuracy": avg_cy_accuracy,
+            "calibrated_count": len(calibrated_estimates),
             "overestimate_rate": round(over_count / total_with_actuals * 100, 1) if total_with_actuals else 0,
             "underestimate_rate": round(under_count / total_with_actuals * 100, 1) if total_with_actuals else 0,
             "needs_data": [
@@ -6196,6 +6295,10 @@ async def admin_accuracy(request: Request):
                 for e in needs_data
             ],
             "by_company": by_company,
+            "by_scene_type": by_scene_type,
+            "by_confidence_bucket": by_confidence_bucket,
+            "by_capture_mode": by_capture_mode,
+            "miss_reasons": miss_reasons,
         }
 
 

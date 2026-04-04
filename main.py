@@ -5610,13 +5610,18 @@ async def admin_update_site_config(request: Request):
 
 
 @app.get("/api/admin/estimates")
-async def admin_estimates(request: Request, page: int = 1, q: str = ""):
+async def admin_estimates(request: Request, page: int = 1, q: str = "", capture_mode: str = ""):
     await require_admin(request)
     limit = 25
     offset = (page - 1) * limit
+    capture_mode = normalize_capture_mode(capture_mode) if capture_mode else ""
     async with AsyncSessionLocal() as db:
         query = select(Estimate)
-        total = (await db.execute(select(func.count(Estimate.id)))).scalar() or 0
+        count_query = select(func.count(Estimate.id))
+        if capture_mode:
+            query = query.where(Estimate.capture_mode == capture_mode)
+            count_query = count_query.where(Estimate.capture_mode == capture_mode)
+        total = (await db.execute(count_query)).scalar() or 0
         result = await db.execute(query.order_by(Estimate.created_at.desc()).offset(offset).limit(limit))
         estimates = result.scalars().all()
 
@@ -5633,12 +5638,14 @@ async def admin_estimates(request: Request, page: int = 1, q: str = ""):
                  "photos_count": e.photos_count, "price_low": e.price_low,
                  "price_high": e.price_high, "cy_estimate": e.cy_estimate,
                  "team_member_id": e.team_member_id,
+                 "capture_mode": getattr(e, "capture_mode", "remote") or "remote",
                  "created_at": e.created_at.isoformat() if e.created_at else None}
                 for e in estimates
             ],
             "total": total,
             "page": page,
             "pages": max(1, (total + limit - 1) // limit),
+            "capture_mode": capture_mode or "all",
         }
 
 
@@ -6179,8 +6186,9 @@ async def validate_promo_code(request: Request):
 # ── Accuracy API ──
 
 @app.get("/api/admin/accuracy")
-async def admin_accuracy(request: Request):
+async def admin_accuracy(request: Request, capture_mode: str = ""):
     await require_admin(request)
+    capture_mode = normalize_capture_mode(capture_mode) if capture_mode else ""
     async with AsyncSessionLocal() as db:
         def _price_accuracy(e: Estimate) -> float | None:
             mid = (e.price_low + e.price_high) / 2 if e.price_low and e.price_high else 0
@@ -6221,9 +6229,10 @@ async def admin_accuracy(request: Request):
             return rows
 
         # Estimates with actual data
-        with_price = await db.execute(
-            select(Estimate).where(Estimate.actual_price.isnot(None))
-        )
+        price_query = select(Estimate).where(Estimate.actual_price.isnot(None))
+        if capture_mode:
+            price_query = price_query.where(Estimate.capture_mode == capture_mode)
+        with_price = await db.execute(price_query)
         price_estimates = with_price.scalars().all()
 
         total_with_actuals = len(price_estimates)
@@ -6243,9 +6252,10 @@ async def admin_accuracy(request: Request):
         avg_price_accuracy = _avg_pct(price_accuracies)
 
         # CY accuracy
-        with_cy = await db.execute(
-            select(Estimate).where(Estimate.actual_cy.isnot(None))
-        )
+        cy_query = select(Estimate).where(Estimate.actual_cy.isnot(None))
+        if capture_mode:
+            cy_query = cy_query.where(Estimate.capture_mode == capture_mode)
+        with_cy = await db.execute(cy_query)
         cy_estimates = with_cy.scalars().all()
         cy_accuracies = []
         for e in cy_estimates:
@@ -6254,25 +6264,29 @@ async def admin_accuracy(request: Request):
                 cy_accuracies.append(acc)
         avg_cy_accuracy = _avg_pct(cy_accuracies)
 
-        actuals_result = await db.execute(
-            select(Estimate).where(
-                or_(
-                    Estimate.actual_price.isnot(None),
-                    Estimate.actual_cy.isnot(None),
-                    Estimate.actual_truck_fraction.isnot(None),
-                )
+        actuals_query = select(Estimate).where(
+            or_(
+                Estimate.actual_price.isnot(None),
+                Estimate.actual_cy.isnot(None),
+                Estimate.actual_truck_fraction.isnot(None),
             )
         )
+        if capture_mode:
+            actuals_query = actuals_query.where(Estimate.capture_mode == capture_mode)
+        actuals_result = await db.execute(actuals_query)
         calibrated_estimates = actuals_result.scalars().all()
 
         # Needs data queue: estimates older than 7 days without actual_price
         cutoff = datetime.utcnow() - timedelta(days=7)
-        needs_data_result = await db.execute(
+        needs_data_query = (
             select(Estimate)
             .where(Estimate.actual_price.is_(None), Estimate.created_at < cutoff)
             .order_by(Estimate.created_at.desc())
             .limit(50)
         )
+        if capture_mode:
+            needs_data_query = needs_data_query.where(Estimate.capture_mode == capture_mode)
+        needs_data_result = await db.execute(needs_data_query)
         needs_data = needs_data_result.scalars().all()
         # Map user emails
         nd_user_ids = list(set(e.user_id for e in needs_data if e.user_id))
@@ -6355,6 +6369,7 @@ async def admin_accuracy(request: Request):
             "by_confidence_bucket": by_confidence_bucket,
             "by_capture_mode": by_capture_mode,
             "miss_reasons": miss_reasons,
+            "capture_mode": capture_mode or "all",
         }
 
 

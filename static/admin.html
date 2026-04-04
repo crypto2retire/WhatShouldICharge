@@ -83,6 +83,9 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
 .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
 .btn-sm { padding: 6px 12px; font-size: 0.78rem; }
 .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.filter-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+.filter-chip { padding:7px 12px; border-radius:999px; border:1px solid var(--border); background:var(--surface2); color:var(--muted); cursor:pointer; font-size:0.8rem; font-weight:600; }
+.filter-chip.active { color:var(--text); border-color:var(--accent); background:var(--accent-glow); }
 
 /* Modal */
 .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; overflow-y: auto; padding: 40px 20px; }
@@ -249,6 +252,11 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
 <div class="section" id="sec-estimates">
   <div class="page-title">Estimates</div>
   <div class="card">
+    <div class="filter-bar" id="estimates-filter-bar">
+      <button class="filter-chip active" data-capture-mode="">All Capture Modes</button>
+      <button class="filter-chip" data-capture-mode="operator_assist">Operator Assist Only</button>
+      <button class="filter-chip" data-capture-mode="remote">Remote Only</button>
+    </div>
     <table>
       <thead><tr><th>ID</th><th>Date</th><th>User</th><th>Photos</th><th>CY</th><th>Price Range</th></tr></thead>
       <tbody id="estimates-body"></tbody>
@@ -326,6 +334,11 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
 <!-- ============ ACCURACY ============ -->
 <div class="section" id="sec-accuracy">
   <div class="page-title">Accuracy Tracking</div>
+  <div class="filter-bar" id="acc-filter-bar">
+    <button class="filter-chip active" data-capture-mode="">All Capture Modes</button>
+    <button class="filter-chip" data-capture-mode="operator_assist">Operator Assist Only</button>
+    <button class="filter-chip" data-capture-mode="remote">Remote Only</button>
+  </div>
   <div class="stats-grid" id="acc-stats"></div>
   <div class="card">
     <div class="card-title">Calibration Breakdown</div>
@@ -660,14 +673,17 @@ async function loadEstimates(page) {
   const tbody = $('#estimates-body');
   tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading...</td></tr>';
   try {
-    const d = await apiFetch(`/api/admin/estimates?page=${page}`);
+    const qs = new URLSearchParams({ page: String(page) });
+    if (window.currentEstimatesCaptureMode) qs.set('capture_mode', window.currentEstimatesCaptureMode);
+    const d = await apiFetch(`/api/admin/estimates?${qs.toString()}`);
     if (!d.estimates.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No estimates</td></tr>'; }
     else {
       tbody.innerHTML = d.estimates.map(e => `<tr class="clickable-row" onclick="openEstimate(${e.id})">
         <td>#${e.id}</td><td>${fmtDate(e.created_at)}</td><td>${esc(e.user_email)}</td><td>${e.photos_count||0}</td>
-        <td>${e.cy_estimate?e.cy_estimate.toFixed(1):'--'}</td><td>$${e.price_low?Math.round(e.price_low):'--'} &ndash; $${e.price_high?Math.round(e.price_high):'--'}</td>
+        <td>${e.cy_estimate?e.cy_estimate.toFixed(1):'--'}</td><td>$${e.price_low?Math.round(e.price_low):'--'} &ndash; $${e.price_high?Math.round(e.price_high):'--'}<div style="font-size:0.72rem;color:var(--muted);margin-top:2px;">${esc((e.capture_mode||'remote').replace(/_/g,' '))}</div></td>
       </tr>`).join('');
     }
+    setActiveCaptureFilter('#estimates-filter-bar', window.currentEstimatesCaptureMode);
     renderPagination('#estimates-pagination', d.page, d.pages, 'loadEstimates');
     loaded.estimates = true;
   } catch(e) { console.error(e); }
@@ -1025,12 +1041,24 @@ function renderAccuracyBreakdownRows(rows, labelKey='label') {
   return rows.map(row => `<tr><td>${esc(row[labelKey]||'Unknown')}</td><td>${row.count||0}</td><td>${row.avg_price_accuracy||0}%</td><td>${row.avg_cy_accuracy||0}%</td></tr>`).join('');
 }
 
+window.currentAccuracyCaptureMode = '';
+window.currentEstimatesCaptureMode = '';
+
+function setActiveCaptureFilter(containerSel, value) {
+  $(`${containerSel}`).querySelectorAll('.filter-chip').forEach(btn => {
+    btn.classList.toggle('active', (btn.dataset.captureMode || '') === value);
+  });
+}
+
 async function loadAccuracy() {
   try {
-    const d = await apiFetch('/api/admin/accuracy');
+    const qs = new URLSearchParams();
+    if (window.currentAccuracyCaptureMode) qs.set('capture_mode', window.currentAccuracyCaptureMode);
+    const d = await apiFetch(`/api/admin/accuracy${qs.toString() ? '?' + qs.toString() : ''}`);
     $('#acc-stats').innerHTML = `
       <div class="stat-card"><div class="stat-label">Estimates w/ Actuals</div><div class="stat-value">${d.total_with_actuals}</div></div>
       <div class="stat-card"><div class="stat-label">Any Calibration Data</div><div class="stat-value">${d.calibrated_count||0}</div></div>
+      <div class="stat-card"><div class="stat-label">Capture Filter</div><div class="stat-value" style="font-size:1rem;">${esc((d.capture_mode||'all').replace(/_/g,' '))}</div></div>
       <div class="stat-card"><div class="stat-label">Avg Price Accuracy</div><div class="stat-value" style="color:${d.avg_price_accuracy>=80?'var(--green)':d.avg_price_accuracy>=60?'var(--orange)':'var(--red)'}">${d.avg_price_accuracy}%</div></div>
       <div class="stat-card"><div class="stat-label">Avg CY Accuracy</div><div class="stat-value" style="color:${d.avg_cy_accuracy>=80?'var(--green)':d.avg_cy_accuracy>=60?'var(--orange)':'var(--red)'}">${d.avg_cy_accuracy}%</div></div>
       <div class="stat-card"><div class="stat-label">Overestimate Rate</div><div class="stat-value">${d.overestimate_rate}%</div></div>
@@ -1042,9 +1070,24 @@ async function loadAccuracy() {
     $('#acc-capture-body').innerHTML = renderAccuracyBreakdownRows(d.by_capture_mode || []);
     $('#acc-miss-reasons-body').innerHTML = (d.miss_reasons||[]).length ? (d.miss_reasons||[]).map(r => `<tr><td>${esc(r.reason||'Unspecified')}</td><td>${r.count||0}</td></tr>`).join('') : '<tr><td colspan="2" class="empty">No miss reasons recorded yet</td></tr>';
     $('#acc-needs-body').innerHTML = d.needs_data.length ? d.needs_data.map(e => `<tr class="clickable-row" onclick="openEstimate(${e.id})"><td>#${e.id}</td><td>${fmtShortDate(e.created_at)}</td><td>${esc(e.user_email)}</td><td>${e.cy_estimate?e.cy_estimate.toFixed(1):'--'}</td><td>$${e.price_low?Math.round(e.price_low):'--'}&ndash;$${e.price_high?Math.round(e.price_high):'--'}</td></tr>`).join('') : '<tr><td colspan="5" class="empty">All caught up!</td></tr>';
+    setActiveCaptureFilter('#acc-filter-bar', window.currentAccuracyCaptureMode);
     loaded.accuracy = true;
   } catch(e) { console.error(e); }
 }
+
+$('#acc-filter-bar').addEventListener('click', function(e) {
+  const btn = e.target.closest('.filter-chip');
+  if (!btn) return;
+  window.currentAccuracyCaptureMode = btn.dataset.captureMode || '';
+  loadAccuracy();
+});
+
+$('#estimates-filter-bar').addEventListener('click', function(e) {
+  const btn = e.target.closest('.filter-chip');
+  if (!btn) return;
+  window.currentEstimatesCaptureMode = btn.dataset.captureMode || '';
+  loadEstimates(1);
+});
 
 // ── Site Settings ──
 async function loadSettings() {

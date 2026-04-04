@@ -69,6 +69,9 @@ WSIC already stores `actual_price`, `actual_cy`, and `accuracy_notes` through th
 ### 1. Add stricter capture rules by mode, not by a separate estimator
 WSIC already has the right estimate endpoints and persistence. Operator assist should be a `capture_mode` on the existing signed-in and team flows, with stricter photo-quality gating and simple UI guidance, instead of a forked estimator path that would duplicate scene/confidence/calibration logic.
 
+### 2. Reuse `capture_mode` as the admin filter axis
+When monitoring whether operator assist is improving accuracy, add filters to the existing admin estimates and accuracy views rather than building a separate dashboard. The same `capture_mode` query parameter should drive both the raw estimate list and the calibration aggregates so the numbers line up with the rows you can inspect.
+
 ## Railway Deployment — 2026-03-12
 
 ### 1. Railway PostgreSQL Networking

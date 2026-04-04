@@ -784,6 +784,19 @@
       <input type="text" id="estimate-name" placeholder="Estimate name (e.g. 123 Main St, Smith garage cleanout)" style="width:100%;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.95rem;" maxlength="100">
     </div>
 
+    <div style="margin-bottom:16px;padding:12px 14px;background:rgba(79,142,247,0.08);border:1px solid rgba(79,142,247,0.2);border-radius:10px;">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+        <input type="checkbox" id="operator-assist-toggle" style="margin-top:2px;">
+        <span>
+          <span style="display:block;font-weight:600;">Operator Assist Mode</span>
+          <span style="display:block;color:var(--muted);font-size:0.82rem;line-height:1.5;">Internal capture flow for on-site use. Requires at least 3 usable photos: wide shot, left angle, and right angle.</span>
+        </span>
+      </label>
+      <div id="operator-assist-guide" style="display:none;margin-top:10px;color:var(--muted);font-size:0.82rem;line-height:1.5;">
+        Shot order: 1. Wide shot 2. Left angle 3. Right angle 4. Close-up only if dense debris or hidden bulk needs clarification.
+      </div>
+    </div>
+
     <div id="drop-zone" role="button" tabindex="0" aria-label="Upload photos. Drop photos here or click to upload.">
       <div class="upload-icon" aria-hidden="true">📷</div>
       <div class="upload-label">Drop photos here or click to upload</div>
@@ -1308,6 +1321,8 @@ const resultsEl = document.getElementById('results');
 const errorBox = document.getElementById('error-box');
 const uploadCard = document.getElementById('upload-card');
 const submitSection = document.getElementById('submit-section');
+const operatorAssistToggle = document.getElementById('operator-assist-toggle');
+const operatorAssistGuide = document.getElementById('operator-assist-guide');
 
 let photos = [];
 let selectedPhotoIdx = null;
@@ -1321,6 +1336,21 @@ const catIcons = {
   debris: '🗑️',
   other: '📦'
 };
+
+function operatorAssistEnabled() {
+  return !!(operatorAssistToggle && operatorAssistToggle.checked);
+}
+
+function syncOperatorAssistUI() {
+  if (operatorAssistGuide) {
+    operatorAssistGuide.style.display = operatorAssistEnabled() ? 'block' : 'none';
+  }
+  updateSubmitBtn();
+}
+
+if (operatorAssistToggle) {
+  operatorAssistToggle.addEventListener('change', syncOperatorAssistUI);
+}
 
 dropZone.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
@@ -1502,6 +1532,8 @@ function updateSubmitBtn() {
   submitBtn.disabled = photos.length === 0;
   if (photos.length === 0) {
     submitBtn.textContent = 'Upload Photos to Get Estimate';
+  } else if (operatorAssistEnabled()) {
+    submitBtn.textContent = 'Run Operator Assist Estimate';
   } else {
     submitBtn.textContent = 'Get Estimate for ' + photos.length + ' Photo' + (photos.length !== 1 ? 's' : '');
   }
@@ -1534,11 +1566,16 @@ async function submitEstimate() {
   photos.forEach(p => formData.append('files', p.file));
   formData.append('rooms', JSON.stringify(rooms));
   formData.append('estimate_name', document.getElementById('estimate-name').value.trim());
+  formData.append('capture_mode', operatorAssistEnabled() ? 'operator_assist' : 'remote');
 
   const hasTruck = photos.some(p => p.room === 'Truck Load');
   if (hasTruck && truckLoadPct) {
     formData.append('truck_load_pct', truckLoadPct);
   }
+
+  document.getElementById('loading-sub').textContent = operatorAssistEnabled()
+    ? 'Checking multi-angle coverage before the estimate runs'
+    : 'AI is estimating cubic yards and pricing';
 
   try {
     const resp = await fetch('/api/estimate', { method: 'POST', headers: {'X-CSRF-Token': getCsrfToken()}, body: formData });

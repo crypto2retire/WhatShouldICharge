@@ -362,6 +362,16 @@
         <label for="cust-phone" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Customer phone</label>
         <input type="tel" id="cust-phone" placeholder="Customer phone (optional)">
       </div>
+      <div style="margin-top:12px;padding:12px 14px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:10px;">
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+          <input type="checkbox" id="operator-assist-toggle" style="margin-top:2px;">
+          <span>
+            <span style="display:block;font-weight:600;">Operator Assist Mode</span>
+            <span style="display:block;color:var(--muted);font-size:0.8rem;line-height:1.5;">For on-site internal use. Requires 3 usable photos before estimate runs: wide shot, left angle, and right angle.</span>
+          </span>
+        </label>
+        <div id="operator-assist-guide" style="display:none;margin-top:10px;color:var(--muted);font-size:0.8rem;line-height:1.5;">Shot order: 1. Wide shot 2. Left angle 3. Right angle 4. Add a close-up only if dense debris or hidden bulk needs clarification.</div>
+      </div>
     </div>
 
     <div class="section-title">Photos</div>
@@ -542,7 +552,21 @@ function assignRoom(room) {
 
 function updateBtn() {
   document.getElementById('submit-btn').disabled = photos.length === 0;
+  document.getElementById('submit-btn').textContent = isOperatorAssist() ? 'Run Operator Assist Estimate' : 'Get Estimate';
 }
+
+function isOperatorAssist() {
+  var el = document.getElementById('operator-assist-toggle');
+  return !!(el && el.checked);
+}
+
+function syncOperatorAssistUI() {
+  var guide = document.getElementById('operator-assist-guide');
+  if (guide) guide.style.display = isOperatorAssist() ? 'block' : 'none';
+  updateBtn();
+}
+
+document.getElementById('operator-assist-toggle').addEventListener('change', syncOperatorAssistUI);
 
 async function submitEstimate() {
   document.getElementById('upload-section').style.display = 'none';
@@ -557,6 +581,10 @@ async function submitEstimate() {
   formData.append('customer_name', document.getElementById('cust-name').value);
   formData.append('customer_email', document.getElementById('cust-email').value);
   formData.append('customer_phone', document.getElementById('cust-phone').value);
+  formData.append('capture_mode', isOperatorAssist() ? 'operator_assist' : 'remote');
+  document.getElementById('loading-sub').textContent = isOperatorAssist()
+    ? 'Checking multi-angle coverage before the estimate runs'
+    : 'AI is calculating your estimate';
 
   try {
     var resp = await fetch('/api/team/estimate', { method: 'POST', headers: {'X-CSRF-Token': getCsrfToken()}, body: formData });
@@ -827,6 +855,8 @@ function newEstimate() {
   document.getElementById('cust-name').value = '';
   document.getElementById('cust-email').value = '';
   document.getElementById('cust-phone').value = '';
+  document.getElementById('operator-assist-toggle').checked = false;
+  syncOperatorAssistUI();
 }
 
 async function logout() {

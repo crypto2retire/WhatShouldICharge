@@ -2717,12 +2717,56 @@ def summarize_photo_quality(analyses: list[dict]) -> dict:
     }
 
 
+def normalize_capture_mode(raw_mode: str | None) -> str:
+    mode = str(raw_mode or "").strip().lower()
+    return "operator_assist" if mode == "operator_assist" else "remote"
+
+
+def apply_capture_mode_quality_policy(photo_quality: dict, capture_mode: str) -> dict:
+    if capture_mode != "operator_assist":
+        return photo_quality
+
+    adjusted = dict(photo_quality)
+    flags = list(photo_quality.get("flags", []))
+    reasons = list(photo_quality.get("reasons", []))
+    guidance = list(photo_quality.get("guidance", []))
+    usable_photo_count = int(photo_quality.get("usable_photo_count", 0) or 0)
+    duplicate_photo_count = int(photo_quality.get("duplicate_photo_count", 0) or 0)
+
+    if usable_photo_count < 3:
+        flags.append("operator_assist_needs_three_angles")
+        reasons.append("Operator assist mode needs at least three usable photos.")
+        guidance.insert(0, "Capture a wide shot, then left and right angles before submitting.")
+        adjusted["retry_needed"] = True
+        adjusted["retry_message"] = "Operator assist mode needs 3 usable photos: wide shot, left angle, and right angle."
+    elif duplicate_photo_count > 0 and usable_photo_count < 4:
+        flags.append("operator_assist_duplicate_angles")
+        reasons.append("Operator assist mode detected repeated angles.")
+        guidance.insert(0, "Retake one photo from a different angle so the set covers the pile from multiple sides.")
+        adjusted["confidence_bucket"] = "medium"
+
+    if adjusted.get("retry_needed"):
+        adjusted["confidence_bucket"] = "low"
+
+    deduped_flags = sorted(set(flags))
+    deduped_guidance: list[str] = []
+    for line in guidance:
+        if line and line not in deduped_guidance:
+            deduped_guidance.append(line)
+
+    adjusted["flags"] = deduped_flags
+    adjusted["reasons"] = reasons[:5]
+    adjusted["guidance"] = deduped_guidance[:4]
+    return adjusted
+
+
 async def prepare_estimate_photos(
     files: list[UploadFile],
     rooms_raw: str,
     *,
     max_files: int,
     default_room: str,
+    capture_mode: str = "remote",
 ) -> tuple[list[dict], list, list[str], dict]:
     if not files:
         raise HTTPException(status_code=400, detail="At least one photo is required.")
@@ -2761,6 +2805,7 @@ async def prepare_estimate_photos(
         photo_data.append({"b64": b64, "room": room_label, "index": i + 1})
 
     quality = summarize_photo_quality(analyses)
+    quality = apply_capture_mode_quality_policy(quality, normalize_capture_mode(capture_mode))
     quality["photos"] = [
         {
             "photo_index": a["photo_index"],
@@ -4404,6 +4449,7 @@ async def create_estimate(
     rooms: str = Form(default="[]"),
     truck_load_pct: Optional[float] = Form(default=None),
     estimate_name: str = Form(default=""),
+    capture_mode: str = Form(default="remote"),
 ):
     user = await require_user(request)
     cleanup_expired_jobs()
@@ -4426,11 +4472,13 @@ async def create_estimate(
     if not api_key:
         raise HTTPException(status_code=500, detail="AI service is not configured. Please contact support.")
 
+    capture_mode = normalize_capture_mode(capture_mode)
     photo_data, image_content, stored_photos, photo_quality = await prepare_estimate_photos(
         files,
         rooms,
         max_files=20,
         default_room="Unknown",
+        capture_mode=capture_mode,
     )
     if photo_quality["retry_needed"]:
         return JSONResponse(
@@ -4478,6 +4526,14 @@ async def create_estimate(
         user = fresh_user
 
     truck_cap = user.truck_capacity_cy or 16.0
+    if capture_mode == "operator_assist":
+        image_content.append({
+            "type": "text",
+            "text": (
+                "\nCapture mode: operator_assist. These photos should cover the same pile with a wide shot, "
+                "left angle, and right angle. Prefer visible floor edges and avoid duplicate angles."
+            )
+        })
     if truck_load_pct is not None:
         truck_cy = round((truck_load_pct / 100.0) * truck_cap, 1)
         image_content.append({
@@ -4498,7 +4554,7 @@ async def create_estimate(
         "estimate_name": estimate_name.strip(),
         "created_at": datetime.utcnow(),
         "stored_photos": stored_photos,
-        "capture_mode": "remote",
+        "capture_mode": capture_mode,
         "photo_quality": photo_quality,
         "room_labels": _normalize_room_labels(photo_data),
         "truck_load_pct": truck_load_pct,
@@ -6544,6 +6600,7 @@ async def team_create_estimate(
     customer_name: str = Form(default=""),
     customer_email: str = Form(default=""),
     customer_phone: str = Form(default=""),
+    capture_mode: str = Form(default="remote"),
 ):
     member, owner = await require_team_member(request)
     cleanup_expired_jobs()
@@ -6564,11 +6621,13 @@ async def team_create_estimate(
     if not api_key:
         raise HTTPException(status_code=500, detail="AI service is not configured. Please contact support.")
 
+    capture_mode = normalize_capture_mode(capture_mode)
     photo_data, image_content, stored_photos, photo_quality = await prepare_estimate_photos(
         files,
         rooms,
         max_files=20,
         default_room="Unknown",
+        capture_mode=capture_mode,
     )
     if photo_quality["retry_needed"]:
         return JSONResponse(
@@ -6595,6 +6654,14 @@ async def team_create_estimate(
         user = fresh_owner
 
     now = datetime.utcnow()
+    if capture_mode == "operator_assist":
+        image_content.append({
+            "type": "text",
+            "text": (
+                "\nCapture mode: operator_assist. These photos should cover the same pile with a wide shot, "
+                "left angle, and right angle. Prefer visible floor edges and avoid duplicate angles."
+            )
+        })
     job_id = f"team-{member.id}-{secrets.token_hex(8)}"
     estimate_jobs[job_id] = {
         "status": "analyzing",
@@ -6608,7 +6675,7 @@ async def team_create_estimate(
         "customer_phone": customer_phone,
         "created_at": now,
         "stored_photos": stored_photos,
-        "capture_mode": "remote",
+        "capture_mode": capture_mode,
         "photo_quality": photo_quality,
         "room_labels": _normalize_room_labels(photo_data),
         "truck_load_pct": truck_load_pct,

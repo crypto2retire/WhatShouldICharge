@@ -8,6 +8,11 @@ If WSIC asks the user to retry because the photo set is too dark, blurry, unread
 ### 2. Shared upload prep logic prevents drift
 The signed-in, public, and team estimate endpoints all process photos. Keep upload validation, compression, and quality analysis in a shared helper so one flow does not silently drift from the others.
 
+## Scene-aware confidence needs consistent UX — 2026-04-04
+
+### 1. Metadata is only useful if every estimate surface shows it
+If backend responses include scene type, confidence bucket, and widened-range context, expose that consistently in signed-in, team, and public estimate views. Otherwise operators see one explanation while customers see another, and trust drops.
+
 ## Repo workflow docs drift — 2026-04-03
 
 ### 1. Keep AGENTS.md aligned with the real deploy path

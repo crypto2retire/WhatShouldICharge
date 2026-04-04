@@ -404,6 +404,8 @@
         <div class="price-meta-item"><div class="val" id="res-photos-count"></div><div class="lbl">Photos</div></div>
         <div class="price-meta-item"><div class="val" id="res-confidence"></div><div class="lbl">Confidence</div></div>
       </div>
+      <div id="res-scene-note" style="display:none;margin-top:10px;color:var(--muted);font-size:0.82rem;text-align:center;"></div>
+      <div id="res-confidence-note" style="display:none;margin-top:8px;color:var(--muted);font-size:0.8rem;line-height:1.5;text-align:center;"></div>
     </div>
 
     <div class="card">
@@ -460,6 +462,11 @@ var currentEstimateId = null;
 var ROOMS = ['Living Room','Bedroom 1','Bedroom 2','Bedroom 3','Bedroom 4','Garage','Basement','Kitchen','Bathroom','Outdoor','Other','Truck Load'];
 
 function esc(s) { var d = document.createElement('div'); d.textContent = String(s || ''); return d.innerHTML; }
+
+function formatConfidenceBucket(bucket) {
+  var labels = { high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence' };
+  return labels[bucket] || '';
+}
 
 (async function() {
   var resp = await fetch('/api/team/me');
@@ -619,6 +626,12 @@ function showResults(data) {
   document.getElementById('res-cy').textContent = (data.cy_estimate || 0) + ' CY';
   document.getElementById('res-photos-count').textContent = photos.length;
   document.getElementById('res-confidence').textContent = (data.confidence || 75) + '%';
+  document.getElementById('res-scene-note').textContent = data.scene_label ? ('Scene type: ' + data.scene_label + (data.range_widened ? ' • range widened slightly for uncertainty' : '')) : '';
+  document.getElementById('res-scene-note').style.display = data.scene_label ? 'block' : 'none';
+  var confReasons = (data.confidence_reasons || []).slice(0, 2);
+  var confBucket = formatConfidenceBucket(data.confidence_bucket);
+  document.getElementById('res-confidence-note').textContent = [confBucket, confReasons.join(' ')].filter(Boolean).join(' • ');
+  document.getElementById('res-confidence-note').style.display = (confBucket || confReasons.length) ? 'block' : 'none';
 
   var photosEl = document.getElementById('ref-photos-section');
   if (photos.length > 0) {

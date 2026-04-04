@@ -123,6 +123,8 @@ input, select { width: 100%; padding: 10px 12px; background: var(--bg); border: 
         We'll reach out to you shortly via your preferred contact method.
       </p>
       <div id="contact-method-confirm" style="background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.2);border-radius:8px;padding:12px 16px;font-size:0.85rem;color:var(--accent);margin-bottom:20px;"></div>
+      <div id="scene-note" style="display:none;background:rgba(15,23,42,0.04);border:1px solid rgba(148,163,184,0.3);border-radius:8px;padding:12px 16px;font-size:0.82rem;color:var(--muted);margin-bottom:12px;line-height:1.5;"></div>
+      <div id="confidence-note" style="display:none;font-size:0.8rem;color:var(--muted);line-height:1.5;"></div>
     </div>
     <div class="card cta-card" id="cta-card">
       <div style="font-size:0.9rem;color:var(--muted);margin-bottom:10px;">Need help sooner?</div>
@@ -338,6 +340,21 @@ function showResults(r) {
   var methodLabels = { phone: 'phone call', text: 'text message', email: 'email' };
   document.getElementById('contact-method-confirm').textContent =
     "We'll contact you by " + (methodLabels[method] || method) + " at the information you provided.";
+  var sceneEl = document.getElementById('scene-note');
+  if (r.scene_label) {
+    sceneEl.textContent = 'Estimate context: ' + r.scene_label + (r.range_widened ? ' • range widened slightly while we account for uncertainty.' : '');
+    sceneEl.style.display = 'block';
+  } else {
+    sceneEl.style.display = 'none';
+  }
+  var confEl = document.getElementById('confidence-note');
+  var reasons = (r.confidence_reasons || []).slice(0, 2);
+  if (reasons.length) {
+    confEl.textContent = reasons.join(' ');
+    confEl.style.display = 'block';
+  } else {
+    confEl.style.display = 'none';
+  }
 }
 
 // Notify parent iframe of height changes for widget auto-resize

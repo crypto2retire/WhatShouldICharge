@@ -1991,6 +1991,12 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
       <strong>Whole house cleanouts &amp; hoarding situations:</strong> For accuracy on larger jobs, we will follow up within 24 hours to confirm pricing or ask a few additional questions.
     </div>
 
+    <div class="card" id="res-scene-card" style="display:none">
+      <div class="card-title">Estimate Context</div>
+      <div id="res-scene-note" style="font-size:0.84rem;color:#64748b;line-height:1.6"></div>
+      <div id="res-confidence-note" style="display:none;font-size:0.8rem;color:#94a3b8;line-height:1.6;margin-top:8px"></div>
+    </div>
+
     <div class="card" id="res-photos-card" style="display:none">
       <div class="card-title">Your Photos</div>
       <div id="res-photos" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
@@ -2299,6 +2305,15 @@ function showResults(r){{
   var dp=r.potential_duplicates||[];
   if(dp.length>0){{var dh='<strong>Items to verify (may be duplicates):</strong><br>';dp.forEach(function(d){{dh+=esc(d.item_a)+' vs '+esc(d.item_b)+'<br>'}});document.getElementById('res-dupes').innerHTML=dh;document.getElementById('res-dupes').style.display='block'}}
   if(r.notes){{document.getElementById('res-notes').textContent=r.notes;document.getElementById('res-notes-card').style.display='block'}}
+  var sceneCard=document.getElementById('res-scene-card');
+  var sceneNote=document.getElementById('res-scene-note');
+  var confNote=document.getElementById('res-confidence-note');
+  var sceneParts=[];
+  if(r.scene_label){{sceneParts.push('Scene type: '+r.scene_label)}}
+  if(r.range_widened){{sceneParts.push('Price range widened slightly for uncertainty')}}
+  if(sceneParts.length){{sceneNote.textContent=sceneParts.join(' • ');sceneCard.style.display='block'}}else{{sceneCard.style.display='none'}}
+  var confReasons=(r.confidence_reasons||[]).slice(0,2);
+  if(confReasons.length){{confNote.textContent=confReasons.join(' ');confNote.style.display='block'}}else{{confNote.style.display='none'}}
   // Show follow-up notice for large/hoarding jobs
   var fn=document.getElementById('followup-notice');
   if(fn){{var cy=r.cy_estimate||0;if(jt==='hoarder'||jt==='truck_load'||cy>=10){{fn.style.display='block'}}else{{fn.style.display='none'}}}}
@@ -2762,6 +2777,174 @@ async def prepare_estimate_photos(
     return photo_data, image_content, stored_photos, quality
 
 
+SCENE_DISPLAY_NAMES = {
+    "curbside_mixed_junk": "Curbside Mixed Junk",
+    "garage_clutter": "Garage Clutter",
+    "room_interior_furniture": "Room Interior Furniture",
+    "bagged_trash_soft_goods": "Bagged Trash / Soft Goods",
+    "construction_debris": "Construction Debris",
+    "yard_waste_outdoor_pile": "Yard Waste / Outdoor Pile",
+    "storage_overflow": "Storage / Basement / Attic Overflow",
+    "truck_load": "Truck Load",
+    "mixed_junk": "Mixed Junk",
+}
+
+
+def _normalize_room_labels(photo_data: list[dict]) -> list[str]:
+    out = []
+    for pd in photo_data:
+        room = str(pd.get("room", "") or "").strip()
+        if room:
+            out.append(room)
+    return out
+
+
+def infer_capture_scene_hint(room_labels: list[str], truck_load_pct: Optional[float] = None) -> str:
+    labels = " ".join(room_labels).lower()
+    if truck_load_pct is not None or "truck load" in labels:
+        return "truck_load"
+    if any(k in labels for k in ("garage",)):
+        return "garage_clutter"
+    if any(k in labels for k in ("basement", "attic", "shed", "storage")):
+        return "storage_overflow"
+    if any(k in labels for k in ("outdoor", "yard", "curb", "driveway")):
+        return "curbside_mixed_junk"
+    if any(k in labels for k in ("living room", "bedroom", "kitchen", "bathroom", "office", "dining")):
+        return "room_interior_furniture"
+    return ""
+
+
+def build_scene_prompt_hint(scene_hint: str) -> str:
+    hints = {
+        "truck_load": "Scene hint: this is a truck-load style estimate. Use truck-load context if visible, but still estimate from the actual visible items.",
+        "garage_clutter": "Scene hint: this appears to be garage clutter. Expect mixed household items, shelving, tools, bins, and stacked storage.",
+        "storage_overflow": "Scene hint: this appears to be a basement, attic, shed, or storage-overflow job. Watch for dense clutter and occluded items.",
+        "curbside_mixed_junk": "Scene hint: this appears to be an outdoor or curbside mixed-junk pile. Use visible pile boundaries and outdoor context carefully.",
+        "room_interior_furniture": "Scene hint: this appears to be an interior room furniture cleanout. Expect bulky items with air gaps.",
+    }
+    return hints.get(scene_hint, "")
+
+
+def classify_scene_type(
+    result_data: dict,
+    room_labels: list[str],
+    truck_load_pct: Optional[float] = None,
+) -> str:
+    labels = " ".join(room_labels).lower()
+    items = result_data.get("items", []) or []
+    names = " ".join(str(it.get("name", "") or "").lower() for it in items)
+    job_type = str(result_data.get("job_type", "") or "").lower()
+    conditions = {str(c).lower() for c in (result_data.get("conditions", []) or [])}
+
+    if truck_load_pct is not None or job_type == "truck_load" or "truck load" in labels:
+        return "truck_load"
+
+    yard_keywords = ("branch", "brush", "yard", "tree", "limb", "leaves", "mulch", "stump")
+    construction_keywords = (
+        "drywall", "sheetrock", "tile", "lumber", "wood", "cabinet", "countertop",
+        "demolition", "construction", "debris", "framing", "fence", "railroad tie",
+        "shingle", "roofing", "carpet", "pad", "plywood", "osb",
+    )
+    bag_keywords = ("bag", "trash bag", "garbage bag", "clothes", "clothing", "linen", "soft", "box", "bin")
+    furniture_keywords = (
+        "couch", "sofa", "loveseat", "sectional", "recliner", "chair", "table",
+        "dresser", "desk", "bed", "mattress", "box spring", "nightstand", "bookshelf",
+    )
+
+    if any(k in names for k in yard_keywords) and any(k in labels for k in ("outdoor", "yard", "curb", "driveway")):
+        return "yard_waste_outdoor_pile"
+    if any(k in names for k in construction_keywords):
+        return "construction_debris"
+    if job_type == "hoarder" or "hoarder" in conditions:
+        return "storage_overflow" if any(k in labels for k in ("basement", "attic", "shed", "storage")) else "bagged_trash_soft_goods"
+    if sum(1 for it in items if any(k in str(it.get("name", "")).lower() for k in bag_keywords)) >= 3:
+        return "bagged_trash_soft_goods"
+    if any(k in labels for k in ("garage",)):
+        return "garage_clutter"
+    if any(k in labels for k in ("basement", "attic", "shed", "storage")):
+        return "storage_overflow"
+    if any(k in labels for k in ("outdoor", "yard", "curb", "driveway")):
+        return "curbside_mixed_junk"
+    if any(k in names for k in furniture_keywords) or any(k in labels for k in ("living room", "bedroom", "kitchen", "bathroom", "office", "dining")):
+        return "room_interior_furniture"
+    return "mixed_junk"
+
+
+def apply_scene_confidence_policy(
+    result_data: dict,
+    photo_quality: dict,
+    scene_type: str,
+    room_labels: list[str],
+) -> tuple[str, list[str], int]:
+    confidence_bucket = str(photo_quality.get("confidence_bucket", "medium") or "medium")
+    reasons = list(photo_quality.get("reasons", []) or [])
+    confidence = int(result_data.get("confidence", 75) or 75)
+    labels = " ".join(room_labels).lower()
+    job_type = str(result_data.get("job_type", "") or "").lower()
+
+    if scene_type in {"garage_clutter", "storage_overflow", "bagged_trash_soft_goods"} and confidence_bucket == "high":
+        confidence_bucket = "medium"
+        reasons.append(f"Scene classified as {SCENE_DISPLAY_NAMES.get(scene_type, scene_type).lower()}, which usually hides some items.")
+
+    if scene_type == "construction_debris":
+        reasons.append("Scene classified as construction debris, which can stack tighter than its footprint suggests.")
+    elif scene_type == "room_interior_furniture":
+        reasons.append("Scene classified as interior furniture, where bulky items create air gaps and occlusion.")
+    elif scene_type == "curbside_mixed_junk":
+        reasons.append("Scene classified as curbside mixed junk based on outdoor pile context.")
+    elif scene_type == "truck_load":
+        reasons.append("Scene classified as truck load from capture context and job type.")
+
+    if job_type in {"hoarder", "truck_load"} and confidence_bucket == "high":
+        confidence_bucket = "medium"
+        reasons.append(f"Job type {job_type} increases estimate uncertainty.")
+
+    if "garage" in labels and scene_type != "garage_clutter":
+        reasons.append("Room labels include garage context.")
+
+    if confidence_bucket == "high":
+        confidence = max(confidence, 80)
+    elif confidence_bucket == "medium":
+        confidence = min(max(confidence, 64), 79)
+    else:
+        confidence = min(confidence, 64)
+
+    deduped = []
+    for reason in reasons:
+        if reason and reason not in deduped:
+            deduped.append(reason)
+    return confidence_bucket, deduped[:4], confidence
+
+
+def widen_price_range_for_confidence(
+    price_low: float,
+    price_high: float,
+    min_charge: float,
+    confidence_bucket: str,
+    scene_type: str,
+) -> tuple[float, float, bool]:
+    extra_pct = 0.0
+    if confidence_bucket == "medium":
+        extra_pct += 0.08
+    elif confidence_bucket == "low":
+        extra_pct += 0.15
+
+    if scene_type in {"garage_clutter", "storage_overflow", "room_interior_furniture"}:
+        extra_pct += 0.03
+    elif scene_type in {"construction_debris", "bagged_trash_soft_goods"}:
+        extra_pct += 0.02
+
+    if extra_pct <= 0:
+        return price_low, price_high, False
+
+    mid = (price_low + price_high) / 2.0
+    half = max((price_high - price_low) / 2.0, max(mid * 0.05, 10.0))
+    widened_half = half * (1.0 + extra_pct)
+    widened_low = max(min_charge, round(mid - widened_half, 2))
+    widened_high = max(widened_low, round(mid + widened_half, 2))
+    return widened_low, widened_high, widened_low != price_low or widened_high != price_high
+
+
 @app.post("/api/public/estimate/{slug}")
 @limiter.limit("10/hour")
 async def public_create_estimate(
@@ -2796,7 +2979,7 @@ async def public_create_estimate(
     if not api_key:
         raise HTTPException(status_code=500, detail="AI service unavailable")
 
-    _, image_content, stored_photos, photo_quality = await prepare_estimate_photos(
+    photo_data, image_content, stored_photos, photo_quality = await prepare_estimate_photos(
         files,
         rooms,
         max_files=10,
@@ -2861,6 +3044,8 @@ async def public_create_estimate(
         "company_phone": company_user.company_phone or "",
         "capture_mode": "remote",
         "photo_quality": photo_quality,
+        "room_labels": _normalize_room_labels(photo_data),
+        "truck_load_pct": None,
     }
 
     asyncio.create_task(run_estimate(
@@ -2905,6 +3090,8 @@ async def public_estimate_status(request: Request, job_id: str):
                 "photo_guidance": r.get("photo_guidance", []),
                 "capture_mode": r.get("capture_mode", "remote"),
                 "scene_type": r.get("scene_type", ""),
+                "scene_label": r.get("scene_label", ""),
+                "range_widened": r.get("range_widened", False),
                 "special_items": r.get("special_items", []),
                 "min_charge_applied": r.get("min_charge_applied", False),
                 "potential_duplicates": r.get("potential_duplicates", []),
@@ -4108,7 +4295,7 @@ async def create_estimate(
     if not api_key:
         raise HTTPException(status_code=500, detail="AI service is not configured. Please contact support.")
 
-    _, image_content, stored_photos, photo_quality = await prepare_estimate_photos(
+    photo_data, image_content, stored_photos, photo_quality = await prepare_estimate_photos(
         files,
         rooms,
         max_files=20,
@@ -4182,6 +4369,8 @@ async def create_estimate(
         "stored_photos": stored_photos,
         "capture_mode": "remote",
         "photo_quality": photo_quality,
+        "room_labels": _normalize_room_labels(photo_data),
+        "truck_load_pct": truck_load_pct,
     }
 
     asyncio.create_task(run_estimate(
@@ -4217,6 +4406,11 @@ async def run_estimate(
         system_prompt = get_system_prompt(industry_id)
         if library_context:
             system_prompt += "\n" + library_context
+        room_labels = list(job.get("room_labels", []) or [])
+        capture_scene_hint = infer_capture_scene_hint(room_labels, job.get("truck_load_pct"))
+        scene_prompt_hint = build_scene_prompt_hint(capture_scene_hint)
+        if scene_prompt_hint:
+            system_prompt += "\n\n" + scene_prompt_hint
 
         job["status"] = "analyzing"
         job["message"] = "Analyzing photos..."
@@ -4369,6 +4563,17 @@ async def run_estimate(
                     result_data["totals"] = totals
 
         result_data = validate_estimate(result_data)
+        scene_type = classify_scene_type(result_data, room_labels, job.get("truck_load_pct"))
+        confidence_bucket, confidence_reasons, final_confidence = apply_scene_confidence_policy(
+            result_data,
+            photo_quality,
+            scene_type,
+            room_labels,
+        )
+        result_data["confidence"] = final_confidence
+        result_data.setdefault("conditions", [])
+        if scene_type and scene_type not in result_data["conditions"] and scene_type in {"truck_load"}:
+            result_data["conditions"].append(scene_type)
 
         # --- Custom per-company pricing (skip Tavily when rates are set) ---
         custom_standard = getattr(user, 'price_per_cy_standard', None)
@@ -4424,6 +4629,16 @@ async def run_estimate(
                 min_charge=user.min_charge or 75.0,
                 market_rates=None,
             )
+
+        price_low, price_high, range_widened = widen_price_range_for_confidence(
+            price_low,
+            price_high,
+            user.min_charge or 75.0,
+            confidence_bucket,
+            scene_type,
+        )
+        if range_widened:
+            confidence_reasons.append("Price range widened slightly because this scene type carries more uncertainty.")
 
         # Serialize stored photos for DB persistence
         stored_photos = job.get("stored_photos", [])
@@ -4596,6 +4811,8 @@ async def run_estimate(
             "photo_guidance": photo_quality.get("guidance", []),
             "capture_mode": job.get("capture_mode", "remote"),
             "scene_type": scene_type,
+            "scene_label": SCENE_DISPLAY_NAMES.get(scene_type, scene_type.replace("_", " ").title() if scene_type else ""),
+            "range_widened": range_widened,
             "estimates_remaining": remaining,
             "special_items": special_items,
             "items_looked_up": lookups_done,
@@ -4840,6 +5057,7 @@ async def get_estimate_detail(request: Request, estimate_id: int):
             "confidence_reasons": _safe_json_loads(getattr(e, "confidence_reasons", "") or "[]", []),
             "photo_quality_flags": _safe_json_loads(getattr(e, "photo_quality_flags", "") or "[]", []),
             "scene_type": getattr(e, "scene_type", "") or "",
+            "scene_label": SCENE_DISPLAY_NAMES.get(getattr(e, "scene_type", "") or "", ""),
         }
 
 
@@ -5277,6 +5495,7 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
             "confidence_reasons": _safe_json_loads(getattr(e, "confidence_reasons", "") or "[]", []),
             "photo_quality_flags": _safe_json_loads(getattr(e, "photo_quality_flags", "") or "[]", []),
             "scene_type": getattr(e, "scene_type", "") or "",
+            "scene_label": SCENE_DISPLAY_NAMES.get(getattr(e, "scene_type", "") or "", ""),
         }
 
 
@@ -6079,7 +6298,7 @@ async def team_create_estimate(
     if not api_key:
         raise HTTPException(status_code=500, detail="AI service is not configured. Please contact support.")
 
-    _, image_content, stored_photos, photo_quality = await prepare_estimate_photos(
+    photo_data, image_content, stored_photos, photo_quality = await prepare_estimate_photos(
         files,
         rooms,
         max_files=20,
@@ -6125,6 +6344,8 @@ async def team_create_estimate(
         "stored_photos": stored_photos,
         "capture_mode": "remote",
         "photo_quality": photo_quality,
+        "room_labels": _normalize_room_labels(photo_data),
+        "truck_load_pct": truck_load_pct,
     }
 
     asyncio.create_task(run_estimate(

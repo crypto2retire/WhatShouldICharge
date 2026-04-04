@@ -873,6 +873,8 @@
         </div>
       </div>
       <div id="res-confidence-warn" style="display:none;margin-top:12px;padding:8px 14px;border-radius:8px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;font-size:0.83rem;font-weight:500;">⚠ Low confidence — recommend requesting additional photos</div>
+      <div id="res-scene-note" style="display:none;margin-top:10px;color:var(--muted);font-size:0.82rem;"></div>
+      <div id="res-confidence-note" style="display:none;margin-top:8px;color:var(--muted);font-size:0.8rem;line-height:1.5;"></div>
       <div id="res-badge"></div>
       <div class="conditions-row" id="res-conditions"></div>
     </div>
@@ -1656,6 +1658,11 @@ function showPhotoModal(src) {
 var currentEstimateData = null;
 var excludedItems = new Set();
 
+function formatConfidenceBucket(bucket) {
+  const labels = { high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence' };
+  return labels[bucket] || '';
+}
+
 function showResults(data) {
   loadingEl.classList.remove('visible');
   resultsEl.classList.add('visible');
@@ -1685,7 +1692,25 @@ function showResults(data) {
   confEl.style.color = confidence >= 80 ? '#22c55e' : confidence >= 70 ? '#f59e0b' : '#ef4444';
 
   const warnEl = document.getElementById('res-confidence-warn');
-  warnEl.style.display = confidence < 70 ? 'block' : 'none';
+  warnEl.style.display = data.confidence_bucket === 'low' || confidence < 70 ? 'block' : 'none';
+
+  const sceneEl = document.getElementById('res-scene-note');
+  if (data.scene_label) {
+    sceneEl.textContent = 'Scene type: ' + data.scene_label + (data.range_widened ? ' • range widened slightly for uncertainty' : '');
+    sceneEl.style.display = 'block';
+  } else {
+    sceneEl.style.display = 'none';
+  }
+
+  const confNoteEl = document.getElementById('res-confidence-note');
+  const confReasons = (data.confidence_reasons || []).slice(0, 2);
+  const bucketLabel = formatConfidenceBucket(data.confidence_bucket);
+  if (bucketLabel || confReasons.length) {
+    confNoteEl.textContent = [bucketLabel, confReasons.join(' ')].filter(Boolean).join(' • ');
+    confNoteEl.style.display = 'block';
+  } else {
+    confNoteEl.style.display = 'none';
+  }
 
   const jobType = data.job_type || 'standard';
   const badgeLabels = {

@@ -1,5 +1,44 @@
 # Lessons Learned
 
+## Estimate retries should not burn credits — 2026-04-03
+
+### 1. Run quality gating before charging usage
+If WSIC asks the user to retry because the photo set is too dark, blurry, unreadable, or duplicate-heavy, do not consume credits or team usage for that attempt. Quality validation must run before usage deduction so retry-needed cases are free to resubmit.
+
+### 2. Shared upload prep logic prevents drift
+The signed-in, public, and team estimate endpoints all process photos. Keep upload validation, compression, and quality analysis in a shared helper so one flow does not silently drift from the others.
+
+## Repo workflow docs drift — 2026-04-03
+
+### 1. Keep AGENTS.md aligned with the real deploy path
+WSIC source-of-truth workflow is local hard-drive repo -> GitHub -> Railway. Do not leave old Cowork mount paths, PAT upload instructions, or other environment-specific workarounds in `AGENTS.md` as if they are still primary.
+
+### 2. Product limits must stay consistent across code and marketing copy
+Free-trial counts are easy to drift because they appear in backend logic, onboarding emails, and frontend pages. When the limit changes, search the repo and update every user-facing reference in the same pass.
+
+## Cowork folder confusion — 2026-03-24
+
+### 1. Know which mounted folder is which
+Cowork mounts TWO folders:
+- `/mnt/WhatShouldICharge/` — THIS IS THE WSIC REPO. All code edits here.
+- `/mnt/ctc-website/` — CTC website. SEPARATE project. Do NOT touch when working on WSIC.
+Always check which folder you're in before making changes.
+
+### 2. GitHub API push is the primary workflow
+Cowork cannot `git push` (no credentials in VM). Use GitHub Contents API with Python + PAT token. ALWAYS use Python `base64.b64encode()` for file content. JavaScript `atob()` corrupts UTF-8 multi-byte characters (em-dashes become garbage).
+
+### 3. Don't ask Kevin for things you already have
+The GitHub PAT exists and has been used before. Don't ask Kevin to paste it or explain what it is. Just use it.
+
+## Spatial redistribution inflation — 2026-03-23
+
+### 1. Three-layer enforcement caused phantom items
+The AI prompt, main.py scaling, and volume_lookup.py redistribution ALL tried to force items to sum to the spatial bounding box. For sparse scenes (shelving, scattered items), this inflated 1.5 CY of actual items to 8.0 CY by creating phantom "miscellaneous small items."
+Fix: Added occupancy assessment to AI prompt, 2x inflation cap in main.py, sparse-scene cap in volume_lookup.py, phantom misc removal.
+
+### 2. Price range collapses at minimum charge
+When both price_low and price_high fall below min_charge, both clamp to the same value ($100-$100). Fix: ensure price_high is at least 1.5x price_low when min_charge is applied.
+
 ## Admin dashboard JS — 2026-03-21
 
 ### 1. Escaped backticks break the whole page

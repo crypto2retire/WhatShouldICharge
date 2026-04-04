@@ -1553,6 +1553,10 @@ async function submitEstimate() {
       throw new Error(data.detail || 'Unknown error');
     }
 
+    if (data.status === 'retry_needed') {
+      throw new Error(data.message || 'Please upload one clearer, wider photo and try again.');
+    }
+
     const jobId = data.job_id;
     if (!jobId) throw new Error('No job ID returned');
 
@@ -1580,6 +1584,10 @@ async function submitEstimate() {
         showResults(result);
         loadHistory();
         break;
+      }
+
+      if (statusData.status === 'retry_needed') {
+        throw new Error(statusData.message || 'Please upload one clearer, wider photo and try again.');
       }
 
       if (statusData.status === 'error') {

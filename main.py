@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import Column, Integer, Float, DateTime, Text, String, Boolean, ForeignKey, select, text, func, update
 import asyncio
-from PIL import Image
+from PIL import Image, ImageFilter, ImageStat
 import io
 from cryptography.fernet import Fernet, InvalidToken
 
@@ -610,6 +610,11 @@ class Estimate(Base):
     output_tokens = Column(Integer, default=0)
     api_cost_cents = Column(Integer, default=0)
     model_used = Column(String(50), default="")
+    capture_mode = Column(String(30), default="remote")
+    confidence_bucket = Column(String(20), default="")
+    confidence_reasons = Column(Text, default="")
+    photo_quality_flags = Column(Text, default="")
+    scene_type = Column(String(50), default="")
     appointment_requested = Column(Boolean, default=False)
     appointment_contact_method = Column(String, default="")
     appointment_preferred_day = Column(String, default="")
@@ -710,6 +715,11 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS output_tokens INTEGER DEFAULT 0",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS api_cost_cents INTEGER DEFAULT 0",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS model_used VARCHAR(50) DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS capture_mode VARCHAR(30) DEFAULT 'remote'",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS confidence_bucket VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS confidence_reasons TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS photo_quality_flags TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS scene_type VARCHAR(50) DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_requested BOOLEAN DEFAULT FALSE",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_contact_method VARCHAR DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_preferred_day VARCHAR DEFAULT ''",
@@ -766,6 +776,11 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN output_tokens INTEGER DEFAULT 0",
             "ALTER TABLE estimates ADD COLUMN api_cost_cents INTEGER DEFAULT 0",
             "ALTER TABLE estimates ADD COLUMN model_used TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN capture_mode TEXT DEFAULT 'remote'",
+            "ALTER TABLE estimates ADD COLUMN confidence_bucket TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN confidence_reasons TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN photo_quality_flags TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN scene_type TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN appointment_requested BOOLEAN DEFAULT 0",
             "ALTER TABLE estimates ADD COLUMN appointment_contact_method TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN appointment_preferred_day TEXT DEFAULT ''",
@@ -2210,6 +2225,7 @@ document.getElementById('submit-btn').addEventListener('click',async function(){
     var resp=await fetch('/api/public/estimate/'+encodeURIComponent(slug),{{method:'POST',body:fd}});
     if(!resp.ok){{var err=await resp.json();throw new Error(err.detail||'Failed to submit')}}
     var data=await resp.json();
+    if(data.status==='retry_needed'){{throw new Error(data.message||'Please upload one clearer, wider photo and try again.')}}
     document.getElementById('upload-section').style.display='none';
     document.getElementById('loading').style.display='block';
     document.getElementById('ls-upload').classList.add('active');
@@ -2232,6 +2248,7 @@ async function pollStatus(jobId){{
       var resp=await fetch('/api/public/estimate/status/'+jobId);
       var data=await resp.json();
       if(data.status==='complete'&&data.result){{clearInterval(iv);document.getElementById('loading').style.display='none';showResults(data.result)}}
+      else if(data.status==='retry_needed'){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent=data.message||'Please upload one clearer, wider photo and try again.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Get Your Estimate'}}
       else if(data.status==='error'){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent=data.message||'An error occurred. Please try again.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Schedule an Appointment'}}
     }}catch(e){{}}
     if(attempts>90){{clearInterval(iv);lt.textContent='Taking longer than expected...'}}
@@ -2481,6 +2498,270 @@ def validate_magic_bytes(raw: bytes, content_type: str) -> bool:
     return any(raw[:len(sig)] == sig for sig in signatures)
 
 
+def _safe_json_loads_list(raw: str) -> list[str]:
+    try:
+        val = json.loads(raw)
+        return val if isinstance(val, list) else []
+    except Exception:
+        return []
+
+
+def _safe_json_loads(raw: str, default):
+    try:
+        return json.loads(raw)
+    except Exception:
+        return default
+
+
+def _image_average_hash(image: Image.Image, size: int = 8) -> int:
+    small = image.convert("L").resize((size, size), Image.Resampling.LANCZOS)
+    pixels = list(small.getdata())
+    avg = sum(pixels) / len(pixels)
+    bits = 0
+    for idx, px in enumerate(pixels):
+        if px >= avg:
+            bits |= 1 << idx
+    return bits
+
+
+def _hamming_distance(a: int, b: int) -> int:
+    return (a ^ b).bit_count()
+
+
+def analyze_photo_quality(image_bytes: bytes, photo_index: int) -> dict:
+    flags: list[str] = []
+    metrics = {
+        "brightness": 0.0,
+        "contrast": 0.0,
+        "edge_mean": 0.0,
+        "edge_stddev": 0.0,
+        "context_score": 0.0,
+    }
+    img = None
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        img.load()
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        gray = img.convert("L")
+        stat = ImageStat.Stat(gray)
+        brightness = float(stat.mean[0] or 0.0)
+        contrast = float(stat.stddev[0] or 0.0)
+        edges = gray.filter(ImageFilter.FIND_EDGES)
+        edge_stat = ImageStat.Stat(edges)
+        edge_mean = float(edge_stat.mean[0] or 0.0)
+        edge_std = float(edge_stat.stddev[0] or 0.0)
+
+        metrics.update(
+            {
+                "brightness": round(brightness, 2),
+                "contrast": round(contrast, 2),
+                "edge_mean": round(edge_mean, 2),
+                "edge_stddev": round(edge_std, 2),
+            }
+        )
+
+        if brightness < 42 or (brightness < 52 and contrast < 24):
+            flags.append("too_dark")
+        if edge_mean < 10 and edge_std < 18:
+            flags.append("blurry")
+
+        width, height = gray.size
+        if width >= 300 and height >= 300:
+            cx0 = int(width * 0.2)
+            cy0 = int(height * 0.2)
+            cx1 = int(width * 0.8)
+            cy1 = int(height * 0.8)
+            center = edges.crop((cx0, cy0, cx1, cy1))
+            center_mean = float(ImageStat.Stat(center).mean[0] or 0.0)
+            context_score = edge_mean / max(center_mean, 1.0)
+            metrics["context_score"] = round(context_score, 2)
+            if context_score < 0.62 and center_mean > 14:
+                flags.append("needs_wider_context")
+    except Exception:
+        flags.append("unreadable")
+    finally:
+        if img is not None:
+            try:
+                img.close()
+            except Exception:
+                pass
+
+    return {
+        "photo_index": photo_index,
+        "flags": flags,
+        "metrics": metrics,
+    }
+
+
+def summarize_photo_quality(analyses: list[dict]) -> dict:
+    all_flags: list[str] = []
+    reasons: list[str] = []
+    guidance: list[str] = []
+    unique_hashes: list[int] = []
+    duplicates: list[int] = []
+
+    for a in analyses:
+        for flag in a.get("flags", []):
+            all_flags.append(flag)
+
+    photo_count = len(analyses)
+    unreadable_count = sum(1 for a in analyses if "unreadable" in a.get("flags", []))
+    dark_count = sum(1 for a in analyses if "too_dark" in a.get("flags", []))
+    blurry_count = sum(1 for a in analyses if "blurry" in a.get("flags", []))
+    context_count = sum(1 for a in analyses if "needs_wider_context" in a.get("flags", []))
+
+    hashes = [a.get("hash") for a in analyses if isinstance(a.get("hash"), int)]
+    for idx, h in enumerate(hashes):
+        if any(_hamming_distance(h, existing) <= 5 for existing in unique_hashes):
+            duplicates.append(idx)
+        else:
+            unique_hashes.append(h)
+
+    if photo_count == 1:
+        all_flags.append("single_photo_only")
+        reasons.append("Only one photo was uploaded.")
+        guidance.append("Add one wider shot from a different angle to improve accuracy.")
+
+    duplicate_count = len(duplicates)
+    if duplicate_count > 0:
+        all_flags.append("duplicate_angles")
+        reasons.append("Multiple photos appear to show nearly the same angle.")
+        guidance.append("Use photos from different angles instead of near-duplicates.")
+
+    if unreadable_count:
+        reasons.append(f"{unreadable_count} photo{'s are' if unreadable_count != 1 else ' is'} unreadable.")
+    if dark_count:
+        reasons.append(f"{dark_count} photo{'s are' if dark_count != 1 else ' is'} too dark.")
+        guidance.append("Take photos with better lighting or stand where the pile is brighter.")
+    if blurry_count:
+        reasons.append(f"{blurry_count} photo{'s are' if blurry_count != 1 else ' is'} too blurry.")
+        guidance.append("Hold the phone steady and let the camera focus before taking the shot.")
+    if context_count:
+        reasons.append(f"{context_count} photo{'s need' if context_count != 1 else ' needs'} a wider view.")
+        guidance.append("Include the full pile and some floor around it.")
+
+    severe_photo_count = sum(
+        1
+        for a in analyses
+        if any(flag in a.get("flags", []) for flag in ("unreadable", "too_dark", "blurry"))
+    )
+    usable_photos = max(0, photo_count - severe_photo_count)
+
+    retry_needed = False
+    retry_message = ""
+    if photo_count == 0:
+        retry_needed = True
+        retry_message = "At least one photo is required."
+    elif usable_photos <= 0:
+        retry_needed = True
+        retry_message = "We couldn't get a usable estimate from these photos. Please retake them with better lighting and focus."
+    elif photo_count >= 2 and duplicate_count >= photo_count - 1:
+        retry_needed = True
+        retry_message = "These photos are too similar. Please add a wider shot from a different angle."
+
+    if retry_needed:
+        confidence_bucket = "low"
+    elif severe_photo_count > 0 or photo_count == 1 or duplicate_count > 0 or context_count > 0:
+        confidence_bucket = "medium"
+    else:
+        confidence_bucket = "high"
+
+    deduped_guidance: list[str] = []
+    for line in guidance:
+        if line not in deduped_guidance:
+            deduped_guidance.append(line)
+
+    return {
+        "confidence_bucket": confidence_bucket,
+        "flags": sorted(set(all_flags)),
+        "reasons": reasons,
+        "retry_needed": retry_needed,
+        "retry_message": retry_message,
+        "guidance": deduped_guidance[:3],
+        "usable_photo_count": usable_photos,
+        "duplicate_photo_count": duplicate_count,
+    }
+
+
+async def prepare_estimate_photos(
+    files: list[UploadFile],
+    rooms_raw: str,
+    *,
+    max_files: int,
+    default_room: str,
+) -> tuple[list[dict], list, list[str], dict]:
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one photo is required.")
+    if len(files) > max_files:
+        raise HTTPException(status_code=400, detail=f"Maximum {max_files} photos allowed.")
+
+    rooms_list = _safe_json_loads_list(rooms_raw)
+    allowed_content_types = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"}
+    max_file_size = 20 * 1024 * 1024
+
+    photo_data = []
+    analyses = []
+    for i, file in enumerate(files):
+        if file.content_type and file.content_type.lower() not in allowed_content_types:
+            raise HTTPException(status_code=400, detail=f"Photo {i+1} has an unsupported file type. Please upload images only.")
+        raw = await file.read()
+        if len(raw) > max_file_size:
+            raise HTTPException(status_code=400, detail=f"Photo {i+1} exceeds 20MB limit.")
+        ct = (file.content_type or "").lower()
+        if not validate_magic_bytes(raw, ct):
+            raise HTTPException(status_code=400, detail=f"Photo {i+1}: file contents don't match declared type.")
+
+        compressed = compress_image(raw)
+        analysis = analyze_photo_quality(compressed, i + 1)
+        try:
+            img = Image.open(io.BytesIO(compressed))
+            img.load()
+            analysis["hash"] = _image_average_hash(img)
+            img.close()
+        except Exception:
+            analysis["hash"] = None
+        analyses.append(analysis)
+
+        b64 = base64.standard_b64encode(compressed).decode("utf-8")
+        room_label = rooms_list[i] if i < len(rooms_list) and str(rooms_list[i]).strip() else default_room
+        photo_data.append({"b64": b64, "room": room_label, "index": i + 1})
+
+    quality = summarize_photo_quality(analyses)
+    quality["photos"] = [
+        {
+            "photo_index": a["photo_index"],
+            "flags": a["flags"],
+            "metrics": a["metrics"],
+        }
+        for a in analyses
+    ]
+
+    room_groups = {}
+    for pd in photo_data:
+        room_groups.setdefault(pd["room"], []).append(pd)
+
+    image_content = []
+    for room, group_photos in room_groups.items():
+        if len(group_photos) > 1:
+            image_content.append({
+                "type": "text",
+                "text": f"\n--- ROOM: {room} ({len(group_photos)} photos — these show DIFFERENT ANGLES of the SAME space. DO NOT double-count items visible in multiple photos.) ---",
+            })
+        for angle_idx, pd in enumerate(group_photos, start=1):
+            label = f"Photo {pd['index']} (Room: {room})"
+            if len(group_photos) > 1:
+                label += f" [angle {angle_idx} of {len(group_photos)} for this room]"
+            image_content.append({"type": "text", "text": f"{label}:"})
+            image_content.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": "image/jpeg", "data": pd["b64"]},
+            })
+
+    stored_photos = [pd["b64"] for pd in photo_data]
+    return photo_data, image_content, stored_photos, quality
+
+
 @app.post("/api/public/estimate/{slug}")
 @limiter.limit("10/hour")
 async def public_create_estimate(
@@ -2506,93 +2787,61 @@ async def public_create_estimate(
         result = await db.execute(select(User).where(User.id == company_user.id))
         cu = result.scalar_one_or_none()
         if cu:
-            # Credit-based gating for widget estimates
             free_remaining = max(0, 2 - (cu.free_trial_used or 0))
             if (cu.credit_balance or 0) <= 0 and free_remaining <= 0:
-                await db.commit()
                 raise HTTPException(status_code=403, detail="This estimator is temporarily unavailable. Please contact the company directly.")
-            # Deduct credit
-            if free_remaining > 0 and (cu.credit_balance or 0) <= 0:
-                cu.free_trial_used = (cu.free_trial_used or 0) + 1
-                txn = CreditTransaction(
-                    user_id=cu.id,
-                    transaction_type="free_trial",
-                    credits=-1,
-                    balance_after=cu.credit_balance or 0,
-                    description=f"Free Trial Widget Estimate #{cu.free_trial_used}"
-                )
-            else:
-                cu.credit_balance = (cu.credit_balance or 0) - 1
-                cu.credits_used_total = (cu.credits_used_total or 0) + 1
-                txn = CreditTransaction(
-                    user_id=cu.id,
-                    transaction_type="usage",
-                    credits=-1,
-                    balance_after=cu.credit_balance,
-                    description="Widget Estimate"
-                )
-            cu.estimates_used = (cu.estimates_used or 0) + 1
-            db.add(txn)
-            await db.commit()
             company_user = cu
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="AI service unavailable")
 
-    if not files:
-        raise HTTPException(status_code=400, detail="At least one photo is required.")
-    if len(files) > 10:
-        raise HTTPException(status_code=400, detail="Maximum 10 photos for customer estimates.")
-
-    try:
-        rooms_list = json.loads(rooms)
-    except Exception:
-        rooms_list = []
-
-    ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"}
-    MAX_FILE_SIZE = 20 * 1024 * 1024
-    photo_data = []
-    for i, file in enumerate(files):
-        if file.content_type and file.content_type.lower() not in ALLOWED_CONTENT_TYPES:
-            raise HTTPException(status_code=400, detail=f"Photo {i+1}: unsupported file type.")
-        raw = await file.read()
-        if len(raw) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=400, detail=f"Photo {i+1} exceeds 20MB limit.")
-        ct = (file.content_type or "").lower()
-        if not validate_magic_bytes(raw, ct):
-            raise HTTPException(status_code=400, detail=f"Photo {i+1}: file contents don't match declared type.")
-        compressed = compress_image(raw)
-        b64 = base64.standard_b64encode(compressed).decode("utf-8")
-        room_label = rooms_list[i] if i < len(rooms_list) else "Main"
-        photo_data.append({"b64": b64, "room": room_label, "index": i + 1})
-
-    room_groups = {}
-    for pd in photo_data:
-        room = pd["room"]
-        if room not in room_groups:
-            room_groups[room] = []
-        room_groups[room].append(pd)
-
-    image_content = []
-    for room, group_photos in room_groups.items():
-        if len(group_photos) > 1:
-            image_content.append({
-                "type": "text",
-                "text": f"\n--- ROOM: {room} ({len(group_photos)} photos — SAME space, different angles. Do NOT double-count.) ---"
-            })
-        for pd in group_photos:
-            label = f"Photo {pd['index']} (Room: {room})"
-            image_content.append({"type": "text", "text": f"{label}:"})
-            image_content.append({
-                "type": "image",
-                "source": {"type": "base64", "media_type": "image/jpeg", "data": pd["b64"]}
-            })
-
-    # Store compressed photos for persistence (thumbnails for DB storage)
-    stored_photos = []
-    for pd in photo_data:
-        stored_photos.append(pd["b64"])
+    _, image_content, stored_photos, photo_quality = await prepare_estimate_photos(
+        files,
+        rooms,
+        max_files=10,
+        default_room="Main",
+    )
+    if photo_quality["retry_needed"]:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "retry_needed",
+                "message": photo_quality["retry_message"],
+                "photo_quality": photo_quality,
+            },
+        )
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == company_user.id))
+        cu = result.scalar_one_or_none()
+        if not cu:
+            raise HTTPException(status_code=404, detail="Company not found")
+        free_remaining = max(0, 2 - (cu.free_trial_used or 0))
+        if (cu.credit_balance or 0) <= 0 and free_remaining <= 0:
+            raise HTTPException(status_code=403, detail="This estimator is temporarily unavailable. Please contact the company directly.")
+        if free_remaining > 0 and (cu.credit_balance or 0) <= 0:
+            cu.free_trial_used = (cu.free_trial_used or 0) + 1
+            txn = CreditTransaction(
+                user_id=cu.id,
+                transaction_type="free_trial",
+                credits=-1,
+                balance_after=cu.credit_balance or 0,
+                description=f"Free Trial Widget Estimate #{cu.free_trial_used}",
+            )
+        else:
+            cu.credit_balance = (cu.credit_balance or 0) - 1
+            cu.credits_used_total = (cu.credits_used_total or 0) + 1
+            txn = CreditTransaction(
+                user_id=cu.id,
+                transaction_type="usage",
+                credits=-1,
+                balance_after=cu.credit_balance,
+                description="Widget Estimate",
+            )
+        cu.estimates_used = (cu.estimates_used or 0) + 1
+        db.add(txn)
+        await db.commit()
+        company_user = cu
 
     job_id = secrets.token_hex(8)
     estimate_jobs[job_id] = {
@@ -2610,6 +2859,8 @@ async def public_create_estimate(
         "company_email": company_user.email,
         "company_name": company_user.company_name or "Junk Removal Company",
         "company_phone": company_user.company_phone or "",
+        "capture_mode": "remote",
+        "photo_quality": photo_quality,
     }
 
     asyncio.create_task(run_estimate(
@@ -2648,12 +2899,22 @@ async def public_estimate_status(request: Request, job_id: str):
                 "conditions": r.get("conditions", []),
                 "notes": r.get("notes", ""),
                 "confidence": r.get("confidence"),
+                "confidence_bucket": r.get("confidence_bucket", ""),
+                "confidence_reasons": r.get("confidence_reasons", []),
+                "photo_quality_flags": r.get("photo_quality_flags", []),
+                "photo_guidance": r.get("photo_guidance", []),
+                "capture_mode": r.get("capture_mode", "remote"),
+                "scene_type": r.get("scene_type", ""),
                 "special_items": r.get("special_items", []),
                 "min_charge_applied": r.get("min_charge_applied", False),
                 "potential_duplicates": r.get("potential_duplicates", []),
                 "photos": stored_photos,
             }
         }
+    if job["status"] == "retry_needed":
+        msg = job["message"]
+        del estimate_jobs[job_id]
+        return {"status": "retry_needed", "message": msg, "result": None}
     return {"status": job["status"], "message": job["message"], "result": None}
 
 
@@ -2880,7 +3141,7 @@ async def auth_signup(request: Request):
         email,
         "Welcome to WhatShouldICharge!",
         f"<h2>Welcome, {company_name or 'there'}!</h2>"
-        "<p>You have <strong>3 free estimates</strong> to try out the platform.</p>"
+        "<p>You have <strong>2 free estimates</strong> to try out the platform.</p>"
         "<p>Upload customer photos and get AI-assisted pricing in seconds.</p>"
         "<p>— The WhatShouldICharge Team</p>"
     )
@@ -3835,15 +4096,45 @@ async def create_estimate(
         fresh_user = result.scalar_one_or_none()
         if not fresh_user:
             raise HTTPException(status_code=403, detail="estimate_limit_reached")
-        # Credit-based gating
         free_remaining = max(0, 2 - (fresh_user.free_trial_used or 0))
         if (fresh_user.credit_balance or 0) <= 0 and free_remaining <= 0:
-            await db.commit()
             return JSONResponse(status_code=402, content={
                 "detail": "no_credits",
                 "message": "No estimate credits remaining. Purchase a credit pack to continue."
             })
-        # Deduct credit
+        user = fresh_user
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="AI service is not configured. Please contact support.")
+
+    _, image_content, stored_photos, photo_quality = await prepare_estimate_photos(
+        files,
+        rooms,
+        max_files=20,
+        default_room="Unknown",
+    )
+    if photo_quality["retry_needed"]:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "retry_needed",
+                "message": photo_quality["retry_message"],
+                "photo_quality": photo_quality,
+            },
+        )
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == user.id))
+        fresh_user = result.scalar_one_or_none()
+        if not fresh_user:
+            raise HTTPException(status_code=403, detail="estimate_limit_reached")
+        free_remaining = max(0, 2 - (fresh_user.free_trial_used or 0))
+        if (fresh_user.credit_balance or 0) <= 0 and free_remaining <= 0:
+            return JSONResponse(status_code=402, content={
+                "detail": "no_credits",
+                "message": "No estimate credits remaining. Purchase a credit pack to continue."
+            })
         if free_remaining > 0 and (fresh_user.credit_balance or 0) <= 0:
             fresh_user.free_trial_used = (fresh_user.free_trial_used or 0) + 1
             txn = CreditTransaction(
@@ -3851,7 +4142,7 @@ async def create_estimate(
                 transaction_type="free_trial",
                 credits=-1,
                 balance_after=fresh_user.credit_balance or 0,
-                description=f"Free Trial Estimate #{fresh_user.free_trial_used}"
+                description=f"Free Trial Estimate #{fresh_user.free_trial_used}",
             )
         else:
             fresh_user.credit_balance = (fresh_user.credit_balance or 0) - 1
@@ -3861,67 +4152,12 @@ async def create_estimate(
                 transaction_type="usage",
                 credits=-1,
                 balance_after=fresh_user.credit_balance,
-                description="Estimate"
+                description="Estimate",
             )
         fresh_user.estimates_used = (fresh_user.estimates_used or 0) + 1
         db.add(txn)
         await db.commit()
         user = fresh_user
-
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="AI service is not configured. Please contact support.")
-
-    if not files:
-        raise HTTPException(status_code=400, detail="At least one photo is required.")
-    if len(files) > 20:
-        raise HTTPException(status_code=400, detail="Maximum 20 photos allowed.")
-
-    try:
-        rooms_list = json.loads(rooms)
-    except Exception:
-        rooms_list = []
-
-    ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"}
-    MAX_FILE_SIZE = 20 * 1024 * 1024
-    photo_data = []
-    for i, file in enumerate(files):
-        if file.content_type and file.content_type.lower() not in ALLOWED_CONTENT_TYPES:
-            raise HTTPException(status_code=400, detail=f"Photo {i+1} has an unsupported file type. Please upload images only.")
-        raw = await file.read()
-        if len(raw) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=400, detail=f"Photo {i+1} exceeds 20MB limit.")
-        ct = (file.content_type or "").lower()
-        if not validate_magic_bytes(raw, ct):
-            raise HTTPException(status_code=400, detail=f"Photo {i+1}: file contents don't match declared type.")
-        compressed = compress_image(raw)
-        b64 = base64.standard_b64encode(compressed).decode("utf-8")
-        room_label = rooms_list[i] if i < len(rooms_list) else "Unknown"
-        photo_data.append({"b64": b64, "room": room_label, "index": i + 1})
-
-    room_groups = {}
-    for pd in photo_data:
-        room = pd["room"]
-        if room not in room_groups:
-            room_groups[room] = []
-        room_groups[room].append(pd)
-
-    image_content = []
-    for room, group_photos in room_groups.items():
-        if len(group_photos) > 1:
-            image_content.append({
-                "type": "text",
-                "text": f"\n--- ROOM: {room} ({len(group_photos)} photos — these show DIFFERENT ANGLES of the SAME space. DO NOT double-count items visible in multiple photos.) ---"
-            })
-        for pd in group_photos:
-            label = f"Photo {pd['index']} (Room: {room})"
-            if len(group_photos) > 1:
-                label += f" [angle {group_photos.index(pd) + 1} of {len(group_photos)} for this room]"
-            image_content.append({"type": "text", "text": f"{label}:"})
-            image_content.append({
-                "type": "image",
-                "source": {"type": "base64", "media_type": "image/jpeg", "data": pd["b64"]}
-            })
 
     truck_cap = user.truck_capacity_cy or 16.0
     if truck_load_pct is not None:
@@ -3935,9 +4171,6 @@ async def create_estimate(
             )
         })
 
-    # Store photos for persistence
-    stored_photos = [pd["b64"] for pd in photo_data]
-
     job_id = secrets.token_hex(8)
     estimate_jobs[job_id] = {
         "status": "analyzing",
@@ -3947,6 +4180,8 @@ async def create_estimate(
         "estimate_name": estimate_name.strip(),
         "created_at": datetime.utcnow(),
         "stored_photos": stored_photos,
+        "capture_mode": "remote",
+        "photo_quality": photo_quality,
     }
 
     asyncio.create_task(run_estimate(
@@ -3970,6 +4205,11 @@ async def run_estimate(
     job = estimate_jobs[job_id]
     pass1_json_str = ""
     lookups_json_str = ""
+    photo_quality = job.get("photo_quality") or {}
+    confidence_bucket = photo_quality.get("confidence_bucket", "")
+    confidence_reasons = photo_quality.get("reasons", [])
+    photo_quality_flags = photo_quality.get("flags", [])
+    scene_type = ""
 
     try:
         library_context = await get_library_context()
@@ -4236,6 +4476,11 @@ async def run_estimate(
                 output_tokens=token_output,
                 api_cost_cents=int(api_cost_cents_val),
                 model_used=token_model,
+                capture_mode=job.get("capture_mode", "remote"),
+                confidence_bucket=confidence_bucket,
+                confidence_reasons=json.dumps(confidence_reasons),
+                photo_quality_flags=json.dumps(photo_quality_flags),
+                scene_type=scene_type,
             )
             db.add(est)
             try:
@@ -4345,6 +4590,12 @@ async def run_estimate(
             "conditions": result_data.get("conditions", []),
             "notes": result_data.get("notes", ""),
             "confidence": result_data.get("confidence", 75),
+            "confidence_bucket": confidence_bucket,
+            "confidence_reasons": confidence_reasons,
+            "photo_quality_flags": photo_quality_flags,
+            "photo_guidance": photo_quality.get("guidance", []),
+            "capture_mode": job.get("capture_mode", "remote"),
+            "scene_type": scene_type,
             "estimates_remaining": remaining,
             "special_items": special_items,
             "items_looked_up": lookups_done,
@@ -4386,6 +4637,8 @@ async def estimate_status(request: Request, job_id: str):
     }
     if job["status"] == "complete":
         resp["result"] = job["result"]
+        del estimate_jobs[job_id]
+    elif job["status"] == "retry_needed":
         del estimate_jobs[job_id]
     elif job["status"] == "error":
         del estimate_jobs[job_id]
@@ -4582,6 +4835,11 @@ async def get_estimate_detail(request: Request, estimate_id: int):
             "preferred_contact": e.preferred_contact or "phone",
             "result": result_data,
             "has_photos": bool(e.photos_json),
+            "capture_mode": getattr(e, "capture_mode", "remote") or "remote",
+            "confidence_bucket": getattr(e, "confidence_bucket", "") or "",
+            "confidence_reasons": _safe_json_loads(getattr(e, "confidence_reasons", "") or "[]", []),
+            "photo_quality_flags": _safe_json_loads(getattr(e, "photo_quality_flags", "") or "[]", []),
+            "scene_type": getattr(e, "scene_type", "") or "",
         }
 
 
@@ -5014,6 +5272,11 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
             "actual_cy": getattr(e, 'actual_cy', None),
             "accuracy_notes": getattr(e, 'accuracy_notes', '') or "",
             "company_timezone": company_timezone,
+            "capture_mode": getattr(e, "capture_mode", "remote") or "remote",
+            "confidence_bucket": getattr(e, "confidence_bucket", "") or "",
+            "confidence_reasons": _safe_json_loads(getattr(e, "confidence_reasons", "") or "[]", []),
+            "photo_quality_flags": _safe_json_loads(getattr(e, "photo_quality_flags", "") or "[]", []),
+            "scene_type": getattr(e, "scene_type", "") or "",
         }
 
 
@@ -5809,70 +6072,42 @@ async def team_create_estimate(
         _reset_billing_cycle_if_needed(fresh_owner)
         allowed, err = _check_usage_limit(fresh_owner)
         if not allowed:
-            await db.commit()
             return JSONResponse(status_code=429, content=err)
-        _record_usage(fresh_owner)
-        fresh_owner.estimates_used = (fresh_owner.estimates_used or 0) + 1
-        await db.commit()
         user = fresh_owner
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="AI service is not configured. Please contact support.")
 
-    if not files:
-        raise HTTPException(status_code=400, detail="At least one photo is required.")
-    if len(files) > 20:
-        raise HTTPException(status_code=400, detail="Maximum 20 photos allowed.")
+    _, image_content, stored_photos, photo_quality = await prepare_estimate_photos(
+        files,
+        rooms,
+        max_files=20,
+        default_room="Unknown",
+    )
+    if photo_quality["retry_needed"]:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "retry_needed",
+                "message": photo_quality["retry_message"],
+                "photo_quality": photo_quality,
+            },
+        )
 
-    try:
-        rooms_list = json.loads(rooms)
-    except Exception:
-        rooms_list = []
-
-    ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"}
-    MAX_FILE_SIZE = 20 * 1024 * 1024
-    photo_data = []
-    for i, file in enumerate(files):
-        if file.content_type and file.content_type.lower() not in ALLOWED_CONTENT_TYPES:
-            raise HTTPException(status_code=400, detail=f"Photo {i+1} has an unsupported file type. Please upload images only.")
-        raw = await file.read()
-        if len(raw) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=400, detail=f"Photo {i+1} exceeds 20MB limit.")
-        ct = (file.content_type or "").lower()
-        if not validate_magic_bytes(raw, ct):
-            raise HTTPException(status_code=400, detail=f"Photo {i+1}: file contents don't match declared type.")
-        compressed = compress_image(raw)
-        b64 = base64.standard_b64encode(compressed).decode("utf-8")
-        room_label = rooms_list[i] if i < len(rooms_list) else "Unknown"
-        photo_data.append({"b64": b64, "room": room_label, "index": i + 1})
-
-    room_groups = {}
-    for pd in photo_data:
-        room = pd["room"]
-        if room not in room_groups:
-            room_groups[room] = []
-        room_groups[room].append(pd)
-
-    image_content = []
-    for room, group_photos in room_groups.items():
-        if len(group_photos) > 1:
-            image_content.append({
-                "type": "text",
-                "text": f"\n--- ROOM: {room} ({len(group_photos)} photos — these show DIFFERENT ANGLES of the SAME space. DO NOT double-count items visible in multiple photos.) ---"
-            })
-        for pd in group_photos:
-            label = f"Photo {pd['index']} (Room: {room})"
-            if len(group_photos) > 1:
-                label += f" [angle {group_photos.index(pd) + 1} of {len(group_photos)} for this room]"
-            image_content.append({"type": "text", "text": f"{label}:"})
-            image_content.append({
-                "type": "image",
-                "source": {"type": "base64", "media_type": "image/jpeg", "data": pd["b64"]}
-            })
-
-    # Store photos for persistence
-    stored_photos = [pd["b64"] for pd in photo_data]
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == owner.id))
+        fresh_owner = result.scalar_one_or_none()
+        if not fresh_owner:
+            raise HTTPException(status_code=403, detail="estimate_limit_reached")
+        _reset_billing_cycle_if_needed(fresh_owner)
+        allowed, err = _check_usage_limit(fresh_owner)
+        if not allowed:
+            return JSONResponse(status_code=429, content=err)
+        _record_usage(fresh_owner)
+        fresh_owner.estimates_used = (fresh_owner.estimates_used or 0) + 1
+        await db.commit()
+        user = fresh_owner
 
     now = datetime.utcnow()
     job_id = f"team-{member.id}-{secrets.token_hex(8)}"
@@ -5888,6 +6123,8 @@ async def team_create_estimate(
         "customer_phone": customer_phone,
         "created_at": now,
         "stored_photos": stored_photos,
+        "capture_mode": "remote",
+        "photo_quality": photo_quality,
     }
 
     asyncio.create_task(run_estimate(
@@ -5916,6 +6153,8 @@ async def team_estimate_status(request: Request, job_id: str):
     }
     if job["status"] == "complete" and job["result"]:
         resp["result"] = job["result"]
+    elif job["status"] == "retry_needed":
+        pass
     elif job["status"] == "error":
         resp["error"] = job["message"]
     return resp

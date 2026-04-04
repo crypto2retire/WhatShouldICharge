@@ -115,11 +115,8 @@ input, select { width: 100%; padding: 10px 12px; background: var(--bg); border: 
   <!-- Results - Lead Capture Confirmation -->
   <div class="results" id="results">
     <div class="card" style="text-align:center;padding:40px 20px;">
-<<<<<<< HEAD
       <div style="font-size:3rem;margin-bottom:16px;">&#x2713;</div>
-=======
       <div style="font-size:3rem;margin-bottom:16px;">&#10003;</div>
->>>>>>> 63311a3 (Security: slowapi rate limits, webhook CSRF path, health hardening, no verify code leak)
       <h2 style="font-size:1.4rem;font-weight:700;margin-bottom:12px;">Thank You!</h2>
       <p style="color:var(--muted);font-size:0.95rem;line-height:1.6;margin-bottom:20px;">
         We've received your photos and are preparing your estimate.<br>
@@ -284,6 +281,9 @@ document.getElementById('submit-btn').addEventListener('click', async function()
       throw new Error(err.detail || 'Failed to submit');
     }
     var data = await resp.json();
+    if (data.status === 'retry_needed') {
+      throw new Error(data.message || 'Please upload one clearer, wider photo and try again.');
+    }
     document.getElementById('upload-section').style.display = 'none';
     document.getElementById('loading').style.display = 'block';
     pollStatus(data.job_id);
@@ -309,6 +309,14 @@ async function pollStatus(jobId) {
         clearInterval(interval);
         document.getElementById('loading').style.display = 'none';
         showResults(data.result);
+      } else if (data.status === 'retry_needed') {
+        clearInterval(interval);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('upload-section').style.display = 'block';
+        document.getElementById('error-msg').textContent = data.message || 'Please upload one clearer, wider photo and try again.';
+        document.getElementById('error-msg').style.display = 'block';
+        document.getElementById('submit-btn').disabled = false;
+        document.getElementById('submit-btn').textContent = 'Get Estimate';
       } else if (data.status === 'error') {
         clearInterval(interval);
         document.getElementById('loading').style.display = 'none';

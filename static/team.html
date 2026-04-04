@@ -560,6 +560,12 @@ async function submitEstimate() {
       document.getElementById('loading').classList.remove('visible');
       return;
     }
+    if (data.status === 'retry_needed') {
+      showError(data.message || 'Please upload one clearer, wider photo and try again.');
+      document.getElementById('upload-section').style.display = 'block';
+      document.getElementById('loading').classList.remove('visible');
+      return;
+    }
     pollStatus(data.job_id);
   } catch (e) {
     showError('Connection error');
@@ -575,6 +581,10 @@ async function pollStatus(jobId) {
     if (data.status === 'complete' && data.result) {
       document.getElementById('loading').classList.remove('visible');
       showResults(data.result);
+    } else if (data.status === 'retry_needed') {
+      showError(data.message || 'Please upload one clearer, wider photo and try again.');
+      document.getElementById('loading').classList.remove('visible');
+      document.getElementById('upload-section').style.display = 'block';
     } else if (data.status === 'error') {
       showError(data.error || 'Estimation failed');
       document.getElementById('loading').classList.remove('visible');

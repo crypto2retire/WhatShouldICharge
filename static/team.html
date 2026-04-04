@@ -406,6 +406,7 @@
       </div>
       <div id="res-scene-note" style="display:none;margin-top:10px;color:var(--muted);font-size:0.82rem;text-align:center;"></div>
       <div id="res-confidence-note" style="display:none;margin-top:8px;color:var(--muted);font-size:0.8rem;line-height:1.5;text-align:center;"></div>
+      <div id="res-geometry-note" style="display:none;margin-top:8px;color:var(--muted);font-size:0.8rem;line-height:1.5;text-align:center;"></div>
     </div>
 
     <div class="card">
@@ -632,6 +633,8 @@ function showResults(data) {
   var confBucket = formatConfidenceBucket(data.confidence_bucket);
   document.getElementById('res-confidence-note').textContent = [confBucket, confReasons.join(' ')].filter(Boolean).join(' • ');
   document.getElementById('res-confidence-note').style.display = (confBucket || confReasons.length) ? 'block' : 'none';
+  document.getElementById('res-geometry-note').textContent = data.geometry_summary ? ('Geometry check: ' + data.geometry_summary) : '';
+  document.getElementById('res-geometry-note').style.display = data.geometry_summary ? 'block' : 'none';
 
   var photosEl = document.getElementById('ref-photos-section');
   if (photos.length > 0) {

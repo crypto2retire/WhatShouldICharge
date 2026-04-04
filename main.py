@@ -615,6 +615,9 @@ class Estimate(Base):
     confidence_reasons = Column(Text, default="")
     photo_quality_flags = Column(Text, default="")
     scene_type = Column(String(50), default="")
+    occupancy_class = Column(String(30), default="")
+    sanity_flags = Column(Text, default="")
+    geometry_summary = Column(Text, default="")
     appointment_requested = Column(Boolean, default=False)
     appointment_contact_method = Column(String, default="")
     appointment_preferred_day = Column(String, default="")
@@ -720,6 +723,9 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS confidence_reasons TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS photo_quality_flags TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS scene_type VARCHAR(50) DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS occupancy_class VARCHAR(30) DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS sanity_flags TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS geometry_summary TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_requested BOOLEAN DEFAULT FALSE",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_contact_method VARCHAR DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_preferred_day VARCHAR DEFAULT ''",
@@ -781,6 +787,9 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN confidence_reasons TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN photo_quality_flags TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN scene_type TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN occupancy_class TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN sanity_flags TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN geometry_summary TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN appointment_requested BOOLEAN DEFAULT 0",
             "ALTER TABLE estimates ADD COLUMN appointment_contact_method TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN appointment_preferred_day TEXT DEFAULT ''",
@@ -1995,6 +2004,7 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
       <div class="card-title">Estimate Context</div>
       <div id="res-scene-note" style="font-size:0.84rem;color:#64748b;line-height:1.6"></div>
       <div id="res-confidence-note" style="display:none;font-size:0.8rem;color:#94a3b8;line-height:1.6;margin-top:8px"></div>
+      <div id="res-geometry-note" style="display:none;font-size:0.8rem;color:#94a3b8;line-height:1.6;margin-top:8px"></div>
     </div>
 
     <div class="card" id="res-photos-card" style="display:none">
@@ -2308,12 +2318,14 @@ function showResults(r){{
   var sceneCard=document.getElementById('res-scene-card');
   var sceneNote=document.getElementById('res-scene-note');
   var confNote=document.getElementById('res-confidence-note');
+  var geometryNote=document.getElementById('res-geometry-note');
   var sceneParts=[];
   if(r.scene_label){{sceneParts.push('Scene type: '+r.scene_label)}}
   if(r.range_widened){{sceneParts.push('Price range widened slightly for uncertainty')}}
   if(sceneParts.length){{sceneNote.textContent=sceneParts.join(' • ');sceneCard.style.display='block'}}else{{sceneCard.style.display='none'}}
   var confReasons=(r.confidence_reasons||[]).slice(0,2);
   if(confReasons.length){{confNote.textContent=confReasons.join(' ');confNote.style.display='block'}}else{{confNote.style.display='none'}}
+  if(r.geometry_summary){{geometryNote.textContent='Geometry check: '+r.geometry_summary;geometryNote.style.display='block';sceneCard.style.display='block'}}else{{geometryNote.style.display='none'}}
   // Show follow-up notice for large/hoarding jobs
   var fn=document.getElementById('followup-notice');
   if(fn){{var cy=r.cy_estimate||0;if(jt==='hoarder'||jt==='truck_load'||cy>=10){{fn.style.display='block'}}else{{fn.style.display='none'}}}}
@@ -2945,6 +2957,116 @@ def widen_price_range_for_confidence(
     return widened_low, widened_high, widened_low != price_low or widened_high != price_high
 
 
+def _parse_spatial_total_from_notes(notes: str) -> Optional[float]:
+    if not notes or not str(notes).strip():
+        return None
+    text = str(notes)
+    eq_matches = re.findall(
+        r"=\s*(\d+(?:\.\d+)?)\s*(?:CY|cubic\s*yards?)\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if eq_matches:
+        try:
+            return float(eq_matches[-1])
+        except ValueError:
+            return None
+    matches = re.findall(r"(\d+(?:\.\d+)?)\s*(?:CY|cubic\s*yards?)\b", text, flags=re.IGNORECASE)
+    if matches:
+        try:
+            return float(matches[-1])
+        except ValueError:
+            return None
+    return None
+
+
+def evaluate_geometry_sanity(
+    result_data: dict,
+    scene_type: str,
+    room_labels: list[str],
+    truck_load_pct: Optional[float],
+    truck_capacity_cy: float,
+) -> dict:
+    items = result_data.get("items", []) or []
+    item_sum = 0.0
+    bulky_count = 0
+    for item in items:
+        try:
+            item_cy = float(item.get("cubic_yards") or 0.0) * max(1, int(item.get("quantity") or 1))
+        except (TypeError, ValueError):
+            item_cy = 0.0
+        item_sum += max(0.0, item_cy)
+        if item_cy >= 1.0:
+            bulky_count += 1
+
+    spatial_total = _parse_spatial_total_from_notes(result_data.get("notes", ""))
+    truck_total = None
+    if truck_load_pct is not None and truck_capacity_cy:
+        truck_total = round((truck_load_pct / 100.0) * truck_capacity_cy, 2)
+
+    occupancy_class = "balanced"
+    flags: list[str] = []
+    summary_parts: list[str] = []
+
+    if item_sum > 0:
+        if bulky_count >= 3 and item_sum / max(bulky_count, 1) > 0.9:
+            occupancy_class = "bulky"
+        elif scene_type in {"construction_debris", "bagged_trash_soft_goods"} and bulky_count <= 1:
+            occupancy_class = "tight"
+        elif scene_type in {"garage_clutter", "storage_overflow"} and item_sum < 4:
+            occupancy_class = "sparse"
+
+    if spatial_total and item_sum > 0:
+        ratio = spatial_total / item_sum if item_sum else 1.0
+        if ratio >= 1.9:
+            flags.append("spatial_above_items")
+            summary_parts.append(f"Spatial note suggests {spatial_total:.1f} CY while identified items sum to {item_sum:.1f} CY.")
+        elif ratio <= 0.65:
+            flags.append("items_above_spatial")
+            summary_parts.append(f"Identified items sum to {item_sum:.1f} CY while note math suggests {spatial_total:.1f} CY.")
+
+    if truck_total and item_sum > 0:
+        ratio = item_sum / truck_total if truck_total else 1.0
+        if ratio < 0.6:
+            flags.append("items_below_truck_hint")
+            summary_parts.append(f"Truck-load hint implies about {truck_total:.1f} CY but visible items only total {item_sum:.1f} CY.")
+        elif ratio > 1.45:
+            flags.append("items_above_truck_hint")
+            summary_parts.append(f"Visible items total {item_sum:.1f} CY against a truck-load hint of about {truck_total:.1f} CY.")
+
+    adjusted_total = round(item_sum, 2)
+    applied_adjustment = False
+    if truck_total and scene_type == "truck_load" and item_sum > 0:
+        if item_sum < truck_total * 0.6:
+            adjusted_total = round(max(item_sum, truck_total * 0.7), 2)
+            flags.append("raised_toward_truck_hint")
+            applied_adjustment = adjusted_total > item_sum
+        elif item_sum > truck_total * 1.45:
+            adjusted_total = round(min(item_sum, truck_total * 1.2), 2)
+            flags.append("trimmed_toward_truck_hint")
+            applied_adjustment = adjusted_total < item_sum
+
+    deduped_flags: list[str] = []
+    for flag in flags:
+        if flag not in deduped_flags:
+            deduped_flags.append(flag)
+
+    summary = " ".join(summary_parts[:2]).strip()
+    if not summary and item_sum > 0:
+        summary = f"Scene appears {occupancy_class} with {item_sum:.1f} CY across identified items."
+
+    return {
+        "item_sum": round(item_sum, 2),
+        "spatial_total": round(spatial_total, 2) if spatial_total else None,
+        "truck_total": truck_total,
+        "occupancy_class": occupancy_class,
+        "sanity_flags": deduped_flags,
+        "geometry_summary": summary,
+        "adjusted_total": adjusted_total,
+        "applied_adjustment": applied_adjustment,
+    }
+
+
 @app.post("/api/public/estimate/{slug}")
 @limiter.limit("10/hour")
 async def public_create_estimate(
@@ -3092,6 +3214,9 @@ async def public_estimate_status(request: Request, job_id: str):
                 "scene_type": r.get("scene_type", ""),
                 "scene_label": r.get("scene_label", ""),
                 "range_widened": r.get("range_widened", False),
+                "occupancy_class": r.get("occupancy_class", ""),
+                "sanity_flags": r.get("sanity_flags", []),
+                "geometry_summary": r.get("geometry_summary", ""),
                 "special_items": r.get("special_items", []),
                 "min_charge_applied": r.get("min_charge_applied", False),
                 "potential_duplicates": r.get("potential_duplicates", []),
@@ -4399,6 +4524,9 @@ async def run_estimate(
     confidence_reasons = photo_quality.get("reasons", [])
     photo_quality_flags = photo_quality.get("flags", [])
     scene_type = ""
+    occupancy_class = ""
+    sanity_flags: list[str] = []
+    geometry_summary = ""
 
     try:
         library_context = await get_library_context()
@@ -4574,6 +4702,29 @@ async def run_estimate(
         result_data.setdefault("conditions", [])
         if scene_type and scene_type not in result_data["conditions"] and scene_type in {"truck_load"}:
             result_data["conditions"].append(scene_type)
+        sanity = evaluate_geometry_sanity(
+            result_data,
+            scene_type,
+            room_labels,
+            job.get("truck_load_pct"),
+            getattr(user, "truck_capacity_cy", 16.0) or 16.0,
+        )
+        occupancy_class = sanity["occupancy_class"]
+        sanity_flags = list(sanity["sanity_flags"] or [])
+        geometry_summary = sanity["geometry_summary"]
+        if sanity_flags:
+            confidence_reasons.append(geometry_summary)
+            if any(flag in sanity_flags for flag in ("spatial_above_items", "items_above_spatial", "items_below_truck_hint", "items_above_truck_hint")):
+                if confidence_bucket == "high":
+                    confidence_bucket = "medium"
+                result_data["confidence"] = min(int(result_data.get("confidence", 75) or 75), 78)
+            if any(flag in sanity_flags for flag in ("raised_toward_truck_hint", "trimmed_toward_truck_hint")):
+                adj_total = float(sanity["adjusted_total"] or 0.0)
+                if adj_total > 0:
+                    result_data["totals"]["cubic_yards_mid"] = round(adj_total, 1)
+                    result_data["totals"]["cubic_yards_low"] = round(adj_total * 0.85, 1)
+                    result_data["totals"]["cubic_yards_high"] = round(adj_total * 1.15, 1)
+                    result_data["total_cubic_yards"] = round(adj_total, 1)
 
         # --- Custom per-company pricing (skip Tavily when rates are set) ---
         custom_standard = getattr(user, 'price_per_cy_standard', None)
@@ -4696,6 +4847,9 @@ async def run_estimate(
                 confidence_reasons=json.dumps(confidence_reasons),
                 photo_quality_flags=json.dumps(photo_quality_flags),
                 scene_type=scene_type,
+                occupancy_class=occupancy_class,
+                sanity_flags=json.dumps(sanity_flags),
+                geometry_summary=geometry_summary,
             )
             db.add(est)
             try:
@@ -4813,6 +4967,9 @@ async def run_estimate(
             "scene_type": scene_type,
             "scene_label": SCENE_DISPLAY_NAMES.get(scene_type, scene_type.replace("_", " ").title() if scene_type else ""),
             "range_widened": range_widened,
+            "occupancy_class": occupancy_class,
+            "sanity_flags": sanity_flags,
+            "geometry_summary": geometry_summary,
             "estimates_remaining": remaining,
             "special_items": special_items,
             "items_looked_up": lookups_done,
@@ -5058,6 +5215,9 @@ async def get_estimate_detail(request: Request, estimate_id: int):
             "photo_quality_flags": _safe_json_loads(getattr(e, "photo_quality_flags", "") or "[]", []),
             "scene_type": getattr(e, "scene_type", "") or "",
             "scene_label": SCENE_DISPLAY_NAMES.get(getattr(e, "scene_type", "") or "", ""),
+            "occupancy_class": getattr(e, "occupancy_class", "") or "",
+            "sanity_flags": _safe_json_loads(getattr(e, "sanity_flags", "") or "[]", []),
+            "geometry_summary": getattr(e, "geometry_summary", "") or "",
         }
 
 
@@ -5496,6 +5656,9 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
             "photo_quality_flags": _safe_json_loads(getattr(e, "photo_quality_flags", "") or "[]", []),
             "scene_type": getattr(e, "scene_type", "") or "",
             "scene_label": SCENE_DISPLAY_NAMES.get(getattr(e, "scene_type", "") or "", ""),
+            "occupancy_class": getattr(e, "occupancy_class", "") or "",
+            "sanity_flags": _safe_json_loads(getattr(e, "sanity_flags", "") or "[]", []),
+            "geometry_summary": getattr(e, "geometry_summary", "") or "",
         }
 
 

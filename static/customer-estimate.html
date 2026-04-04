@@ -125,6 +125,7 @@ input, select { width: 100%; padding: 10px 12px; background: var(--bg); border: 
       <div id="contact-method-confirm" style="background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.2);border-radius:8px;padding:12px 16px;font-size:0.85rem;color:var(--accent);margin-bottom:20px;"></div>
       <div id="scene-note" style="display:none;background:rgba(15,23,42,0.04);border:1px solid rgba(148,163,184,0.3);border-radius:8px;padding:12px 16px;font-size:0.82rem;color:var(--muted);margin-bottom:12px;line-height:1.5;"></div>
       <div id="confidence-note" style="display:none;font-size:0.8rem;color:var(--muted);line-height:1.5;"></div>
+      <div id="geometry-note" style="display:none;font-size:0.8rem;color:var(--muted);line-height:1.5;margin-top:10px;"></div>
     </div>
     <div class="card cta-card" id="cta-card">
       <div style="font-size:0.9rem;color:var(--muted);margin-bottom:10px;">Need help sooner?</div>
@@ -354,6 +355,13 @@ function showResults(r) {
     confEl.style.display = 'block';
   } else {
     confEl.style.display = 'none';
+  }
+  var geometryEl = document.getElementById('geometry-note');
+  if (r.geometry_summary) {
+    geometryEl.textContent = 'Geometry check: ' + r.geometry_summary;
+    geometryEl.style.display = 'block';
+  } else {
+    geometryEl.style.display = 'none';
   }
 }
 

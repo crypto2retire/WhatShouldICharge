@@ -875,6 +875,7 @@
       <div id="res-confidence-warn" style="display:none;margin-top:12px;padding:8px 14px;border-radius:8px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;font-size:0.83rem;font-weight:500;">⚠ Low confidence — recommend requesting additional photos</div>
       <div id="res-scene-note" style="display:none;margin-top:10px;color:var(--muted);font-size:0.82rem;"></div>
       <div id="res-confidence-note" style="display:none;margin-top:8px;color:var(--muted);font-size:0.8rem;line-height:1.5;"></div>
+      <div id="res-geometry-note" style="display:none;margin-top:8px;color:var(--muted);font-size:0.8rem;line-height:1.5;"></div>
       <div id="res-badge"></div>
       <div class="conditions-row" id="res-conditions"></div>
     </div>
@@ -1710,6 +1711,14 @@ function showResults(data) {
     confNoteEl.style.display = 'block';
   } else {
     confNoteEl.style.display = 'none';
+  }
+
+  const geometryEl = document.getElementById('res-geometry-note');
+  if (data.geometry_summary) {
+    geometryEl.textContent = 'Geometry check: ' + data.geometry_summary;
+    geometryEl.style.display = 'block';
+  } else {
+    geometryEl.style.display = 'none';
   }
 
   const jobType = data.job_type || 'standard';

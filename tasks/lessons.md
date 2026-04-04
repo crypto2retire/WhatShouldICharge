@@ -13,6 +13,11 @@ The signed-in, public, and team estimate endpoints all process photos. Keep uplo
 ### 1. Metadata is only useful if every estimate surface shows it
 If backend responses include scene type, confidence bucket, and widened-range context, expose that consistently in signed-in, team, and public estimate views. Otherwise operators see one explanation while customers see another, and trust drops.
 
+## Geometry sanity must be bounded — 2026-04-04
+
+### 1. Use scene-level sanity checks to downgrade confidence before rewriting numbers
+Scene-level comparisons against note math and truck-load hints are useful for catching obvious mismatches, but they should mostly change confidence and review metadata. Hard numeric changes should stay rare and bounded to strong evidence cases like truck-load hints that are far away from the visible item total.
+
 ## Repo workflow docs drift — 2026-04-03
 
 ### 1. Keep AGENTS.md aligned with the real deploy path

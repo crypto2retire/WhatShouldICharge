@@ -72,6 +72,11 @@ WSIC already has the right estimate endpoints and persistence. Operator assist s
 ### 2. Reuse `capture_mode` as the admin filter axis
 When monitoring whether operator assist is improving accuracy, add filters to the existing admin estimates and accuracy views rather than building a separate dashboard. The same `capture_mode` query parameter should drive both the raw estimate list and the calibration aggregates so the numbers line up with the rows you can inspect.
 
+## Small garage overestimates — 2026-04-05
+
+### 1. Guard against background fixtures and duplicate-angle inflation before pricing
+Small garage/storage jobs can blow up if the model counts installed shelving, background storage, or the same bag group from two angles. Add code-side guardrails before final pricing: exclude likely background shelving in garage-like scenes, reduce grouped item counts when a duplicate-angle warning points at the same bags/boxes, sync totals back to the item sum, and suppress `hoarder` / `construction_debris` labels unless the visible scene actually supports them.
+
 ## Railway Deployment — 2026-03-12
 
 ### 1. Railway PostgreSQL Networking

@@ -65,10 +65,15 @@ BROKEN/DISASSEMBLED ITEMS:
 
 5. CHECK FOR DUPLICATES across multiple photos — same item from different angles should not be counted twice.
 
-6. CLASSIFY THE JOB:
+6. DO NOT COUNT INSTALLED OR BACKGROUND STORAGE/FIXTURES unless they are clearly staged for removal.
+   - Garage shelving, wall shelving, mounted shelves, and background storage systems are usually part of the space, not the haul-away pile.
+   - Items sitting on shelves in the background should not be counted unless the photo clearly shows they are included for removal.
+   - When in doubt, count the foreground haul-away items only.
+
+7. CLASSIFY THE JOB:
    - "standard": Easy access, mostly furniture/boxes, manageable load
    - "premium": Stairs, very heavy items (200+ lbs), difficult access, large volume (10+ CY)
-   - "hoarder": Floor-to-ceiling, pathways needed, biohazard risk
+   - "hoarder": Only for true floor-to-ceiling or room-wide overflow with blocked pathways, not for a few bags and scattered garage items
    - "truck_load": Full or near-full truck load (14+ CY)
 
 Return this EXACT JSON structure:
@@ -99,6 +104,8 @@ CRITICAL RULES:
 - Do NOT invent phantom "miscellaneous" items to reach a spatial total
 - When you see many small items (bags, boxes, buckets, small debris), estimate each one individually at its ACTUAL size. Do NOT round up small items to large volumes. Eight contractor bags at 0.3 CY each = 2.4 CY total, not 19.2 CY.
 - For flat/spread-out items, estimate their LOADED truck volume, not ground coverage
+- Same bag pile, same couch, or same appliance shown from two angles should still be counted once
+- Do NOT label a job as hoarding, whole-house, or construction debris unless the photos clearly support that scale/job type
 - The low/mid/high range should reflect estimation uncertainty (roughly -15% to +15%)
 - Confidence should reflect photo quality and how well you can see everything
 - Flag ALL special disposal items with is_special: true
@@ -227,4 +234,3 @@ def list_industries() -> list:
         {"id": k, "display_name": v["display_name"], "slug": v["slug"]}
         for k, v in INDUSTRIES.items()
     ]
-

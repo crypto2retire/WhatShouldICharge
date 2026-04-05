@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import math
 import base64
 import secrets
 import time
@@ -2003,7 +2004,7 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
 
     <div class="followup-notice" id="followup-notice">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      <strong>Whole house cleanouts &amp; hoarding situations:</strong> For accuracy on larger jobs, we will follow up within 24 hours to confirm pricing or ask a few additional questions.
+      <strong>Larger or more uncertain jobs:</strong> We may follow up within 24 hours to confirm pricing or ask one or two clarifying questions.
     </div>
 
     <div class="card" id="res-scene-card" style="display:none">
@@ -2334,7 +2335,7 @@ function showResults(r){{
   if(r.geometry_summary){{geometryNote.textContent='Geometry check: '+r.geometry_summary;geometryNote.style.display='block';sceneCard.style.display='block'}}else{{geometryNote.style.display='none'}}
   // Show follow-up notice for large/hoarding jobs
   var fn=document.getElementById('followup-notice');
-  if(fn){{var cy=r.cy_estimate||0;if(jt==='hoarder'||jt==='truck_load'||cy>=10){{fn.style.display='block'}}else{{fn.style.display='none'}}}}
+  if(fn){{var cy=r.cy_estimate||0;if(jt==='truck_load'||(jt==='hoarder'&&cy>=12)||cy>=14){{fn.style.display='block'}}else{{fn.style.display='none'}}}}
   // Show customer photos
   var photos=r.photos||[];
   if(photos.length>0){{
@@ -2852,6 +2853,122 @@ SCENE_DISPLAY_NAMES = {
     "mixed_junk": "Mixed Junk",
 }
 
+_BACKGROUND_FIXTURE_SUBSTRINGS = (
+    "shelving",
+    "shelving unit",
+    "shelf with items",
+    "storage shelf",
+    "garage shelf",
+    "mounted shelf",
+    "wall shelf",
+)
+
+_DUPLICATE_GROUP_SUBSTRINGS = (
+    "bag",
+    "box",
+    "bucket",
+    "bin",
+    "tote",
+    "crate",
+    "container",
+    "misc",
+    "tool",
+)
+
+
+def _normalized_item_name(raw_name: str) -> str:
+    return re.sub(r"\s+", " ", str(raw_name or "").strip().lower())
+
+
+def _duplicate_base_name(raw_name: str) -> str:
+    base = re.sub(r"\(photo\s*\d+\)", "", str(raw_name or ""), flags=re.IGNORECASE)
+    return _normalized_item_name(base)
+
+
+def _sync_result_totals_to_items(result_data: dict) -> float:
+    items = result_data.get("items", []) or []
+    item_sum = 0.0
+    for item in items:
+        try:
+            item_sum += max(0.0, float(item.get("cubic_yards") or 0.0)) * max(1, int(item.get("quantity") or 1))
+        except (TypeError, ValueError):
+            continue
+    item_sum = round(item_sum, 2)
+    if item_sum > 0:
+        result_data.setdefault("totals", {})
+        result_data["totals"]["cubic_yards_mid"] = round(item_sum, 1)
+        result_data["totals"]["cubic_yards_low"] = round(item_sum * 0.85, 1)
+        result_data["totals"]["cubic_yards_high"] = round(item_sum * 1.15, 1)
+        result_data["total_cubic_yards"] = round(item_sum, 1)
+    return item_sum
+
+
+def apply_visual_estimate_guardrails(result_data: dict, room_labels: list[str]) -> tuple[dict, list[str]]:
+    items = result_data.get("items", []) or []
+    if not isinstance(items, list) or not items:
+        return result_data, []
+
+    labels = " ".join(room_labels).lower()
+    garage_like = any(k in labels for k in ("garage", "basement", "attic", "shed", "storage"))
+    duplicate_bases = set()
+    for dup in result_data.get("potential_duplicates", []) or []:
+        if not isinstance(dup, dict):
+            continue
+        duplicate_bases.add(_duplicate_base_name(dup.get("item_a", "")))
+        duplicate_bases.add(_duplicate_base_name(dup.get("item_b", "")))
+    duplicate_bases = {name for name in duplicate_bases if name}
+
+    filtered_items = []
+    notes: list[str] = []
+    removed_fixture_names: list[str] = []
+    dedupe_notes: list[str] = []
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "") or "")
+        norm_name = _normalized_item_name(name)
+        qty = max(1, int(item.get("quantity") or 1))
+        photo_sources = item.get("photo_sources", []) or []
+
+        if garage_like and any(substr in norm_name for substr in _BACKGROUND_FIXTURE_SUBSTRINGS):
+            removed_fixture_names.append(name or "shelving")
+            continue
+
+        if any(norm_name == base or norm_name in base or base in norm_name for base in duplicate_bases):
+            if any(substr in norm_name for substr in _DUPLICATE_GROUP_SUBSTRINGS) and qty > 1:
+                new_qty = max(1, math.ceil(qty / 2))
+            elif len(photo_sources) >= 2 and qty > 1:
+                new_qty = 1
+            else:
+                new_qty = qty
+            if new_qty != qty:
+                item["quantity"] = new_qty
+                item["dedup_note"] = f"Reduced from {qty} to {new_qty} because the same item group appears across multiple photos."
+                dedupe_notes.append(f"{name}: counted once across multiple angles.")
+
+        filtered_items.append(item)
+
+    if removed_fixture_names:
+        unique_removed = []
+        for name in removed_fixture_names:
+            if name not in unique_removed:
+                unique_removed.append(name)
+        notes.append("Background shelving/storage was excluded unless clearly staged for removal: " + ", ".join(unique_removed[:3]) + ".")
+
+    if dedupe_notes:
+        unique_dedupe = []
+        for note in dedupe_notes:
+            if note not in unique_dedupe:
+                unique_dedupe.append(note)
+        notes.append("Duplicate-angle guardrail applied: " + " ".join(unique_dedupe[:2]))
+
+    result_data["items"] = filtered_items
+    if notes:
+        existing_notes = str(result_data.get("notes", "") or "").strip()
+        result_data["notes"] = (existing_notes + "\n" if existing_notes else "") + " ".join(notes)
+    return result_data, notes
+
 
 def _normalize_room_labels(photo_data: list[dict]) -> list[str]:
     out = []
@@ -2904,7 +3021,7 @@ def classify_scene_type(
 
     yard_keywords = ("branch", "brush", "yard", "tree", "limb", "leaves", "mulch", "stump")
     construction_keywords = (
-        "drywall", "sheetrock", "tile", "lumber", "wood", "cabinet", "countertop",
+        "drywall", "sheetrock", "tile", "lumber", "countertop",
         "demolition", "construction", "debris", "framing", "fence", "railroad tie",
         "shingle", "roofing", "carpet", "pad", "plywood", "osb",
     )
@@ -2916,6 +3033,9 @@ def classify_scene_type(
 
     if any(k in names for k in yard_keywords) and any(k in labels for k in ("outdoor", "yard", "curb", "driveway")):
         return "yard_waste_outdoor_pile"
+    construction_hits = sum(1 for k in construction_keywords if k in names)
+    if any(k in labels for k in ("garage",)) and construction_hits < 2:
+        return "garage_clutter"
     if any(k in names for k in construction_keywords):
         return "construction_debris"
     if job_type == "hoarder" or "hoarder" in conditions:
@@ -2977,6 +3097,35 @@ def apply_scene_confidence_policy(
         if reason and reason not in deduped:
             deduped.append(reason)
     return confidence_bucket, deduped[:4], confidence
+
+
+def apply_job_label_guardrails(result_data: dict, scene_type: str, room_labels: list[str]) -> tuple[dict, str]:
+    labels = " ".join(room_labels).lower()
+    item_sum = _sync_result_totals_to_items(result_data)
+    job_type = str(result_data.get("job_type", "") or "").lower()
+    conditions = [str(c).lower() for c in (result_data.get("conditions", []) or [])]
+    items = result_data.get("items", []) or []
+    names = " ".join(_normalized_item_name(it.get("name", "")) for it in items if isinstance(it, dict))
+    bag_like_count = sum(
+        1 for it in items
+        if isinstance(it, dict) and any(k in _normalized_item_name(it.get("name", "")) for k in ("bag", "bucket", "bin", "crate"))
+    )
+
+    if job_type == "hoarder" and item_sum < 12:
+        result_data["job_type"] = "standard"
+    if "hoarder" in conditions and item_sum < 12:
+        result_data["conditions"] = [c for c in conditions if c != "hoarder"]
+
+    if scene_type == "construction_debris":
+        construction_hits = sum(1 for k in ("drywall", "sheetrock", "tile", "lumber", "demolition", "construction", "debris", "framing", "shingle", "roofing", "plywood", "osb") if k in names)
+        if any(k in labels for k in ("garage", "basement", "storage")) and construction_hits < 2:
+            scene_type = "garage_clutter" if bag_like_count < 3 else "bagged_trash_soft_goods"
+
+    if item_sum < 8 and result_data.get("job_type") == "truck_load":
+        result_data["job_type"] = "standard"
+
+    _sync_result_totals_to_items(result_data)
+    return result_data, scene_type
 
 
 def widen_price_range_for_confidence(
@@ -4668,6 +4817,7 @@ async def run_estimate(
             return
 
         result_data = pass1_result
+        result_data, _guardrail_notes = apply_visual_estimate_guardrails(result_data, room_labels)
 
         # ── Post-processing: use item-based total (bottom-up), not spatial bounding box ──
         # The new prompt generates bottom-up estimates (sum of items = total).
@@ -4753,7 +4903,9 @@ async def run_estimate(
                     result_data["totals"] = totals
 
         result_data = validate_estimate(result_data)
+        _sync_result_totals_to_items(result_data)
         scene_type = classify_scene_type(result_data, room_labels, job.get("truck_load_pct"))
+        result_data, scene_type = apply_job_label_guardrails(result_data, scene_type, room_labels)
         confidence_bucket, confidence_reasons, final_confidence = apply_scene_confidence_policy(
             result_data,
             photo_quality,
@@ -4787,6 +4939,17 @@ async def run_estimate(
                     result_data["totals"]["cubic_yards_low"] = round(adj_total * 0.85, 1)
                     result_data["totals"]["cubic_yards_high"] = round(adj_total * 1.15, 1)
                     result_data["total_cubic_yards"] = round(adj_total, 1)
+
+        final_item_sum = _sync_result_totals_to_items(result_data)
+        if scene_type in {"garage_clutter", "bagged_trash_soft_goods", "mixed_junk"} and job.get("truck_load_pct") is None:
+            max_reasonable_total = 8.0
+            if final_item_sum > max_reasonable_total:
+                result_data["totals"]["cubic_yards_mid"] = round(max_reasonable_total, 1)
+                result_data["totals"]["cubic_yards_low"] = round(max_reasonable_total * 0.85, 1)
+                result_data["totals"]["cubic_yards_high"] = round(max_reasonable_total * 1.15, 1)
+                result_data["total_cubic_yards"] = round(max_reasonable_total, 1)
+                confidence_bucket = "medium"
+                confidence_reasons.append("Small visible garage/storage pickups are capped unless truck-load context or broader room coverage is confirmed.")
 
         # --- Custom per-company pricing (skip Tavily when rates are set) ---
         custom_standard = getattr(user, 'price_per_cy_standard', None)

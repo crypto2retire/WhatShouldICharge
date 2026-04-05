@@ -30,7 +30,14 @@ import io
 from cryptography.fernet import Fernet, InvalidToken
 
 from services.volume_lookup import validate_estimate
-from services.industry_config import get_industry_config, get_system_prompt, get_calibration_items, get_business_rules
+from services.industry_config import (
+    get_industry_config,
+    get_system_prompt,
+    get_extraction_prompt,
+    get_verification_prompt,
+    get_calibration_items,
+    get_business_rules,
+)
 
 _encryption_key = os.environ.get("ENCRYPTION_KEY")
 _fernet = Fernet(_encryption_key.encode()) if _encryption_key else None
@@ -2885,6 +2892,25 @@ def _duplicate_base_name(raw_name: str) -> str:
     return _normalized_item_name(base)
 
 
+def _scene_context_text(result_data: dict, room_labels: list[str]) -> str:
+    labels = " ".join(str(label or "") for label in room_labels)
+    notes = str(result_data.get("notes", "") or "")
+    return f"{labels} {notes}".lower()
+
+
+def _small_job_group_total_cy(item: dict) -> float:
+    if not isinstance(item, dict):
+        return 0.0
+    norm_name = _normalized_item_name(item.get("name", ""))
+    qty = max(1, int(item.get("quantity") or 1))
+    total_cy = max(0.0, float(item.get("cubic_yards") or 0.0) * qty)
+    if "bag" in norm_name and ("trash" in norm_name or "garbage" in norm_name):
+        return min(total_cy, qty * 0.30)
+    if "paint" in norm_name and ("bucket" in norm_name or "can" in norm_name):
+        return min(total_cy, qty * 0.03)
+    return total_cy
+
+
 def _sync_result_totals_to_items(result_data: dict) -> float:
     items = result_data.get("items", []) or []
     item_sum = 0.0
@@ -2970,6 +2996,52 @@ def apply_visual_estimate_guardrails(result_data: dict, room_labels: list[str]) 
     return result_data, notes
 
 
+def apply_small_job_volume_guardrails(result_data: dict, scene_type: str, room_labels: list[str]) -> tuple[dict, list[str]]:
+    items = result_data.get("items", []) or []
+    if not isinstance(items, list) or not items:
+        return result_data, []
+
+    context = _scene_context_text(result_data, room_labels)
+    garage_like = any(k in context for k in ("garage", "basement", "storage", "shed"))
+    if scene_type not in {"garage_clutter", "bagged_trash_soft_goods", "mixed_junk", "storage_overflow"} and not garage_like:
+        return result_data, []
+
+    notes: list[str] = []
+    adjusted = False
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        norm_name = _normalized_item_name(item.get("name", ""))
+        qty = max(1, int(item.get("quantity") or 1))
+        current_cy = max(0.0, float(item.get("cubic_yards") or 0.0))
+        current_total = current_cy * qty
+
+        if "bag" in norm_name and ("trash" in norm_name or "garbage" in norm_name):
+            corrected_cy = round(min(current_total, qty * 0.30) / qty, 3)
+            if corrected_cy < current_cy:
+                item["cubic_yards"] = corrected_cy
+                adjusted = True
+        elif "paint" in norm_name and ("bucket" in norm_name or "can" in norm_name):
+            corrected_cy = round(min(current_total, qty * 0.03) / qty, 3)
+            if corrected_cy < current_cy:
+                item["cubic_yards"] = corrected_cy
+                adjusted = True
+
+    if adjusted:
+        corrected_sum = sum(_small_job_group_total_cy(item) for item in items if isinstance(item, dict))
+        result_data.setdefault("totals", {})
+        result_data["totals"]["cubic_yards_mid"] = round(corrected_sum, 1)
+        result_data["totals"]["cubic_yards_low"] = round(corrected_sum * 0.85, 1)
+        result_data["totals"]["cubic_yards_high"] = round(corrected_sum * 1.15, 1)
+        result_data["total_cubic_yards"] = round(corrected_sum, 1)
+        notes.append("Small-job guardrail reduced grouped bag/container volumes to field-calibrated per-item ranges.")
+
+    if notes:
+        existing_notes = str(result_data.get("notes", "") or "").strip()
+        result_data["notes"] = (existing_notes + "\n" if existing_notes else "") + " ".join(notes)
+    return result_data, notes
+
+
 def _normalize_room_labels(photo_data: list[dict]) -> list[str]:
     out = []
     for pd in photo_data:
@@ -3010,13 +3082,14 @@ def classify_scene_type(
     room_labels: list[str],
     truck_load_pct: Optional[float] = None,
 ) -> str:
+    context = _scene_context_text(result_data, room_labels)
     labels = " ".join(room_labels).lower()
     items = result_data.get("items", []) or []
     names = " ".join(str(it.get("name", "") or "").lower() for it in items)
     job_type = str(result_data.get("job_type", "") or "").lower()
     conditions = {str(c).lower() for c in (result_data.get("conditions", []) or [])}
 
-    if truck_load_pct is not None or job_type == "truck_load" or "truck load" in labels:
+    if truck_load_pct is not None or job_type == "truck_load" or "truck load" in context:
         return "truck_load"
 
     yard_keywords = ("branch", "brush", "yard", "tree", "limb", "leaves", "mulch", "stump")
@@ -3031,24 +3104,24 @@ def classify_scene_type(
         "dresser", "desk", "bed", "mattress", "box spring", "nightstand", "bookshelf",
     )
 
-    if any(k in names for k in yard_keywords) and any(k in labels for k in ("outdoor", "yard", "curb", "driveway")):
+    if any(k in names for k in yard_keywords) and any(k in context for k in ("outdoor", "yard", "curb", "driveway")):
         return "yard_waste_outdoor_pile"
     construction_hits = sum(1 for k in construction_keywords if k in names)
-    if any(k in labels for k in ("garage",)) and construction_hits < 2:
+    if any(k in context for k in ("garage",)) and construction_hits < 2:
         return "garage_clutter"
     if any(k in names for k in construction_keywords):
         return "construction_debris"
     if job_type == "hoarder" or "hoarder" in conditions:
-        return "storage_overflow" if any(k in labels for k in ("basement", "attic", "shed", "storage")) else "bagged_trash_soft_goods"
+        return "storage_overflow" if any(k in context for k in ("basement", "attic", "shed", "storage")) else "bagged_trash_soft_goods"
     if sum(1 for it in items if any(k in str(it.get("name", "")).lower() for k in bag_keywords)) >= 3:
         return "bagged_trash_soft_goods"
-    if any(k in labels for k in ("garage",)):
+    if any(k in context for k in ("garage",)):
         return "garage_clutter"
-    if any(k in labels for k in ("basement", "attic", "shed", "storage")):
+    if any(k in context for k in ("basement", "attic", "shed", "storage")):
         return "storage_overflow"
-    if any(k in labels for k in ("outdoor", "yard", "curb", "driveway")):
+    if any(k in context for k in ("outdoor", "yard", "curb", "driveway")):
         return "curbside_mixed_junk"
-    if any(k in names for k in furniture_keywords) or any(k in labels for k in ("living room", "bedroom", "kitchen", "bathroom", "office", "dining")):
+    if any(k in names for k in furniture_keywords) or any(k in context for k in ("living room", "bedroom", "kitchen", "bathroom", "office", "dining")):
         return "room_interior_furniture"
     return "mixed_junk"
 
@@ -4444,6 +4517,38 @@ def parse_ai_json(raw_text: str) -> dict:
     return json.loads(raw_text)
 
 
+def validate_estimate_schema(result: dict) -> bool:
+    if not isinstance(result, dict):
+        return False
+    if not isinstance(result.get("items"), list):
+        return False
+    totals = result.get("totals")
+    if not isinstance(totals, dict) or "cubic_yards_mid" not in totals:
+        return False
+    if not isinstance(result.get("job_type"), str):
+        return False
+    return True
+
+
+def _clean_string_list(values) -> list[str]:
+    cleaned = []
+    for value in values or []:
+        text = str(value or "").strip()
+        if text and text not in cleaned:
+            cleaned.append(text)
+    return cleaned
+
+
+def normalize_verification_result(result: dict) -> dict:
+    if not isinstance(result, dict):
+        return result
+    result["verification_notes"] = _clean_string_list(result.get("verification_notes"))
+    result["confirmed_items"] = _clean_string_list(result.get("confirmed_items"))
+    result["uncertain_items"] = _clean_string_list(result.get("uncertain_items"))
+    result["removed_items"] = _clean_string_list(result.get("removed_items"))
+    return result
+
+
 async def lookup_item_dimensions(item_name: str, api_key: str) -> dict:
     tavily_key = os.environ.get("TAVILY_API_KEY")
     if not tavily_key:
@@ -4729,6 +4834,7 @@ async def run_estimate(
 ):
     job = estimate_jobs[job_id]
     pass1_json_str = ""
+    pass2_json_str = ""
     lookups_json_str = ""
     photo_quality = job.get("photo_quality") or {}
     confidence_bucket = photo_quality.get("confidence_bucket", "")
@@ -4742,14 +4848,17 @@ async def run_estimate(
     try:
         library_context = await get_library_context()
         industry_id = getattr(user, "industry", "junk_removal") or "junk_removal"
-        system_prompt = get_system_prompt(industry_id)
+        extraction_prompt = get_extraction_prompt(industry_id)
+        verification_prompt = get_verification_prompt(industry_id)
         if library_context:
-            system_prompt += "\n" + library_context
+            extraction_prompt += "\n" + library_context
+            verification_prompt += "\n" + library_context
         room_labels = list(job.get("room_labels", []) or [])
         capture_scene_hint = infer_capture_scene_hint(room_labels, job.get("truck_load_pct"))
         scene_prompt_hint = build_scene_prompt_hint(capture_scene_hint)
         if scene_prompt_hint:
-            system_prompt += "\n\n" + scene_prompt_hint
+            extraction_prompt += "\n\n" + scene_prompt_hint
+            verification_prompt += "\n\n" + scene_prompt_hint
 
         job["status"] = "analyzing"
         job["message"] = "Analyzing photos..."
@@ -4767,7 +4876,7 @@ async def run_estimate(
                 model="claude-sonnet-4-20250514",
                 max_tokens=2048,
                 temperature=0,
-                system=system_prompt,
+                system=extraction_prompt,
                 messages=[{
                     "role": "user",
                     "content": image_content + [{
@@ -4796,27 +4905,61 @@ async def run_estimate(
         pass1_json_str = json.dumps(pass1_result)
 
         # H7: Validate AI response schema
-        if not isinstance(pass1_result.get("items"), list):
-            logger.error(f"[run_estimate] Malformed AI response for job {job_id}: missing/invalid 'items' field")
-            job["status"] = "error"
-            job["message"] = "We received an unexpected response from our AI. Please try again."
-            job["result"] = None
-            return
-        totals = pass1_result.get("totals")
-        if not isinstance(totals, dict) or "cubic_yards_mid" not in totals:
-            logger.error(f"[run_estimate] Malformed AI response for job {job_id}: missing/invalid 'totals' field")
-            job["status"] = "error"
-            job["message"] = "We received an unexpected response from our AI. Please try again."
-            job["result"] = None
-            return
-        if not isinstance(pass1_result.get("job_type"), str):
-            logger.error(f"[run_estimate] Malformed AI response for job {job_id}: missing/invalid 'job_type' field")
+        if not validate_estimate_schema(pass1_result):
+            logger.error(f"[run_estimate] Malformed AI response for job {job_id}: invalid pass-1 schema")
             job["status"] = "error"
             job["message"] = "We received an unexpected response from our AI. Please try again."
             job["result"] = None
             return
 
         result_data = pass1_result
+        job["message"] = "Verifying estimate..."
+
+        pass2_result = None
+
+        def run_pass2():
+            return client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=2200,
+                temperature=0,
+                system=verification_prompt,
+                messages=[{
+                    "role": "user",
+                    "content": image_content + [{
+                        "type": "text",
+                        "text": (
+                            "Verify this first-pass junk removal estimate against the same photos. "
+                            "Remove anything you cannot clearly confirm, fix duplicate counts, recount grouped items, "
+                            "and return corrected JSON only.\n\n"
+                            f"FIRST PASS JSON:\n{json.dumps(pass1_result, indent=2)}"
+                        )
+                    }]
+                }]
+            )
+
+        try:
+            pass2_message = await asyncio.to_thread(run_pass2)
+            pin, pout, pmod = _claude_response_usage(pass2_message)
+            total_input_tokens += pin
+            total_output_tokens += pout
+            if pmod:
+                model_name = pmod
+            parsed_pass2 = parse_ai_json(pass2_message.content[0].text)
+            parsed_pass2 = normalize_verification_result(parsed_pass2)
+            if validate_estimate_schema(parsed_pass2):
+                pass2_result = parsed_pass2
+                pass2_json_str = json.dumps(pass2_result)
+                result_data = pass2_result
+            else:
+                logger.warning(f"[run_estimate] Job {job_id}: pass-2 returned invalid schema; falling back to pass-1")
+        except Exception as pass2_err:
+            logger.warning(f"[run_estimate] Job {job_id}: pass-2 verification failed ({type(pass2_err).__name__}: {pass2_err}); falling back to pass-1")
+
+        if pass2_result and pass2_result.get("verification_notes"):
+            existing_notes = str(result_data.get("notes", "") or "").strip()
+            verification_summary = "Verification notes: " + "; ".join(result_data.get("verification_notes", [])[:3])
+            result_data["notes"] = (existing_notes + "\n" if existing_notes else "") + verification_summary
+
         result_data, _guardrail_notes = apply_visual_estimate_guardrails(result_data, room_labels)
 
         # ── Post-processing: use item-based total (bottom-up), not spatial bounding box ──
@@ -4905,6 +5048,9 @@ async def run_estimate(
         result_data = validate_estimate(result_data)
         _sync_result_totals_to_items(result_data)
         scene_type = classify_scene_type(result_data, room_labels, job.get("truck_load_pct"))
+        result_data, _small_job_notes = apply_small_job_volume_guardrails(result_data, scene_type, room_labels)
+        _sync_result_totals_to_items(result_data)
+        scene_type = classify_scene_type(result_data, room_labels, job.get("truck_load_pct"))
         result_data, scene_type = apply_job_label_guardrails(result_data, scene_type, room_labels)
         confidence_bucket, confidence_reasons, final_confidence = apply_scene_confidence_policy(
             result_data,
@@ -4941,7 +5087,11 @@ async def run_estimate(
                     result_data["total_cubic_yards"] = round(adj_total, 1)
 
         final_item_sum = _sync_result_totals_to_items(result_data)
-        if scene_type in {"garage_clutter", "bagged_trash_soft_goods", "mixed_junk"} and job.get("truck_load_pct") is None:
+        scene_context = _scene_context_text(result_data, room_labels)
+        if (
+            scene_type in {"garage_clutter", "bagged_trash_soft_goods", "mixed_junk", "storage_overflow"}
+            or any(k in scene_context for k in ("garage", "basement", "storage", "shed"))
+        ) and job.get("truck_load_pct") is None:
             max_reasonable_total = 8.0
             if final_item_sum > max_reasonable_total:
                 result_data["totals"]["cubic_yards_mid"] = round(max_reasonable_total, 1)
@@ -5060,7 +5210,7 @@ async def run_estimate(
                 price_high=price_high,
                 cy_estimate=cy_mid,
                 pass1_json=pass1_json_str,
-                pass2_json="",
+                pass2_json=pass2_json_str,
                 lookups_json=lookups_json_str,
                 photos_json=photos_json_str,
                 input_tokens=token_input,

@@ -77,6 +77,12 @@ When monitoring whether operator assist is improving accuracy, add filters to th
 ### 1. Guard against background fixtures and duplicate-angle inflation before pricing
 Small garage/storage jobs can blow up if the model counts installed shelving, background storage, or the same bag group from two angles. Add code-side guardrails before final pricing: exclude likely background shelving in garage-like scenes, reduce grouped item counts when a duplicate-angle warning points at the same bags/boxes, sync totals back to the item sum, and suppress `hoarder` / `construction_debris` labels unless the visible scene actually supports them.
 
+### 2. Public uploads need scene context from notes, not just room labels
+Public/customer uploads are often unlabeled, so garage/basement jobs can still fall through to `construction_debris` if classification only looks at `room_labels`. Reuse the model's own notes text as scene context and apply per-item caps for grouped trash bags / paint containers on small garage-like jobs before final pricing.
+
+### 3. Pass-2 verification must see the original photos and be subtractive
+If WSIC uses a second AI pass, it must receive the same photos plus Pass 1 JSON. A verifier that only sees the text report cannot reliably remove false positives or fix duplicate-angle counts. Keep Pass 2 narrow: confirm, correct, or remove items, then hand final totals and pricing back to deterministic code.
+
 ## Railway Deployment — 2026-03-12
 
 ### 1. Railway PostgreSQL Networking

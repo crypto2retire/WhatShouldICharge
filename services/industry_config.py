@@ -13,8 +13,8 @@ INDUSTRIES = {
         "unit_abbrev": "CY",
         "description": "AI-powered junk removal volume estimation from photos",
 
-        # The system prompt for Claude Vision — this IS the product for this industry
-        "system_prompt": """You are a junk removal estimator with years of field experience. Return ONLY valid JSON — no markdown, no explanation, no code blocks.
+        # Extraction prompt for Claude Vision
+        "extraction_prompt": """You are a junk removal estimator with years of field experience. Return ONLY valid JSON — no markdown, no explanation, no code blocks.
 
 Look at the photo(s) and estimate the total cubic yards of junk/debris to be removed. Use your best judgment as an experienced estimator — consider what these items would actually take up when loaded into a truck.
 
@@ -110,6 +110,62 @@ CRITICAL RULES:
 - Confidence should reflect photo quality and how well you can see everything
 - Flag ALL special disposal items with is_special: true
 - Detect duplicates across multiple photos""",
+
+        "verification_prompt": """You are a senior junk removal estimator doing a second-pass verification. Return ONLY valid JSON — no markdown, no explanation, no code blocks.
+
+You will receive:
+- the same photos from Pass 1
+- the first estimator's JSON result
+
+Your job is to VERIFY, REMOVE, or CORRECT items using the actual photos. Be skeptical. Do not inflate the estimate.
+
+VERIFICATION RULES:
+1. Only keep items you can visually confirm in the photos.
+2. If an item appears to be the same object from multiple angles, count it once.
+3. Recount grouped items carefully:
+   - contractor trash bags are usually about 0.2-0.4 CY each when full
+   - kitchen bags are usually about 0.05-0.1 CY each
+   - paint buckets/cans should stay small per item
+4. Remove background fixtures and storage systems unless clearly staged for removal.
+5. Keep special disposal flags only when you can visually confirm the item.
+6. If uncertain, keep the item but mark it uncertain rather than padding the estimate.
+7. Your corrected total must be the sum of the corrected items only.
+
+Return this EXACT JSON structure:
+{
+  "reference_points": [
+    {"name": "item used for scale reference", "known_dimensions": "description", "cubic_yards": 0.0, "location_in_photo": "description", "photo_number": 1}
+  ],
+  "items": [
+    {"name": "item name", "quantity": 1, "category": "furniture", "cubic_yards": 0.0, "is_special": false, "photo_sources": [1], "dedup_note": null}
+  ],
+  "potential_duplicates": [
+    {"item_a": "Couch (photo 1)", "item_b": "Couch (photo 3)", "reason": "Same brown couch visible from different angles"}
+  ],
+  "totals": {
+    "cubic_yards_low": 0.0,
+    "cubic_yards_mid": 0.0,
+    "cubic_yards_high": 0.0
+  },
+  "job_type": "standard",
+  "conditions": [],
+  "confidence": 75,
+  "notes": "Brief description of what you see, your corrected volume reasoning, and any concerns.",
+  "verification_notes": [
+    "Removed background shelving from haul-away count.",
+    "Reduced trash bags from 8 to 4 after recounting visible bags."
+  ],
+  "confirmed_items": ["pedestal fan", "brown trash barrel"],
+  "uncertain_items": ["paint buckets and containers"],
+  "removed_items": ["metal shelving units"]
+}
+
+CRITICAL RULES:
+- Be subtractive and corrective, not creative
+- Remove items you cannot actually find in the photos
+- Do NOT increase a small-job total just to match floor footprint
+- Do NOT label a job as hoarding, whole-house, or construction debris unless the photos clearly support that scale/job type
+- Keep verification_notes concise and specific""",
 
         # Calibration: known item volumes that override AI guesses
         "calibration_items": {
@@ -218,7 +274,20 @@ def get_industry_config(industry_id: str) -> dict:
 
 def get_system_prompt(industry_id: str) -> str:
     """Get the Claude Vision system prompt for an industry."""
-    return get_industry_config(industry_id)["system_prompt"]
+    config = get_industry_config(industry_id)
+    return config.get("system_prompt") or config.get("extraction_prompt", "")
+
+
+def get_extraction_prompt(industry_id: str) -> str:
+    """Get the pass-1 extraction prompt for an industry."""
+    config = get_industry_config(industry_id)
+    return config.get("extraction_prompt") or config.get("system_prompt", "")
+
+
+def get_verification_prompt(industry_id: str) -> str:
+    """Get the pass-2 verification prompt for an industry."""
+    config = get_industry_config(industry_id)
+    return config.get("verification_prompt") or config.get("extraction_prompt") or config.get("system_prompt", "")
 
 def get_calibration_items(industry_id: str) -> dict:
     """Get calibration items (known volumes) for an industry."""

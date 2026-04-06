@@ -6297,8 +6297,16 @@ async def estimate_status(request: Request, job_id: str):
         "status": job["status"],
         "message": job["message"],
     }
-    if job["status"] in {"complete", "needs_review"}:
+    if job["status"] == "complete":
         resp["result"] = job["result"]
+        del estimate_jobs[job_id]
+    elif job["status"] == "needs_review":
+        jr = job.get("result") or {}
+        resp["result"] = {
+            "review_status": "needs_review",
+            "review_reason": jr.get("review_reason", ""),
+            "clarification_questions": jr.get("clarification_questions", []),
+        }
         del estimate_jobs[job_id]
     elif job["status"] == "retry_needed":
         del estimate_jobs[job_id]
@@ -8058,8 +8066,15 @@ async def team_estimate_status(request: Request, job_id: str):
         "status": job["status"],
         "message": job["message"],
     }
-    if job["status"] in {"complete", "needs_review"} and job["result"]:
+    if job["status"] == "complete" and job["result"]:
         resp["result"] = job["result"]
+    elif job["status"] == "needs_review":
+        jr = job.get("result") or {}
+        resp["result"] = {
+            "review_status": "needs_review",
+            "review_reason": jr.get("review_reason", ""),
+            "clarification_questions": jr.get("clarification_questions", []),
+        }
     elif job["status"] == "retry_needed":
         pass
     elif job["status"] == "error":

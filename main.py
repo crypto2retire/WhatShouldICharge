@@ -4791,7 +4791,20 @@ async def run_openrouter_model_eval(image_b64: str, media_type: str, system_prom
     }
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
-        response.raise_for_status()
+        if response.status_code >= 400:
+            raw_text = (response.text or "").strip()
+            detail = ""
+            try:
+                err_json = response.json()
+                err_obj = err_json.get("error") if isinstance(err_json, dict) else None
+                if isinstance(err_obj, dict):
+                    detail = str(err_obj.get("message") or "").strip()
+                if not detail and isinstance(err_json, dict):
+                    detail = str(err_json.get("message") or "").strip()
+            except Exception:
+                pass
+            snippet = detail or raw_text[:300] or response.reason_phrase
+            raise RuntimeError(f"OpenRouter {response.status_code}: {snippet}")
         data = response.json()
     choice = (((data.get("choices") or [{}])[0]).get("message") or {})
     raw_text = choice.get("content") or ""
@@ -5159,8 +5172,25 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
         generate_model_eval_html(job, html_path)
         job["csv_path"] = str(csv_path)
         job["html_path"] = str(html_path)
+        total_rows = 0
+        success_rows = 0
+        errors = []
+        for image in job.get("images", []) or []:
+            for result in image.get("results", []) or []:
+                total_rows += 1
+                if result.get("parse_ok"):
+                    success_rows += 1
+                elif result.get("error"):
+                    errors.append(str(result.get("error")))
         job["status"] = "complete"
-        job["message"] = "Model eval complete."
+        if success_rows == total_rows:
+            job["message"] = "Model eval complete."
+        elif success_rows > 0:
+            first_error = errors[0] if errors else "Unknown model error"
+            job["message"] = f"Model eval complete with partial errors. First error: {first_error[:220]}"
+        else:
+            first_error = errors[0] if errors else "Unknown model error"
+            job["message"] = f"Model eval failed for all model runs. First error: {first_error[:220]}"
     except Exception as err:
         job["status"] = "error"
         job["message"] = f"Model eval failed: {type(err).__name__}: {err}"
@@ -5176,7 +5206,11 @@ async def admin_create_model_eval(
     cleanup_expired_model_eval_jobs()
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
-    requested_models = normalize_model_eval_models(json.loads(models or "[]"))
+    try:
+        parsed_models = json.loads(models or "[]")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid models payload")
+    requested_models = normalize_model_eval_models(parsed_models)
     if "claude-sonnet-4-20250514" in requested_models and not anthropic_key:
         raise HTTPException(status_code=400, detail="ANTHROPIC_API_KEY is not configured")
     if "openai/gpt-4.1" in requested_models and not openrouter_key:
@@ -5196,8 +5230,12 @@ async def admin_create_model_eval(
             continue
         safe_name = _safe_eval_filename(upload.filename or f"image_{idx+1}.jpg", idx)
         file_path = workspace / safe_name
-        file_path.write_bytes(raw)
-        compressed = compress_image(raw)
+        try:
+            file_path.write_bytes(raw)
+            compressed = compress_image(raw)
+        except Exception as err:
+            shutil.rmtree(workspace, ignore_errors=True)
+            raise HTTPException(status_code=400, detail=f"Image processing failed for {safe_name}: {type(err).__name__}: {err}")
         b64 = base64.standard_b64encode(compressed).decode("utf-8")
         media_type = "image/jpeg"
         images.append({
@@ -5228,7 +5266,10 @@ async def admin_create_model_eval(
     }
 
     extraction_prompt = get_extraction_prompt("junk_removal")
-    library_context = await get_library_context()
+    try:
+        library_context = await get_library_context()
+    except Exception:
+        library_context = ""
     if library_context:
         extraction_prompt += "\n" + library_context
 

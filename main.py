@@ -4796,6 +4796,14 @@ ANTHROPIC_PRICING_PER_MILLION = {
 }
 
 
+OPENROUTER_PRICING_PER_MILLION = {
+    "qwen/qwen2.5-vl-72b-instruct": (0.80, 0.80),
+    "mistralai/pixtral-large-2411": (2.00, 6.00),
+    "openai/gpt-4.1": (2.00, 8.00),
+    "meta-llama/llama-3.2-90b-vision-instruct": (0.90, 0.90),
+}
+
+
 def _claude_response_usage(resp) -> tuple[int, int, str]:
     """(input_tokens, output_tokens, model) from an Anthropic messages response."""
     try:
@@ -4811,6 +4819,14 @@ def _claude_response_usage(resp) -> tuple[int, int, str]:
 def estimate_anthropic_cost_cents(input_tokens: int, output_tokens: int, model_name: str) -> int:
     """Approximate Claude API cost in US cents."""
     rates = ANTHROPIC_PRICING_PER_MILLION.get(model_name or "", (3.0, 15.0))
+    cost_dollars = (input_tokens / 1_000_000.0) * rates[0] + (output_tokens / 1_000_000.0) * rates[1]
+    return int(round(cost_dollars * 100))
+
+
+def estimate_openrouter_cost_cents(input_tokens: int, output_tokens: int, model_name: str) -> int:
+    rates = OPENROUTER_PRICING_PER_MILLION.get(model_name or "")
+    if not rates:
+        return 0
     cost_dollars = (input_tokens / 1_000_000.0) * rates[0] + (output_tokens / 1_000_000.0) * rates[1]
     return int(round(cost_dollars * 100))
 
@@ -4984,7 +5000,11 @@ async def run_openrouter_model_eval(image_b64: str, media_type: str, system_prom
         "input_tokens": int(usage.get("prompt_tokens", 0) or 0),
         "output_tokens": int(usage.get("completion_tokens", 0) or 0),
         "model_used": str(data.get("model") or model_name),
-        "api_cost_cents": 0,
+        "api_cost_cents": estimate_openrouter_cost_cents(
+            int(usage.get("prompt_tokens", 0) or 0),
+            int(usage.get("completion_tokens", 0) or 0),
+            str(data.get("model") or model_name),
+        ),
     }
     return parsed, meta
 
@@ -5058,7 +5078,11 @@ async def run_openrouter_estimate(
         "input_tokens": int(usage.get("prompt_tokens", 0) or 0),
         "output_tokens": int(usage.get("completion_tokens", 0) or 0),
         "model_used": str(data.get("model") or model_name),
-        "api_cost_cents": 0,
+        "api_cost_cents": estimate_openrouter_cost_cents(
+            int(usage.get("prompt_tokens", 0) or 0),
+            int(usage.get("completion_tokens", 0) or 0),
+            str(data.get("model") or model_name),
+        ),
     }
     return parsed, meta
 
@@ -5195,7 +5219,7 @@ def generate_model_eval_html(job: dict, output_path: Path) -> None:
 
 async def lookup_item_dimensions(item_name: str, api_key: str) -> dict:
     tavily_key = os.environ.get("TAVILY_API_KEY")
-    if not tavily_key:
+    if not tavily_key or not (api_key or "").strip():
         return {"cubic_yards": 0, "confidence": 0}
 
     try:
@@ -5876,6 +5900,7 @@ async def run_estimate(
 
         total_input_tokens = 0
         total_output_tokens = 0
+        total_api_cost_cents = 0
         model_name = f"{PROD_PRIMARY_MODEL}|{PROD_VERIFIER_MODEL}"
 
         try:
@@ -5910,6 +5935,8 @@ async def run_estimate(
         total_input_tokens += int(verifier_meta.get("input_tokens", 0) or 0)
         total_output_tokens += int(primary_meta.get("output_tokens", 0) or 0)
         total_output_tokens += int(verifier_meta.get("output_tokens", 0) or 0)
+        total_api_cost_cents += int(primary_meta.get("api_cost_cents", 0) or 0)
+        total_api_cost_cents += int(verifier_meta.get("api_cost_cents", 0) or 0)
 
         pass1_result = primary_result
         pass1_json_str = json.dumps(pass1_result)
@@ -5975,7 +6002,7 @@ async def run_estimate(
             job["message"] = f"Looking up {len(items_needing_lookup)} unknown items..."
 
             lookup_tasks = [
-                lookup_item_dimensions(item_name, api_key)
+                lookup_item_dimensions(item_name, os.environ.get("ANTHROPIC_API_KEY", ""))
                 for item_name in items_needing_lookup[:5]
             ]
             lookup_results = await asyncio.gather(*lookup_tasks, return_exceptions=True)
@@ -5988,6 +6015,11 @@ async def run_estimate(
                         total_output_tokens += int(tu.get("output", 0) or 0)
                         if tu.get("model"):
                             model_name = str(tu["model"])
+                            total_api_cost_cents += estimate_anthropic_cost_cents(
+                                int(tu.get("input", 0) or 0),
+                                int(tu.get("output", 0) or 0),
+                                str(tu.get("model") or ""),
+                            )
 
             for i, item_name in enumerate(items_needing_lookup[:5]):
                 lr = lookup_results[i]
@@ -6270,7 +6302,7 @@ async def run_estimate(
         photos_json_str = json.dumps(stored_photos) if stored_photos else ""
         logger.info(f"[run_estimate] Job {job_id}: saving {len(stored_photos)} photos ({len(photos_json_str)} bytes)")
 
-        api_cost_cents_val = 0
+        api_cost_cents_val = int(total_api_cost_cents or 0)
         token_input = total_input_tokens
         token_output = total_output_tokens
         token_model = (model_name or "")[:50]

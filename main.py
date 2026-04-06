@@ -3660,7 +3660,7 @@ async def public_create_estimate(
                 raise HTTPException(status_code=403, detail="This estimator is temporarily unavailable. Please contact the company directly.")
             company_user = cu
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="AI service unavailable")
 
@@ -3732,6 +3732,7 @@ async def public_create_estimate(
         "photo_quality": photo_quality,
         "room_labels": _normalize_room_labels(photo_data),
         "truck_load_pct": None,
+        "review_mode": "company_manual_review",
     }
 
     asyncio.create_task(run_estimate(
@@ -5841,6 +5842,7 @@ async def create_estimate(
         "photo_quality": photo_quality,
         "room_labels": _normalize_room_labels(photo_data),
         "truck_load_pct": truck_load_pct,
+        "review_mode": "self_serve_clarify",
     }
 
     asyncio.create_task(run_estimate(
@@ -5876,6 +5878,8 @@ async def run_estimate(
     review_status = "auto_approved"
     review_reason = ""
     review_reason_flags: list[str] = []
+    review_mode = str(job.get("review_mode") or "self_serve_clarify").strip().lower()
+    allow_manual_review = review_mode == "company_manual_review"
 
     try:
         library_context = await get_library_context()
@@ -6255,13 +6259,16 @@ async def run_estimate(
                     f"Range calibrated by Qwen+Pixtral overlap (primary ±{int(primary_pct * 100)}%, verifier ±{int(verifier_pct * 100)}%)."
                 )
             else:
-                review_status = "needs_review"
                 review_reason_flags.append("model_disagreement_no_overlap")
                 confidence_bucket = "low"
                 result_data["confidence"] = min(int(result_data.get("confidence", 70) or 70), 70)
                 price_low = min(primary_low, verifier_low)
                 price_high = max(primary_high, verifier_high)
-                confidence_reasons.append("Two-model check did not overlap; estimate routed to manual review.")
+                if allow_manual_review:
+                    review_status = "needs_review"
+                    confidence_reasons.append("Two-model check did not overlap; estimate routed to manual review.")
+                else:
+                    confidence_reasons.append("Two-model check did not overlap; showing low-confidence range and clarification prompts.")
         else:
             # Fallback to prior widening when verifier output is unusable.
             price_low, price_high, fallback_widened = widen_price_range_for_confidence(
@@ -6278,7 +6285,7 @@ async def run_estimate(
             flag in sanity_flags for flag in ("spatial_above_items", "items_above_spatial", "items_below_truck_hint", "items_above_truck_hint")
         )
         if unresolved_question_ids or severe_sanity or confidence_bucket == "low" or review_status == "needs_review":
-            review_status = "needs_review"
+            review_status = "needs_review" if allow_manual_review else "auto_approved"
             review_reason_bits = list(review_reason_flags)
             if unresolved_question_ids:
                 review_reason_bits.append(f"unresolved_clarifications:{','.join(unresolved_question_ids)}")
@@ -6286,16 +6293,27 @@ async def run_estimate(
                 review_reason_bits.append("sanity_conflict")
             if confidence_bucket == "low":
                 review_reason_bits.append("low_confidence")
-            review_reason = "; ".join(sorted(set(review_reason_bits)))[:240]
+            review_reason = "; ".join(sorted(set(review_reason_bits)))[:240] if allow_manual_review else ""
             confidence_bucket = "low"
             result_data["confidence"] = min(int(result_data.get("confidence", 70) or 70), 70)
-            if "Estimate requires manual review before showing a customer-ready quote." not in confidence_reasons:
-                confidence_reasons.append("Estimate requires manual review before showing a customer-ready quote.")
-            # Avoid narrow quotes when clarifications remain unresolved.
-            widened_low = max(user.min_charge or 75.0, round(price_low * 0.82, 2))
-            widened_high = max(widened_low, round(price_high * 1.35, 2))
-            price_low, price_high = widened_low, widened_high
-            range_widened = True
+            if allow_manual_review:
+                if "Estimate requires manual review before showing a customer-ready quote." not in confidence_reasons:
+                    confidence_reasons.append("Estimate requires manual review before showing a customer-ready quote.")
+                # Avoid narrow quotes when clarifications remain unresolved.
+                widened_low = max(user.min_charge or 75.0, round(price_low * 0.82, 2))
+                widened_high = max(widened_low, round(price_high * 1.35, 2))
+                price_low, price_high = widened_low, widened_high
+                range_widened = True
+            else:
+                if unresolved_question_ids:
+                    qmap = {str(q.get("id", "")): str(q.get("question", "")).strip() for q in clarification_questions}
+                    lines = [qmap.get(qid, "").strip() for qid in unresolved_question_ids if qmap.get(qid, "").strip()]
+                    if lines:
+                        clarification_note = "Clarifying questions to improve accuracy:\n- " + "\n- ".join(lines[:3])
+                        existing_notes = str(result_data.get("notes", "") or "").strip()
+                        result_data["notes"] = (existing_notes + "\n\n" if existing_notes else "") + clarification_note
+                if "Low confidence estimate shown; answer clarification questions and retake photos if needed." not in confidence_reasons:
+                    confidence_reasons.append("Low confidence estimate shown; answer clarification questions and retake photos if needed.")
 
         # Serialize stored photos for DB persistence
         stored_photos = job.get("stored_photos", [])
@@ -8258,6 +8276,7 @@ async def team_create_estimate(
         "photo_quality": photo_quality,
         "room_labels": _normalize_room_labels(photo_data),
         "truck_load_pct": truck_load_pct,
+        "review_mode": "self_serve_clarify",
     }
 
     asyncio.create_task(run_estimate(

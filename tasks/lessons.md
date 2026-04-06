@@ -110,6 +110,9 @@ When benchmarking alternate VLMs, keep Claude as a fixed baseline and compute pe
 ### 12. Production quotes need a two-model overlap gate when single-model tails are risky
 For customer-facing estimates, run a primary model plus verifier model, widen each by uncertainty, and only publish a quote when their expanded ranges overlap; otherwise force `needs_review`.
 
+### 13. Review policy must differ by channel: self-serve vs widget lead capture
+Self-serve subscriber/team flows should return low-confidence estimates plus explicit clarification prompts (no dead-end manual review), while public/widget flows can route to company manual review for follow-up.
+
 ## Railway Deployment — 2026-03-12
 
 ### 1. Railway PostgreSQL Networking

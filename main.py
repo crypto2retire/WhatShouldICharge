@@ -633,6 +633,8 @@ class Estimate(Base):
     occupancy_class = Column(String(30), default="")
     sanity_flags = Column(Text, default="")
     geometry_summary = Column(Text, default="")
+    review_status = Column(String(30), default="auto_approved")
+    review_reason = Column(Text, default="")
     appointment_requested = Column(Boolean, default=False)
     appointment_contact_method = Column(String, default="")
     appointment_preferred_day = Column(String, default="")
@@ -743,6 +745,8 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS occupancy_class VARCHAR(30) DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS sanity_flags TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS geometry_summary TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS review_status VARCHAR(30) DEFAULT 'auto_approved'",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS review_reason TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_requested BOOLEAN DEFAULT FALSE",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_contact_method VARCHAR DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_preferred_day VARCHAR DEFAULT ''",
@@ -809,6 +813,8 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN occupancy_class TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN sanity_flags TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN geometry_summary TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN review_status TEXT DEFAULT 'auto_approved'",
+            "ALTER TABLE estimates ADD COLUMN review_reason TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN appointment_requested BOOLEAN DEFAULT 0",
             "ALTER TABLE estimates ADD COLUMN appointment_contact_method TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN appointment_preferred_day TEXT DEFAULT ''",
@@ -2283,6 +2289,7 @@ async function pollStatus(jobId){{
       var resp=await fetch('/api/public/estimate/status/'+jobId);
       var data=await resp.json();
       if(data.status==='complete'&&data.result){{clearInterval(iv);document.getElementById('loading').style.display='none';showResults(data.result)}}
+      else if(data.status==='needs_review'){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent=data.message||'This estimate needs manual review before we can show pricing.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Get Your Estimate'}}
       else if(data.status==='retry_needed'){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent=data.message||'Please upload one clearer, wider photo and try again.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Get Your Estimate'}}
       else if(data.status==='error'){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent=data.message||'An error occurred. Please try again.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Schedule an Appointment'}}
     }}catch(e){{}}
@@ -3476,6 +3483,127 @@ def evaluate_geometry_sanity(
     }
 
 
+def parse_clarification_answers(raw: str | None) -> dict:
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return {}
+
+
+def _has_truthy_answer(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        cleaned = value.strip().lower()
+        return cleaned not in {"", "unknown", "not sure", "unsure", "skip", "none", "n/a"}
+    if isinstance(value, list):
+        return any(_has_truthy_answer(v) for v in value)
+    if isinstance(value, dict):
+        return any(_has_truthy_answer(v) for v in value.values())
+    return True
+
+
+def apply_fail_safe_estimate_rules(
+    result_data: dict,
+    scene_type: str,
+    room_labels: list[str],
+    num_photos: int,
+    truck_load_pct: Optional[float],
+) -> tuple[dict, list[str]]:
+    notes: list[str] = []
+    totals = result_data.get("totals", {}) or {}
+    item_sum = _sync_result_totals_to_items(result_data)
+    cy_mid = float(totals.get("cubic_yards_mid", item_sum) or item_sum)
+    labels = " ".join(room_labels or []).lower()
+    scene_context = _scene_context_text(result_data, room_labels)
+    garage_like = any(k in labels for k in ("garage", "basement", "storage", "shed")) or any(
+        k in scene_context for k in ("garage", "basement", "storage", "shed")
+    )
+    bag_qty = 0
+    for item in result_data.get("items", []) or []:
+        nm = _normalized_item_name(item.get("name", ""))
+        if any(k in nm for k in ("trash bag", "bags", "contractor bag", "garbage bag")):
+            try:
+                bag_qty += max(1, int(item.get("quantity") or 1))
+            except Exception:
+                bag_qty += 1
+
+    # Hard cap impossible totals for small/partial garage storage views without truck context.
+    if garage_like and num_photos <= 3 and truck_load_pct is None and cy_mid > 10.0:
+        capped = 10.0
+        result_data["totals"]["cubic_yards_mid"] = round(capped, 1)
+        result_data["totals"]["cubic_yards_low"] = round(capped * 0.85, 1)
+        result_data["totals"]["cubic_yards_high"] = round(capped * 1.15, 1)
+        result_data["total_cubic_yards"] = round(capped, 1)
+        notes.append("Applied fail-safe cap for partial garage/storage visibility.")
+
+    # Bag-heavy scenes should stay in a realistic range relative to visible bag count.
+    if bag_qty > 0:
+        bag_cap = max(3.0, bag_qty * 0.7 + 2.0)
+        current_mid = float(result_data.get("totals", {}).get("cubic_yards_mid", 0) or 0)
+        if current_mid > bag_cap and scene_type in {"garage_clutter", "bagged_trash_soft_goods", "mixed_junk"}:
+            result_data["totals"]["cubic_yards_mid"] = round(bag_cap, 1)
+            result_data["totals"]["cubic_yards_low"] = round(bag_cap * 0.85, 1)
+            result_data["totals"]["cubic_yards_high"] = round(bag_cap * 1.15, 1)
+            result_data["total_cubic_yards"] = round(bag_cap, 1)
+            notes.append("Applied bag-count consistency cap before pricing.")
+
+    # Never keep aggressive labels unless clear threshold conditions are met.
+    job_type = str(result_data.get("job_type", "") or "").lower()
+    if job_type in {"hoarder", "whole_house", "whole house"}:
+        if truck_load_pct is None and (num_photos < 6 or _sync_result_totals_to_items(result_data) < 14.0):
+            result_data["job_type"] = "standard"
+            notes.append("Downgraded aggressive job label pending stronger evidence.")
+    return result_data, notes
+
+
+def build_required_clarification_questions(
+    result_data: dict,
+    scene_type: str,
+    actionable_duplicates: list[dict],
+    sanity_flags: list[str],
+) -> list[dict]:
+    questions: list[dict] = []
+    if actionable_duplicates:
+        questions.append({
+            "id": "duplicate_items",
+            "question": "Are these duplicate-tagged items separate pieces or the same items from different angles?",
+            "type": "single_choice",
+            "options": ["same_items", "separate_items", "not_sure"],
+        })
+
+    fixture_like = any(
+        isinstance(it, dict) and any(k in _normalized_item_name(it.get("name", "")) for k in ("shelf", "shelving", "cabinet", "rack", "storage unit"))
+        for it in (result_data.get("items", []) or [])
+    )
+    if fixture_like and scene_type in {"garage_clutter", "storage_overflow"}:
+        questions.append({
+            "id": "fixtures_included",
+            "question": "Should built-in or background shelving/storage fixtures be included for removal?",
+            "type": "single_choice",
+            "options": ["exclude_background_fixtures", "include_all_visible", "not_sure"],
+        })
+
+    if any(flag in sanity_flags for flag in ("spatial_above_items", "items_above_spatial", "items_above_truck_hint", "items_below_truck_hint")):
+        questions.append({
+            "id": "scope_confirmation",
+            "question": "Does this photo set show everything being removed, or only part of the job?",
+            "type": "single_choice",
+            "options": ["full_scope_shown", "partial_scope_only", "not_sure"],
+        })
+
+    return questions[:3]
+
+
 @app.post("/api/public/estimate/{slug}")
 @limiter.limit("10/hour")
 async def public_create_estimate(
@@ -3487,6 +3615,7 @@ async def public_create_estimate(
     customer_email: str = Form(default=""),
     customer_phone: str = Form(default=""),
     preferred_contact: str = Form(default="phone"),
+    clarification_answers_json: str = Form(default=""),
 ):
     """Public estimate endpoint — customer submits photos, charges against company's estimate count."""
     cleanup_expired_jobs()
@@ -3574,6 +3703,7 @@ async def public_create_estimate(
         "company_name": company_user.company_name or "Junk Removal Company",
         "company_phone": company_user.company_phone or "",
         "capture_mode": "remote",
+        "clarification_answers": parse_clarification_answers(clarification_answers_json),
         "photo_quality": photo_quality,
         "room_labels": _normalize_room_labels(photo_data),
         "truck_load_pct": None,
@@ -3598,8 +3728,21 @@ async def public_estimate_status(request: Request, job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found or expired")
 
-    if job["status"] == "complete" and job.get("result"):
+    if job["status"] in {"complete", "needs_review"} and job.get("result"):
         r = job["result"]
+        if job["status"] == "needs_review":
+            return {
+                "status": "needs_review",
+                "message": job["message"],
+                "result": {
+                    "id": r.get("id"),
+                    "scene_label": r.get("scene_label", ""),
+                    "confidence_bucket": r.get("confidence_bucket", "low"),
+                    "confidence_reasons": r.get("confidence_reasons", []),
+                    "clarification_questions": r.get("clarification_questions", []),
+                },
+            }
+
         # Include photo count (not full base64) for customer display
         stored_photos = job.get("stored_photos", [])
         return {
@@ -3626,6 +3769,8 @@ async def public_estimate_status(request: Request, job_id: str):
                 "occupancy_class": r.get("occupancy_class", ""),
                 "sanity_flags": r.get("sanity_flags", []),
                 "geometry_summary": r.get("geometry_summary", ""),
+                "review_status": r.get("review_status", "auto_approved"),
+                "review_reason": r.get("review_reason", ""),
                 "special_items": r.get("special_items", []),
                 "min_charge_applied": r.get("min_charge_applied", False),
                 "potential_duplicates": r.get("potential_duplicates", []),
@@ -5406,6 +5551,7 @@ async def create_estimate(
     truck_load_pct: Optional[float] = Form(default=None),
     estimate_name: str = Form(default=""),
     capture_mode: str = Form(default="remote"),
+    clarification_answers_json: str = Form(default=""),
 ):
     user = await require_user(request)
     cleanup_expired_jobs()
@@ -5511,6 +5657,7 @@ async def create_estimate(
         "created_at": datetime.utcnow(),
         "stored_photos": stored_photos,
         "capture_mode": capture_mode,
+        "clarification_answers": parse_clarification_answers(clarification_answers_json),
         "photo_quality": photo_quality,
         "room_labels": _normalize_room_labels(photo_data),
         "truck_load_pct": truck_load_pct,
@@ -5546,6 +5693,8 @@ async def run_estimate(
     occupancy_class = ""
     sanity_flags: list[str] = []
     geometry_summary = ""
+    review_status = "auto_approved"
+    review_reason = ""
 
     try:
         library_context = await get_library_context()
@@ -5757,6 +5906,15 @@ async def run_estimate(
         _sync_result_totals_to_items(result_data)
         scene_type = classify_scene_type(result_data, room_labels, job.get("truck_load_pct"))
         result_data, scene_type = apply_job_label_guardrails(result_data, scene_type, room_labels)
+        result_data, fail_safe_notes = apply_fail_safe_estimate_rules(
+            result_data,
+            scene_type,
+            room_labels,
+            num_photos,
+            job.get("truck_load_pct"),
+        )
+        if fail_safe_notes:
+            confidence_reasons.extend(fail_safe_notes)
         confidence_bucket, confidence_reasons, final_confidence = apply_scene_confidence_policy(
             result_data,
             photo_quality,
@@ -5809,6 +5967,18 @@ async def run_estimate(
                     confidence_reasons.append("Small visible garage/storage pickups are capped unless truck-load context or broader room coverage is confirmed.")
 
         actionable_duplicates = filter_actionable_duplicates(result_data)
+        clarification_questions = build_required_clarification_questions(
+            result_data,
+            scene_type,
+            actionable_duplicates,
+            sanity_flags,
+        )
+        clarification_answers = job.get("clarification_answers") or {}
+        unresolved_question_ids = [
+            q.get("id", "")
+            for q in clarification_questions
+            if q.get("id") and not _has_truthy_answer(clarification_answers.get(q.get("id", "")))
+        ]
 
         # --- Custom per-company pricing (skip Tavily when rates are set) ---
         custom_standard = getattr(user, 'price_per_cy_standard', None)
@@ -5875,6 +6045,29 @@ async def run_estimate(
         if range_widened:
             confidence_reasons.append("Price range widened slightly because this scene type carries more uncertainty.")
 
+        severe_sanity = any(
+            flag in sanity_flags for flag in ("spatial_above_items", "items_above_spatial", "items_below_truck_hint", "items_above_truck_hint")
+        )
+        if unresolved_question_ids or severe_sanity or confidence_bucket == "low":
+            review_status = "needs_review"
+            review_reason_bits = []
+            if unresolved_question_ids:
+                review_reason_bits.append(f"unresolved_clarifications:{','.join(unresolved_question_ids)}")
+            if severe_sanity:
+                review_reason_bits.append("sanity_conflict")
+            if confidence_bucket == "low":
+                review_reason_bits.append("low_confidence")
+            review_reason = "; ".join(review_reason_bits)[:240]
+            confidence_bucket = "low"
+            result_data["confidence"] = min(int(result_data.get("confidence", 70) or 70), 70)
+            if "Estimate requires manual review before showing a customer-ready quote." not in confidence_reasons:
+                confidence_reasons.append("Estimate requires manual review before showing a customer-ready quote.")
+            # Avoid narrow quotes when clarifications remain unresolved.
+            widened_low = max(user.min_charge or 75.0, round(price_low * 0.82, 2))
+            widened_high = max(widened_low, round(price_high * 1.35, 2))
+            price_low, price_high = widened_low, widened_high
+            range_widened = True
+
         # Serialize stored photos for DB persistence
         stored_photos = job.get("stored_photos", [])
         photos_json_str = json.dumps(stored_photos) if stored_photos else ""
@@ -5934,6 +6127,8 @@ async def run_estimate(
                 occupancy_class=occupancy_class,
                 sanity_flags=json.dumps(sanity_flags),
                 geometry_summary=geometry_summary,
+                review_status=review_status,
+                review_reason=review_reason,
             )
             db.add(est)
             try:
@@ -6054,6 +6249,11 @@ async def run_estimate(
             "occupancy_class": occupancy_class,
             "sanity_flags": sanity_flags,
             "geometry_summary": geometry_summary,
+            "review_status": review_status,
+            "review_reason": review_reason,
+            "clarification_questions": clarification_questions,
+            "clarification_answers": clarification_answers,
+            "unresolved_clarification_ids": unresolved_question_ids,
             "estimates_remaining": remaining,
             "special_items": special_items,
             "items_looked_up": lookups_done,
@@ -6068,8 +6268,12 @@ async def run_estimate(
         if market_context:
             resp["market_context"] = market_context
 
-        job["status"] = "complete"
-        job["message"] = "Estimate ready!"
+        job["status"] = "needs_review" if review_status == "needs_review" else "complete"
+        job["message"] = (
+            "Estimate routed to manual review to avoid an unreliable quote."
+            if review_status == "needs_review"
+            else "Estimate ready!"
+        )
         job["result"] = resp
 
     except Exception as e:
@@ -6093,7 +6297,7 @@ async def estimate_status(request: Request, job_id: str):
         "status": job["status"],
         "message": job["message"],
     }
-    if job["status"] == "complete":
+    if job["status"] in {"complete", "needs_review"}:
         resp["result"] = job["result"]
         del estimate_jobs[job_id]
     elif job["status"] == "retry_needed":
@@ -6302,6 +6506,8 @@ async def get_estimate_detail(request: Request, estimate_id: int):
             "occupancy_class": getattr(e, "occupancy_class", "") or "",
             "sanity_flags": _safe_json_loads(getattr(e, "sanity_flags", "") or "[]", []),
             "geometry_summary": getattr(e, "geometry_summary", "") or "",
+            "review_status": getattr(e, "review_status", "auto_approved") or "auto_approved",
+            "review_reason": getattr(e, "review_reason", "") or "",
         }
 
 
@@ -6632,17 +6838,27 @@ async def admin_update_site_config(request: Request):
 
 
 @app.get("/api/admin/estimates")
-async def admin_estimates(request: Request, page: int = 1, q: str = "", capture_mode: str = ""):
+async def admin_estimates(
+    request: Request,
+    page: int = 1,
+    q: str = "",
+    capture_mode: str = "",
+    review_status: str = "",
+):
     await require_admin(request)
     limit = 25
     offset = (page - 1) * limit
     capture_mode = normalize_capture_mode(capture_mode) if capture_mode else ""
+    review_status = str(review_status or "").strip().lower()
     async with AsyncSessionLocal() as db:
         query = select(Estimate)
         count_query = select(func.count(Estimate.id))
         if capture_mode:
             query = query.where(Estimate.capture_mode == capture_mode)
             count_query = count_query.where(Estimate.capture_mode == capture_mode)
+        if review_status in {"auto_approved", "needs_review"}:
+            query = query.where(Estimate.review_status == review_status)
+            count_query = count_query.where(Estimate.review_status == review_status)
         total = (await db.execute(count_query)).scalar() or 0
         result = await db.execute(query.order_by(Estimate.created_at.desc()).offset(offset).limit(limit))
         estimates = result.scalars().all()
@@ -6661,6 +6877,8 @@ async def admin_estimates(request: Request, page: int = 1, q: str = "", capture_
                  "price_high": e.price_high, "cy_estimate": e.cy_estimate,
                  "team_member_id": e.team_member_id,
                  "capture_mode": getattr(e, "capture_mode", "remote") or "remote",
+                 "review_status": getattr(e, "review_status", "auto_approved") or "auto_approved",
+                 "review_reason": getattr(e, "review_reason", "") or "",
                  "created_at": e.created_at.isoformat() if e.created_at else None}
                 for e in estimates
             ],
@@ -6668,6 +6886,7 @@ async def admin_estimates(request: Request, page: int = 1, q: str = "", capture_
             "page": page,
             "pages": max(1, (total + limit - 1) // limit),
             "capture_mode": capture_mode or "all",
+            "review_status": review_status or "all",
         }
 
 
@@ -6752,6 +6971,8 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
             "occupancy_class": getattr(e, "occupancy_class", "") or "",
             "sanity_flags": _safe_json_loads(getattr(e, "sanity_flags", "") or "[]", []),
             "geometry_summary": getattr(e, "geometry_summary", "") or "",
+            "review_status": getattr(e, "review_status", "auto_approved") or "auto_approved",
+            "review_reason": getattr(e, "review_reason", "") or "",
         }
 
 
@@ -7362,6 +7583,11 @@ async def admin_accuracy(request: Request, capture_mode: str = ""):
             lambda e: getattr(e, "capture_mode", "") or "remote",
             lambda key: key.replace("_", " ").title() if key != "unknown" else "Unknown",
         )
+        by_review_status = _build_breakdown(
+            calibrated_estimates,
+            lambda e: getattr(e, "review_status", "") or "auto_approved",
+            lambda key: key.replace("_", " ").title() if key != "unknown" else "Unknown",
+        )
 
         miss_reason_counts: dict[str, int] = {}
         for e in calibrated_estimates:
@@ -7390,9 +7616,97 @@ async def admin_accuracy(request: Request, capture_mode: str = ""):
             "by_scene_type": by_scene_type,
             "by_confidence_bucket": by_confidence_bucket,
             "by_capture_mode": by_capture_mode,
+            "by_review_status": by_review_status,
             "miss_reasons": miss_reasons,
             "capture_mode": capture_mode or "all",
         }
+
+
+@app.get("/api/admin/accuracy/export.csv")
+async def admin_accuracy_export(
+    request: Request,
+    capture_mode: str = "",
+    review_status: str = "",
+):
+    await require_admin(request)
+    capture_mode = normalize_capture_mode(capture_mode) if capture_mode else ""
+    review_status = str(review_status or "").strip().lower()
+
+    async with AsyncSessionLocal() as db:
+        query = select(Estimate).order_by(Estimate.created_at.desc()).limit(5000)
+        if capture_mode:
+            query = query.where(Estimate.capture_mode == capture_mode)
+        if review_status in {"auto_approved", "needs_review"}:
+            query = query.where(Estimate.review_status == review_status)
+        result = await db.execute(query)
+        estimates = result.scalars().all()
+
+    header = [
+        "estimate_id",
+        "created_at",
+        "capture_mode",
+        "review_status",
+        "review_reason",
+        "scene_type",
+        "confidence_bucket",
+        "cy_estimate",
+        "actual_cy",
+        "cy_error_abs",
+        "cy_error_pct",
+        "price_low",
+        "price_high",
+        "price_mid",
+        "actual_price",
+        "price_error_abs",
+        "price_error_pct",
+        "correction_reason",
+        "sanity_flags",
+        "geometry_summary",
+    ]
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(header)
+    for e in estimates:
+        price_mid = ((e.price_low or 0.0) + (e.price_high or 0.0)) / 2.0
+        cy_err_abs = ""
+        cy_err_pct = ""
+        if e.actual_cy and e.cy_estimate is not None:
+            cy_err_abs = round(abs((e.cy_estimate or 0.0) - (e.actual_cy or 0.0)), 2)
+            cy_err_pct = round((cy_err_abs / max(e.actual_cy, 0.001)) * 100.0, 2)
+        price_err_abs = ""
+        price_err_pct = ""
+        if e.actual_price and price_mid:
+            price_err_abs = round(abs(price_mid - e.actual_price), 2)
+            price_err_pct = round((price_err_abs / max(e.actual_price, 0.01)) * 100.0, 2)
+        writer.writerow([
+            e.id,
+            e.created_at.isoformat() if e.created_at else "",
+            getattr(e, "capture_mode", "remote") or "remote",
+            getattr(e, "review_status", "auto_approved") or "auto_approved",
+            getattr(e, "review_reason", "") or "",
+            getattr(e, "scene_type", "") or "",
+            getattr(e, "confidence_bucket", "") or "",
+            e.cy_estimate if e.cy_estimate is not None else "",
+            e.actual_cy if e.actual_cy is not None else "",
+            cy_err_abs,
+            cy_err_pct,
+            e.price_low if e.price_low is not None else "",
+            e.price_high if e.price_high is not None else "",
+            round(price_mid, 2) if price_mid else "",
+            e.actual_price if e.actual_price is not None else "",
+            price_err_abs,
+            price_err_pct,
+            getattr(e, "correction_reason", "") or "",
+            "|".join(_safe_json_loads(getattr(e, "sanity_flags", "") or "[]", [])),
+            (getattr(e, "geometry_summary", "") or "").replace("\n", " ")[:300],
+        ])
+
+    filename = f"wsic-accuracy-export-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.csv"
+    return StreamingResponse(
+        iter([out.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ── Env Status API ──
@@ -7638,6 +7952,7 @@ async def team_create_estimate(
     customer_email: str = Form(default=""),
     customer_phone: str = Form(default=""),
     capture_mode: str = Form(default="remote"),
+    clarification_answers_json: str = Form(default=""),
 ):
     member, owner = await require_team_member(request)
     cleanup_expired_jobs()
@@ -7713,6 +8028,7 @@ async def team_create_estimate(
         "created_at": now,
         "stored_photos": stored_photos,
         "capture_mode": capture_mode,
+        "clarification_answers": parse_clarification_answers(clarification_answers_json),
         "photo_quality": photo_quality,
         "room_labels": _normalize_room_labels(photo_data),
         "truck_load_pct": truck_load_pct,
@@ -7742,7 +8058,7 @@ async def team_estimate_status(request: Request, job_id: str):
         "status": job["status"],
         "message": job["message"],
     }
-    if job["status"] == "complete" and job["result"]:
+    if job["status"] in {"complete", "needs_review"} and job["result"]:
         resp["result"] = job["result"]
     elif job["status"] == "retry_needed":
         pass

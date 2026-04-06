@@ -1626,6 +1626,10 @@ async function submitEstimate() {
         break;
       }
 
+      if (statusData.status === 'needs_review') {
+        throw new Error(statusData.message || 'This estimate needs manual review before we can show pricing.');
+      }
+
       if (statusData.status === 'retry_needed') {
         throw new Error(statusData.message || 'Please upload one clearer, wider photo and try again.');
       }

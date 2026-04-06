@@ -312,6 +312,14 @@ async function pollStatus(jobId) {
         clearInterval(interval);
         document.getElementById('loading').style.display = 'none';
         showResults(data.result);
+      } else if (data.status === 'needs_review') {
+        clearInterval(interval);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('upload-section').style.display = 'block';
+        document.getElementById('error-msg').textContent = data.message || 'This estimate needs manual review before we can show pricing.';
+        document.getElementById('error-msg').style.display = 'block';
+        document.getElementById('submit-btn').disabled = false;
+        document.getElementById('submit-btn').textContent = 'Get Estimate';
       } else if (data.status === 'retry_needed') {
         clearInterval(interval);
         document.getElementById('loading').style.display = 'none';

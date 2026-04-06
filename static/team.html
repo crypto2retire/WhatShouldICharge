@@ -617,6 +617,10 @@ async function pollStatus(jobId) {
     if (data.status === 'complete' && data.result) {
       document.getElementById('loading').classList.remove('visible');
       showResults(data.result);
+    } else if (data.status === 'needs_review') {
+      showError(data.message || 'This estimate needs manual review before we can show pricing.');
+      document.getElementById('loading').classList.remove('visible');
+      document.getElementById('upload-section').style.display = 'block';
     } else if (data.status === 'retry_needed') {
       showError(data.message || 'Please upload one clearer, wider photo and try again.');
       document.getElementById('loading').classList.remove('visible');

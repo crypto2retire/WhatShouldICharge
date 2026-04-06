@@ -335,6 +335,9 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
 <!-- ============ ACCURACY ============ -->
 <div class="section" id="sec-accuracy">
   <div class="page-title">Accuracy Tracking</div>
+  <div class="btn-group" style="margin-bottom:12px">
+    <button class="btn btn-outline" onclick="exportAccuracyCsv()">Export Accuracy CSV</button>
+  </div>
   <div class="filter-bar" id="acc-filter-bar">
     <button class="filter-chip active" data-capture-mode="">All Capture Modes</button>
     <button class="filter-chip" data-capture-mode="operator_assist">Operator Assist Only</button>
@@ -359,9 +362,16 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
         <table><thead><tr><th>Mode</th><th>Count</th><th>Price</th><th>CY</th></tr></thead><tbody id="acc-capture-body"></tbody></table>
       </div>
       <div>
+        <div class="summary-label">By Review Status</div>
+        <table><thead><tr><th>Status</th><th>Count</th><th>Price</th><th>CY</th></tr></thead><tbody id="acc-review-body"></tbody></table>
+      </div>
+    </div>
+    <div class="summary-grid" style="margin-top:16px">
+      <div>
         <div class="summary-label">Recorded Miss Reasons</div>
         <table><thead><tr><th>Reason</th><th>Count</th></tr></thead><tbody id="acc-miss-reasons-body"></tbody></table>
       </div>
+      <div></div>
     </div>
   </div>
   <div class="card">
@@ -1099,6 +1109,7 @@ async function loadAccuracy() {
     $('#acc-scene-body').innerHTML = renderAccuracyBreakdownRows(d.by_scene_type || []);
     $('#acc-confidence-body').innerHTML = renderAccuracyBreakdownRows(d.by_confidence_bucket || []);
     $('#acc-capture-body').innerHTML = renderAccuracyBreakdownRows(d.by_capture_mode || []);
+    $('#acc-review-body').innerHTML = renderAccuracyBreakdownRows(d.by_review_status || []);
     $('#acc-miss-reasons-body').innerHTML = (d.miss_reasons||[]).length ? (d.miss_reasons||[]).map(r => `<tr><td>${esc(r.reason||'Unspecified')}</td><td>${r.count||0}</td></tr>`).join('') : '<tr><td colspan="2" class="empty">No miss reasons recorded yet</td></tr>';
     $('#acc-needs-body').innerHTML = d.needs_data.length ? d.needs_data.map(e => `<tr class="clickable-row" onclick="openEstimate(${e.id})"><td>#${e.id}</td><td>${fmtShortDate(e.created_at)}</td><td>${esc(e.user_email)}</td><td>${e.cy_estimate?e.cy_estimate.toFixed(1):'--'}</td><td>$${e.price_low?Math.round(e.price_low):'--'}&ndash;$${e.price_high?Math.round(e.price_high):'--'}</td></tr>`).join('') : '<tr><td colspan="5" class="empty">All caught up!</td></tr>';
     setActiveCaptureFilter('#acc-filter-bar', window.currentAccuracyCaptureMode);
@@ -1119,6 +1130,13 @@ $('#estimates-filter-bar').addEventListener('click', function(e) {
   window.currentEstimatesCaptureMode = btn.dataset.captureMode || '';
   loadEstimates(1);
 });
+
+function exportAccuracyCsv() {
+  const qs = new URLSearchParams();
+  if (window.currentAccuracyCaptureMode) qs.set('capture_mode', window.currentAccuracyCaptureMode);
+  const url = `/api/admin/accuracy/export.csv${qs.toString() ? '?' + qs.toString() : ''}`;
+  window.open(url, '_blank');
+}
 
 // ── Model Eval ──
 let currentModelEvalId = '';

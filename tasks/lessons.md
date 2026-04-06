@@ -98,6 +98,9 @@ Do not treat buckets as hazardous disposal just because the model labels them as
 ### 8. Admin-only eval tooling should use temporary workspaces and never leak to customer routes
 Internal model testing is useful, but it must stay separate from the customer estimator. Temporary evaluator uploads and reports should live in short-lived temp workspaces, be accessible only through admin-authenticated endpoints, and be removable from the dashboard when review is done.
 
+### 9. Folder uploads must skip hidden metadata files instead of failing the whole batch
+Admin batch uploads can include `.DS_Store`, `._*`, and other non-image files from macOS/desktop folders. The evaluator should skip those files and continue processing valid images. A single non-image file should never crash the entire model eval run.
+
 ## Railway Deployment — 2026-03-12
 
 ### 1. Railway PostgreSQL Networking

@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import Column, Integer, Float, DateTime, Text, String, Boolean, ForeignKey, select, text, func, update, or_
 import asyncio
-from PIL import Image, ImageFilter, ImageStat
+from PIL import Image, ImageFilter, ImageStat, UnidentifiedImageError
 import io
 from cryptography.fernet import Fernet, InvalidToken
 
@@ -5224,15 +5224,37 @@ async def admin_create_model_eval(
     created_at = datetime.utcnow()
 
     images = []
+    skipped_files = []
+    allowed_image_exts = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".bmp", ".gif"}
     for idx, upload in enumerate(files):
         raw = await upload.read()
         if not raw:
             continue
-        safe_name = _safe_eval_filename(upload.filename or f"image_{idx+1}.jpg", idx)
+        original_name = upload.filename or f"image_{idx+1}.jpg"
+        lower_name = original_name.lower()
+        content_type = str(upload.content_type or "").lower()
+        ext = Path(lower_name).suffix
+
+        # Browser folder uploads often include metadata files like .DS_Store.
+        if lower_name in {".ds_store", "thumbs.db"} or lower_name.startswith("._"):
+            skipped_files.append(original_name)
+            continue
+        if not (content_type.startswith("image/") or ext in allowed_image_exts):
+            skipped_files.append(original_name)
+            continue
+
+        safe_name = _safe_eval_filename(original_name, idx)
         file_path = workspace / safe_name
         try:
             file_path.write_bytes(raw)
             compressed = compress_image(raw)
+        except UnidentifiedImageError:
+            skipped_files.append(original_name)
+            try:
+                file_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            continue
         except Exception as err:
             shutil.rmtree(workspace, ignore_errors=True)
             raise HTTPException(status_code=400, detail=f"Image processing failed for {safe_name}: {type(err).__name__}: {err}")
@@ -5248,17 +5270,25 @@ async def admin_create_model_eval(
         })
     if not images:
         shutil.rmtree(workspace, ignore_errors=True)
-        raise HTTPException(status_code=400, detail="No usable images were uploaded")
+        skipped_preview = ", ".join(skipped_files[:5]) if skipped_files else ""
+        msg = "No usable images were uploaded"
+        if skipped_preview:
+            msg += f". Skipped files: {skipped_preview}"
+        raise HTTPException(status_code=400, detail=msg)
 
     model_eval_jobs[job_id] = {
         "id": job_id,
         "status": "running",
-        "message": "Running model comparison...",
+        "message": (
+            f"Running model comparison... Skipped {len(skipped_files)} non-image file(s)."
+            if skipped_files else "Running model comparison..."
+        ),
         "created_at": created_at,
         "created_at_label": created_at.strftime("%Y-%m-%d %H:%M:%S UTC"),
         "workspace": str(workspace),
         "models": requested_models,
         "images": images,
+        "skipped_files": skipped_files,
         "completed_images": 0,
         "csv_path": "",
         "html_path": "",
@@ -5274,7 +5304,11 @@ async def admin_create_model_eval(
         extraction_prompt += "\n" + library_context
 
     asyncio.create_task(run_model_eval_job(job_id, extraction_prompt, anthropic_key, openrouter_key))
-    return {"job_id": job_id}
+    return {
+        "job_id": job_id,
+        "skipped_count": len(skipped_files),
+        "skipped_files": skipped_files[:20],
+    }
 
 
 @app.get("/api/admin/model-evals")
@@ -5290,6 +5324,7 @@ async def admin_list_model_evals(request: Request):
             "created_at": job.get("created_at").isoformat() if job.get("created_at") else None,
             "models": job.get("models", []),
             "image_count": len(job.get("images", []) or []),
+            "skipped_count": len(job.get("skipped_files", []) or []),
             "completed_images": int(job.get("completed_images", 0) or 0),
             "has_csv": bool(job.get("csv_path")),
             "has_html": bool(job.get("html_path")),
@@ -5311,6 +5346,8 @@ async def admin_model_eval_detail(request: Request, job_id: str):
         "created_at": job.get("created_at").isoformat() if job.get("created_at") else None,
         "models": job.get("models", []),
         "image_count": len(job.get("images", []) or []),
+        "skipped_count": len(job.get("skipped_files", []) or []),
+        "skipped_files": job.get("skipped_files", []),
         "completed_images": int(job.get("completed_images", 0) or 0),
         "csv_download_url": f"/api/admin/model-evals/{job_id}/download/csv" if job.get("csv_path") else "",
         "html_download_url": f"/api/admin/model-evals/{job_id}/download/html" if job.get("html_path") else "",

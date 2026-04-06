@@ -1700,6 +1700,8 @@ function showPhotoModal(src) {
 var currentEstimateData = null;
 var excludedItems = new Set();
 var adjustedQuantities = {};
+var adjustmentSaveTimer = null;
+var lastAdjustmentPayloadKey = '';
 
 function getEffectiveQty(item, idx) {
   var original = Math.max(1, parseInt(item.quantity) || 1);
@@ -1711,6 +1713,39 @@ function getEffectiveQty(item, idx) {
 
 function hasItemAdjustments() {
   return excludedItems.size > 0 || Object.keys(adjustedQuantities).length > 0;
+}
+
+function buildAdjustmentPayload(overridePrices, overrideCy) {
+  var excluded = Array.from(excludedItems).sort(function(a, b) { return a - b; });
+  var qty = {};
+  Object.keys(adjustedQuantities).forEach(function(k) {
+    var v = parseInt(adjustedQuantities[k]);
+    if (!isNaN(v) && v >= 1) qty[String(parseInt(k))] = v;
+  });
+  return {
+    excluded_item_indices: excluded,
+    quantity_overrides: qty,
+    adjusted_price_low: overridePrices ? overridePrices.low : null,
+    adjusted_price_high: overridePrices ? overridePrices.high : null,
+    adjusted_cy: overrideCy != null ? overrideCy : null
+  };
+}
+
+function scheduleAdjustmentSave(payload) {
+  if (!currentEstimateId) return;
+  var key = JSON.stringify(payload || {});
+  if (key === lastAdjustmentPayloadKey) return;
+  if (adjustmentSaveTimer) clearTimeout(adjustmentSaveTimer);
+  adjustmentSaveTimer = setTimeout(async function() {
+    try {
+      await fetch('/api/estimates/' + currentEstimateId + '/adjustments', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+        body: JSON.stringify(payload)
+      });
+      lastAdjustmentPayloadKey = key;
+    } catch (_) {}
+  }, 500);
 }
 
 function formatConfidenceBucket(bucket) {
@@ -1725,6 +1760,7 @@ function showResults(data) {
   currentEstimateData = data;
   excludedItems = new Set();
   adjustedQuantities = {};
+  lastAdjustmentPayloadKey = '';
   document.getElementById('recalc-btn').style.display = 'none';
   renderRefPhotos();
 
@@ -1957,6 +1993,7 @@ function restoreOriginalEstimate() {
     '$' + priceLow.toLocaleString() + ' <span>–</span> $' + priceHigh.toLocaleString()
     + '<div style="font-size:0.75rem;color:var(--muted);font-weight:400;margin-top:4px;">Based on volume only</div>';
   document.getElementById('res-cy').textContent = data.cy_estimate + ' CY';
+  scheduleAdjustmentSave(buildAdjustmentPayload(null, null));
   var specialEl = document.getElementById('res-special-items');
   if (data.special_items && data.special_items.length > 0) {
     var html = '<div style="font-weight:600;color:#fef3c7;margin-bottom:10px;font-size:0.85rem;">♻️ Recycling Fee Items Detected</div>';
@@ -2030,6 +2067,7 @@ function recalcEstimate() {
     '$' + priceLow.toLocaleString() + ' <span>–</span> $' + priceHigh.toLocaleString()
     + '<div style="font-size:0.75rem;color:' + (recalcMinApplied ? '#f59e0b' : 'var(--muted)') + ';font-weight:400;margin-top:4px;">' + recalcNote + '</div>';
   document.getElementById('res-cy').textContent = totalCy + ' CY';
+  scheduleAdjustmentSave(buildAdjustmentPayload({ low: priceLow, high: priceHigh }, totalCy));
 
   var specialItems = includedItems.filter(i => i.is_special);
   var specialEl = document.getElementById('res-special-items');
@@ -2063,6 +2101,7 @@ document.getElementById('new-estimate-btn').addEventListener('click', () => {
   currentEstimateData = null;
   excludedItems = new Set();
   adjustedQuantities = {};
+  lastAdjustmentPayloadKey = '';
   document.getElementById('recalc-btn').style.display = 'none';
   submitSection.style.display = 'block';
   uploadCard.style.display = 'block';

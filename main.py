@@ -9,6 +9,7 @@ import csv
 import html
 import shutil
 import tempfile
+import statistics
 from datetime import datetime, timedelta
 from typing import Optional
 from pathlib import Path
@@ -641,6 +642,7 @@ class Estimate(Base):
     appointment_preferred_time = Column(String, default="")
     appointment_requested_at = Column(DateTime, default=None)
     additional_items_text = Column(Text, default="")
+    adjustments_json = Column(Text, default="")
 
 
 class ItemReferenceLibrary(Base):
@@ -753,6 +755,7 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_preferred_time VARCHAR DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS appointment_requested_at TIMESTAMP DEFAULT NULL",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS additional_items_text TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS adjustments_json TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_tag_id VARCHAR DEFAULT ''",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS fb_pixel_id VARCHAR DEFAULT ''",
         ]
@@ -821,6 +824,7 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN appointment_preferred_time TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN appointment_requested_at TIMESTAMP DEFAULT NULL",
             "ALTER TABLE estimates ADD COLUMN additional_items_text TEXT DEFAULT ''",
+            "ALTER TABLE estimates ADD COLUMN adjustments_json TEXT DEFAULT ''",
         ]
 
     async with engine.begin() as conn:
@@ -3409,6 +3413,55 @@ def _price_overlap(a_low: float, a_high: float, b_low: float, b_high: float) -> 
     low = max(a_low, b_low)
     high = min(a_high, b_high)
     return low, high, high >= low
+
+
+async def _get_lightweight_price_calibration(scene_type: str, capture_mode: str) -> Optional[dict]:
+    st = str(scene_type or "").strip().lower()
+    if not st:
+        return None
+    cm = normalize_capture_mode(capture_mode)
+    cutoff = datetime.utcnow() - timedelta(days=180)
+    async with AsyncSessionLocal() as db:
+        query = (
+            select(Estimate.price_low, Estimate.price_high, Estimate.actual_price)
+            .where(
+                Estimate.scene_type == st,
+                Estimate.actual_price.isnot(None),
+                Estimate.price_low.isnot(None),
+                Estimate.price_high.isnot(None),
+                Estimate.created_at >= cutoff,
+            )
+            .order_by(Estimate.created_at.desc())
+            .limit(250)
+        )
+        if cm:
+            query = query.where(Estimate.capture_mode == cm)
+        rows = (await db.execute(query)).all()
+
+    ratios = []
+    for low, high, actual in rows:
+        try:
+            mid = (float(low or 0) + float(high or 0)) / 2.0
+            act = float(actual or 0)
+        except Exception:
+            continue
+        if mid <= 0 or act <= 0:
+            continue
+        ratio = act / mid
+        # Trim severe outliers to keep this lightweight and stable.
+        if 0.70 <= ratio <= 1.80:
+            ratios.append(ratio)
+    if len(ratios) < 10:
+        return None
+    med = float(statistics.median(ratios))
+    if med <= 1.05:
+        return None
+    factor = min(1.15, max(1.03, med))
+    return {
+        "factor": round(factor, 3),
+        "sample_size": len(ratios),
+        "median_ratio": round(med, 3),
+    }
 
 
 def _parse_spatial_total_from_notes(notes: str) -> Optional[float]:
@@ -6294,6 +6347,16 @@ async def run_estimate(
             if fallback_widened:
                 confidence_reasons.append("Price range widened slightly because this scene type carries more uncertainty.")
 
+        calibration = await _get_lightweight_price_calibration(scene_type, job.get("capture_mode", "remote"))
+        if calibration:
+            factor = float(calibration.get("factor", 1.0) or 1.0)
+            if factor > 1.0:
+                price_low = max(min_charge, round(price_low * factor, 2))
+                price_high = max(price_low, round(price_high * factor, 2))
+                confidence_reasons.append(
+                    f"Calibrated +{int(round((factor - 1.0) * 100))}% from recent actuals for this scene ({int(calibration.get('sample_size', 0) or 0)} jobs)."
+                )
+
         severe_sanity = any(
             flag in sanity_flags for flag in ("spatial_above_items", "items_above_spatial", "items_below_truck_hint", "items_above_truck_hint")
         )
@@ -6740,6 +6803,12 @@ async def get_estimate_detail(request: Request, estimate_id: int):
                 result_data = json.loads(e.result_json)
             except Exception:
                 pass
+        adjustments_data = {}
+        if getattr(e, "adjustments_json", ""):
+            try:
+                adjustments_data = json.loads(e.adjustments_json)
+            except Exception:
+                adjustments_data = {}
         return {
             "id": e.id,
             "created_at": e.created_at.isoformat() if e.created_at else None,
@@ -6765,7 +6834,82 @@ async def get_estimate_detail(request: Request, estimate_id: int):
             "geometry_summary": getattr(e, "geometry_summary", "") or "",
             "review_status": getattr(e, "review_status", "auto_approved") or "auto_approved",
             "review_reason": getattr(e, "review_reason", "") or "",
+            "adjustments": adjustments_data,
         }
+
+
+def _normalize_adjustment_payload(payload: dict) -> dict:
+    payload = payload if isinstance(payload, dict) else {}
+    excluded = payload.get("excluded_item_indices") or []
+    qty_overrides = payload.get("quantity_overrides") or {}
+    try:
+        excluded_norm = sorted({int(x) for x in excluded if str(x).strip() != "" and int(x) >= 0})
+    except Exception:
+        excluded_norm = []
+    qty_norm = {}
+    if isinstance(qty_overrides, dict):
+        for k, v in qty_overrides.items():
+            try:
+                idx = int(k)
+                qty = int(v)
+            except Exception:
+                continue
+            if idx >= 0 and qty >= 1:
+                qty_norm[str(idx)] = qty
+    def _as_float(v):
+        if v in (None, ""):
+            return None
+        try:
+            return float(v)
+        except Exception:
+            return None
+
+    out = {
+        "excluded_item_indices": excluded_norm,
+        "quantity_overrides": qty_norm,
+        "adjusted_cy": _as_float(payload.get("adjusted_cy")),
+        "adjusted_price_low": _as_float(payload.get("adjusted_price_low")),
+        "adjusted_price_high": _as_float(payload.get("adjusted_price_high")),
+    }
+    out["updated_at"] = datetime.utcnow().isoformat()
+    return out
+
+
+@app.put("/api/estimates/{estimate_id}/adjustments")
+async def save_estimate_adjustments(request: Request, estimate_id: int):
+    user = await require_user(request)
+    body = await request.json()
+    normalized = _normalize_adjustment_payload(body)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Estimate).where(Estimate.id == estimate_id, Estimate.user_id == user.id))
+        e = result.scalar_one_or_none()
+        if not e:
+            raise HTTPException(status_code=404, detail="Estimate not found.")
+        e.adjustments_json = json.dumps(normalized)
+        await db.commit()
+    return {"ok": True, "adjustments": normalized}
+
+
+@app.put("/api/team/estimates/{estimate_id}/adjustments")
+async def team_save_estimate_adjustments(request: Request, estimate_id: int):
+    member, owner = await require_team_member(request)
+    body = await request.json()
+    normalized = _normalize_adjustment_payload(body)
+    normalized["team_member_id"] = member.id
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Estimate).where(
+                Estimate.id == estimate_id,
+                Estimate.user_id == owner.id,
+                or_(Estimate.team_member_id == member.id, Estimate.team_member_id == 0),
+            )
+        )
+        e = result.scalar_one_or_none()
+        if not e:
+            raise HTTPException(status_code=404, detail="Estimate not found.")
+        e.adjustments_json = json.dumps(normalized)
+        await db.commit()
+    return {"ok": True, "adjustments": normalized}
 
 
 @app.get("/api/estimates/{estimate_id}/photos")
@@ -7187,6 +7331,12 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
                 lookups = json.loads(e.lookups_json)
             except Exception:
                 pass
+        adjustments = {}
+        if getattr(e, "adjustments_json", ""):
+            try:
+                adjustments = json.loads(e.adjustments_json)
+            except Exception:
+                adjustments = {}
 
         # Build photos array with data URLs
         photos = []
@@ -7230,6 +7380,7 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
             "geometry_summary": getattr(e, "geometry_summary", "") or "",
             "review_status": getattr(e, "review_status", "auto_approved") or "auto_approved",
             "review_reason": getattr(e, "review_reason", "") or "",
+            "adjustments": adjustments,
         }
 
 

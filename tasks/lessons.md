@@ -113,6 +113,9 @@ For customer-facing estimates, run a primary model plus verifier model, widen ea
 ### 13. Review policy must differ by channel: self-serve vs widget lead capture
 Self-serve subscriber/team flows should return low-confidence estimates plus explicit clarification prompts (no dead-end manual review), while public/widget flows can route to company manual review for follow-up.
 
+### 14. Operator quantity overrides are signal and should be logged for calibration
+When users correct duplicate-angle counts (for example 3 chairs → 1), persist those per-estimate overrides and feed lightweight scene+capture calibration from recent actual outcomes to reduce recurring low-side bias.
+
 ## Railway Deployment — 2026-03-12
 
 ### 1. Railway PostgreSQL Networking

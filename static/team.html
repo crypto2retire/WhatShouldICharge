@@ -643,6 +643,8 @@ var catIcons = { furniture: '🪑', appliance: '🔌', debris: '🗑️', electr
 var currentEstimateData = null;
 var excludedItems = new Set();
 var adjustedQuantities = {};
+var adjustmentSaveTimer = null;
+var lastAdjustmentPayloadKey = '';
 
 function getEffectiveQty(item, idx) {
   var original = Math.max(1, parseInt(item.quantity) || 1);
@@ -656,11 +658,45 @@ function hasItemAdjustments() {
   return excludedItems.size > 0 || Object.keys(adjustedQuantities).length > 0;
 }
 
+function buildAdjustmentPayload(overridePrices, overrideCy) {
+  var excluded = Array.from(excludedItems).sort(function(a, b) { return a - b; });
+  var qty = {};
+  Object.keys(adjustedQuantities).forEach(function(k) {
+    var v = parseInt(adjustedQuantities[k]);
+    if (!isNaN(v) && v >= 1) qty[String(parseInt(k))] = v;
+  });
+  return {
+    excluded_item_indices: excluded,
+    quantity_overrides: qty,
+    adjusted_price_low: overridePrices ? overridePrices.low : null,
+    adjusted_price_high: overridePrices ? overridePrices.high : null,
+    adjusted_cy: overrideCy != null ? overrideCy : null
+  };
+}
+
+function scheduleAdjustmentSave(payload) {
+  if (!currentEstimateId) return;
+  var key = JSON.stringify(payload || {});
+  if (key === lastAdjustmentPayloadKey) return;
+  if (adjustmentSaveTimer) clearTimeout(adjustmentSaveTimer);
+  adjustmentSaveTimer = setTimeout(async function() {
+    try {
+      await fetch('/api/team/estimates/' + currentEstimateId + '/adjustments', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+        body: JSON.stringify(payload)
+      });
+      lastAdjustmentPayloadKey = key;
+    } catch (_) {}
+  }, 500);
+}
+
 function showResults(data) {
   currentEstimateId = data.id;
   currentEstimateData = data;
   excludedItems = new Set();
   adjustedQuantities = {};
+  lastAdjustmentPayloadKey = '';
   document.getElementById('recalc-btn').style.display = 'none';
   document.getElementById('results').classList.add('visible');
 
@@ -764,6 +800,7 @@ function restoreOriginalEstimate() {
   var data = currentEstimateData;
   document.getElementById('res-price').textContent = '$' + (data.price_low || 0).toLocaleString() + ' — $' + (data.price_high || 0).toLocaleString();
   document.getElementById('res-cy').textContent = (data.cy_estimate || 0) + ' CY';
+  scheduleAdjustmentSave(buildAdjustmentPayload(null, null));
   var specialEl = document.getElementById('res-special');
   if (data.special_items && data.special_items.length > 0) {
     var sh = '<div class="special-title">♻️ Special Recycling Items</div>';
@@ -818,6 +855,7 @@ function recalcEstimate() {
 
   document.getElementById('res-price').textContent = '$' + priceLow.toLocaleString() + ' — $' + priceHigh.toLocaleString();
   document.getElementById('res-cy').textContent = totalCy + ' CY';
+  scheduleAdjustmentSave(buildAdjustmentPayload({ low: priceLow, high: priceHigh }, totalCy));
 
   var specialItems = includedItems.filter(function(i) { return i.is_special; });
   var specialEl = document.getElementById('res-special');

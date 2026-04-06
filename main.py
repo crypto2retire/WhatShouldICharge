@@ -3373,6 +3373,31 @@ def widen_price_range_for_confidence(
     return widened_low, widened_high, widened_low != price_low or widened_high != price_high
 
 
+def _model_uncertainty_pct(confidence_bucket: str, scene_type: str, num_photos: int) -> float:
+    uncertain_scene = scene_type in {
+        "garage_clutter",
+        "storage_overflow",
+        "construction_debris",
+        "mixed_junk",
+        "bagged_trash_soft_goods",
+    }
+    if confidence_bucket in {"low", "medium"} or num_photos <= 2 or uncertain_scene:
+        return 0.25
+    return 0.15
+
+
+def _expand_model_range(price_low: float, price_high: float, min_charge: float, pct: float) -> tuple[float, float]:
+    low = max(min_charge, round(price_low * (1.0 - pct), 2))
+    high = max(low, round(price_high * (1.0 + pct), 2))
+    return low, high
+
+
+def _price_overlap(a_low: float, a_high: float, b_low: float, b_high: float) -> tuple[float, float, bool]:
+    low = max(a_low, b_low)
+    high = min(a_high, b_high)
+    return low, high, high >= low
+
+
 def _parse_spatial_total_from_notes(notes: str) -> Optional[float]:
     if not notes or not str(notes).strip():
         return None
@@ -4964,6 +4989,80 @@ async def run_openrouter_model_eval(image_b64: str, media_type: str, system_prom
     return parsed, meta
 
 
+def _openrouter_content_from_anthropic_blocks(image_content: list[dict]) -> list[dict]:
+    out: list[dict] = []
+    for block in image_content or []:
+        if not isinstance(block, dict):
+            continue
+        btype = str(block.get("type") or "").strip().lower()
+        if btype == "text":
+            text = str(block.get("text") or "").strip()
+            if text:
+                out.append({"type": "text", "text": text})
+        elif btype == "image":
+            source = block.get("source") or {}
+            media_type = str(source.get("media_type") or "image/jpeg").strip() or "image/jpeg"
+            data = str(source.get("data") or "").strip()
+            if data:
+                out.append({"type": "image_url", "image_url": {"url": _model_eval_data_uri(data, media_type)}})
+    return out
+
+
+async def run_openrouter_estimate(
+    image_content: list[dict],
+    system_prompt: str,
+    api_key: str,
+    model_name: str,
+    *,
+    title: str = "WhatShouldICharge Estimate",
+) -> tuple[dict, dict]:
+    content_blocks = _openrouter_content_from_anthropic_blocks(image_content)
+    content_blocks.append({"type": "text", "text": "Analyze these junk removal photos and provide your estimate as JSON."})
+    payload = {
+        "model": model_name,
+        "temperature": 0,
+        "max_tokens": 2048,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": content_blocks},
+        ],
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://whatshouldicharge.app",
+        "X-Title": title,
+    }
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        response = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
+        if response.status_code >= 400:
+            raw_text = (response.text or "").strip()
+            detail = ""
+            try:
+                err_json = response.json()
+                err_obj = err_json.get("error") if isinstance(err_json, dict) else None
+                if isinstance(err_obj, dict):
+                    detail = str(err_obj.get("message") or "").strip()
+                if not detail and isinstance(err_json, dict):
+                    detail = str(err_json.get("message") or "").strip()
+            except Exception:
+                pass
+            snippet = detail or raw_text[:300] or response.reason_phrase
+            raise RuntimeError(f"OpenRouter {response.status_code}: {snippet}")
+        data = response.json()
+    choice = (((data.get("choices") or [{}])[0]).get("message") or {})
+    raw_text = choice.get("content") or ""
+    parsed = parse_ai_json(raw_text)
+    usage = data.get("usage") or {}
+    meta = {
+        "input_tokens": int(usage.get("prompt_tokens", 0) or 0),
+        "output_tokens": int(usage.get("completion_tokens", 0) or 0),
+        "model_used": str(data.get("model") or model_name),
+        "api_cost_cents": 0,
+    }
+    return parsed, meta
+
+
 def finalize_model_eval_result(result_data: dict, room_labels: Optional[list[str]] = None) -> dict:
     labels = list(room_labels or ["Main"])
     result_data = validate_estimate(result_data)
@@ -5229,6 +5328,8 @@ MODEL_EVAL_ROOT = Path(tempfile.gettempdir()) / "wsic_model_evals"
 MODEL_EVAL_ROOT.mkdir(parents=True, exist_ok=True)
 MODEL_EVAL_DEFAULT_MODELS = ("claude-sonnet-4-20250514", "openai/gpt-4.1")
 MODEL_EVAL_PER_RUN_TIMEOUT_SECONDS = 150
+PROD_PRIMARY_MODEL = "qwen/qwen2.5-vl-72b-instruct"
+PROD_VERIFIER_MODEL = "mistralai/pixtral-large-2411"
 MODEL_EVAL_SUPPORTED_MODELS = (
     "claude-sonnet-4-20250514",
     "openai/gpt-4.1",
@@ -5625,7 +5726,7 @@ async def create_estimate(
             })
         user = fresh_user
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="AI service is not configured. Please contact support.")
 
@@ -5750,6 +5851,7 @@ async def run_estimate(
     geometry_summary = ""
     review_status = "auto_approved"
     review_reason = ""
+    review_reason_flags: list[str] = []
 
     try:
         library_context = await get_library_context()
@@ -5772,42 +5874,44 @@ async def run_estimate(
         import logging
         logger = logging.getLogger("wsic.estimate")
 
-        client = anthropic.Anthropic(api_key=api_key, timeout=60.0)
         total_input_tokens = 0
         total_output_tokens = 0
-        model_name = ""
-
-        def run_pass1():
-            return client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=2048,
-                temperature=0,
-                system=extraction_prompt,
-                messages=[{
-                    "role": "user",
-                    "content": image_content + [{
-                        "type": "text",
-                        "text": "Analyze these junk removal photos and provide your estimate as JSON."
-                    }]
-                }]
-            )
+        model_name = f"{PROD_PRIMARY_MODEL}|{PROD_VERIFIER_MODEL}"
 
         try:
-            message = await asyncio.to_thread(run_pass1)
+            primary_result, primary_meta = await asyncio.wait_for(
+                run_openrouter_estimate(
+                    image_content,
+                    extraction_prompt,
+                    api_key,
+                    PROD_PRIMARY_MODEL,
+                    title="WhatShouldICharge Primary Estimate",
+                ),
+                timeout=160.0,
+            )
+            verifier_result_raw, verifier_meta = await asyncio.wait_for(
+                run_openrouter_estimate(
+                    image_content,
+                    extraction_prompt,
+                    api_key,
+                    PROD_VERIFIER_MODEL,
+                    title="WhatShouldICharge Verifier Estimate",
+                ),
+                timeout=160.0,
+            )
         except Exception as api_err:
-            logger.error(f"[run_estimate] Anthropic API error for job {job_id}, user {user.id}: {type(api_err).__name__}: {api_err}")
+            logger.error(f"[run_estimate] OpenRouter API error for job {job_id}, user {user.id}: {type(api_err).__name__}: {api_err}")
             job["status"] = "error"
             job["message"] = "Our AI service is temporarily unavailable. Please try again in a few minutes."
             job["result"] = None
             return
 
-        pin, pout, pmod = _claude_response_usage(message)
-        total_input_tokens += pin
-        total_output_tokens += pout
-        if pmod:
-            model_name = pmod
+        total_input_tokens += int(primary_meta.get("input_tokens", 0) or 0)
+        total_input_tokens += int(verifier_meta.get("input_tokens", 0) or 0)
+        total_output_tokens += int(primary_meta.get("output_tokens", 0) or 0)
+        total_output_tokens += int(verifier_meta.get("output_tokens", 0) or 0)
 
-        pass1_result = parse_ai_json(message.content[0].text)
+        pass1_result = primary_result
         pass1_json_str = json.dumps(pass1_result)
 
         # H7: Validate AI response schema
@@ -5820,51 +5924,12 @@ async def run_estimate(
 
         result_data = pass1_result
         job["message"] = "Verifying estimate..."
-
-        pass2_result = None
-
-        def run_pass2():
-            return client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=2200,
-                temperature=0,
-                system=verification_prompt,
-                messages=[{
-                    "role": "user",
-                    "content": image_content + [{
-                        "type": "text",
-                        "text": (
-                            "Verify this first-pass junk removal estimate against the same photos. "
-                            "Remove anything you cannot clearly confirm, fix duplicate counts, recount grouped items, "
-                            "and return corrected JSON only.\n\n"
-                            f"FIRST PASS JSON:\n{json.dumps(pass1_result, indent=2)}"
-                        )
-                    }]
-                }]
-            )
-
-        try:
-            pass2_message = await asyncio.to_thread(run_pass2)
-            pin, pout, pmod = _claude_response_usage(pass2_message)
-            total_input_tokens += pin
-            total_output_tokens += pout
-            if pmod:
-                model_name = pmod
-            parsed_pass2 = parse_ai_json(pass2_message.content[0].text)
-            parsed_pass2 = normalize_verification_result(parsed_pass2)
-            if validate_estimate_schema(parsed_pass2):
-                pass2_result = parsed_pass2
-                pass2_json_str = json.dumps(pass2_result)
-                result_data = pass2_result
-            else:
-                logger.warning(f"[run_estimate] Job {job_id}: pass-2 returned invalid schema; falling back to pass-1")
-        except Exception as pass2_err:
-            logger.warning(f"[run_estimate] Job {job_id}: pass-2 verification failed ({type(pass2_err).__name__}: {pass2_err}); falling back to pass-1")
-
-        if pass2_result and pass2_result.get("verification_notes"):
-            existing_notes = str(result_data.get("notes", "") or "").strip()
-            verification_summary = "Verification notes: " + "; ".join(result_data.get("verification_notes", [])[:3])
-            result_data["notes"] = (existing_notes + "\n" if existing_notes else "") + verification_summary
+        verifier_result = None
+        if validate_estimate_schema(verifier_result_raw):
+            verifier_result = normalize_verification_result(verifier_result_raw)
+            pass2_json_str = json.dumps(verifier_result)
+        else:
+            logger.warning(f"[run_estimate] Job {job_id}: verifier model returned invalid schema; skipping overlap gate")
 
         result_data, _guardrail_notes = apply_visual_estimate_guardrails(result_data, room_labels)
 
@@ -6090,29 +6155,106 @@ async def run_estimate(
                 market_rates=None,
             )
 
-        price_low, price_high, range_widened = widen_price_range_for_confidence(
-            price_low,
-            price_high,
-            user.min_charge or 75.0,
-            confidence_bucket,
-            scene_type,
-        )
-        if range_widened:
-            confidence_reasons.append("Price range widened slightly because this scene type carries more uncertainty.")
+        min_charge = user.min_charge or 75.0
+        range_widened = False
+
+        primary_pct = _model_uncertainty_pct(confidence_bucket, scene_type, num_photos)
+        primary_low, primary_high = _expand_model_range(price_low, price_high, min_charge, primary_pct)
+        price_low, price_high = primary_low, primary_high
+        range_widened = True
+        confidence_reasons.append(f"Primary model range expanded by ±{int(primary_pct * 100)}% for uncertainty.")
+
+        if verifier_result:
+            verifier_data = validate_estimate(verifier_result)
+            _sync_result_totals_to_items(verifier_data)
+            verifier_data, _ = normalize_curbside_mixed_item_labels(verifier_data, room_labels)
+            verifier_data, _ = normalize_special_fee_items(verifier_data)
+            _sync_result_totals_to_items(verifier_data)
+            verifier_scene_type = classify_scene_type(verifier_data, room_labels, job.get("truck_load_pct"))
+            verifier_data, _ = apply_small_job_volume_guardrails(verifier_data, verifier_scene_type, room_labels)
+            _sync_result_totals_to_items(verifier_data)
+            verifier_scene_type = classify_scene_type(verifier_data, room_labels, job.get("truck_load_pct"))
+            verifier_data, verifier_scene_type = apply_job_label_guardrails(verifier_data, verifier_scene_type, room_labels)
+            _sync_result_totals_to_items(verifier_data)
+            verifier_conf_bucket, _verifier_reasons, _verifier_conf = apply_scene_confidence_policy(
+                verifier_data,
+                photo_quality,
+                verifier_scene_type,
+                room_labels,
+            )
+
+            if custom_standard and custom_heavy:
+                verifier_totals = verifier_data.get("totals", {})
+                verifier_cy_mid = float(verifier_totals.get("cubic_yards_mid", verifier_totals.get("cubic_yards_low", 2.0)))
+                verifier_job_type = verifier_data.get("job_type", "standard")
+                verifier_conditions = verifier_data.get("conditions", [])
+                verifier_heavy = (
+                    verifier_job_type in ("premium", "hoarder", "truck_load")
+                    or "stairs" in verifier_conditions
+                    or "heavy_items" in verifier_conditions
+                    or "hoarder" in verifier_conditions
+                    or verifier_cy_mid > 10
+                )
+                verifier_rate = custom_heavy if verifier_heavy else custom_standard
+                verifier_base = verifier_cy_mid * verifier_rate
+                verifier_price_low = round(verifier_base * 0.90, 2)
+                verifier_price_high = round(verifier_base * 1.20, 2)
+                verifier_price_low = max(verifier_price_low, min_charge)
+                verifier_price_high = max(verifier_price_high, min_charge)
+                if verifier_price_high <= verifier_price_low or verifier_price_high < verifier_price_low * 1.15:
+                    verifier_price_high = round(verifier_price_low * 1.5, 2)
+            else:
+                verifier_price_low, verifier_price_high, _v_cy, _v_special, _v_min_charge = calculate_price(
+                    verifier_data,
+                    rate_low=user.price_per_cy_low or 35.0,
+                    rate_high=user.price_per_cy_high or 40.0,
+                    rate_premium=user.price_per_cy_premium or 55.0,
+                    min_charge=min_charge,
+                    market_rates=None,
+                )
+
+            verifier_pct = _model_uncertainty_pct(verifier_conf_bucket, verifier_scene_type, num_photos)
+            verifier_low, verifier_high = _expand_model_range(verifier_price_low, verifier_price_high, min_charge, verifier_pct)
+            overlap_low, overlap_high, has_overlap = _price_overlap(primary_low, primary_high, verifier_low, verifier_high)
+
+            if has_overlap:
+                price_low, price_high = overlap_low, overlap_high
+                confidence_reasons.append(
+                    f"Range calibrated by Qwen+Pixtral overlap (primary ±{int(primary_pct * 100)}%, verifier ±{int(verifier_pct * 100)}%)."
+                )
+            else:
+                review_status = "needs_review"
+                review_reason_flags.append("model_disagreement_no_overlap")
+                confidence_bucket = "low"
+                result_data["confidence"] = min(int(result_data.get("confidence", 70) or 70), 70)
+                price_low = min(primary_low, verifier_low)
+                price_high = max(primary_high, verifier_high)
+                confidence_reasons.append("Two-model check did not overlap; estimate routed to manual review.")
+        else:
+            # Fallback to prior widening when verifier output is unusable.
+            price_low, price_high, fallback_widened = widen_price_range_for_confidence(
+                price_low,
+                price_high,
+                min_charge,
+                confidence_bucket,
+                scene_type,
+            )
+            if fallback_widened:
+                confidence_reasons.append("Price range widened slightly because this scene type carries more uncertainty.")
 
         severe_sanity = any(
             flag in sanity_flags for flag in ("spatial_above_items", "items_above_spatial", "items_below_truck_hint", "items_above_truck_hint")
         )
-        if unresolved_question_ids or severe_sanity or confidence_bucket == "low":
+        if unresolved_question_ids or severe_sanity or confidence_bucket == "low" or review_status == "needs_review":
             review_status = "needs_review"
-            review_reason_bits = []
+            review_reason_bits = list(review_reason_flags)
             if unresolved_question_ids:
                 review_reason_bits.append(f"unresolved_clarifications:{','.join(unresolved_question_ids)}")
             if severe_sanity:
                 review_reason_bits.append("sanity_conflict")
             if confidence_bucket == "low":
                 review_reason_bits.append("low_confidence")
-            review_reason = "; ".join(review_reason_bits)[:240]
+            review_reason = "; ".join(sorted(set(review_reason_bits)))[:240]
             confidence_bucket = "low"
             result_data["confidence"] = min(int(result_data.get("confidence", 70) or 70), 70)
             if "Estimate requires manual review before showing a customer-ready quote." not in confidence_reasons:
@@ -6128,21 +6270,10 @@ async def run_estimate(
         photos_json_str = json.dumps(stored_photos) if stored_photos else ""
         logger.info(f"[run_estimate] Job {job_id}: saving {len(stored_photos)} photos ({len(photos_json_str)} bytes)")
 
-        try:
-            api_cost_cents_val = estimate_anthropic_cost_cents(
-                total_input_tokens,
-                total_output_tokens,
-                model_name or "claude-sonnet-4-20250514",
-            )
-            token_input = total_input_tokens
-            token_output = total_output_tokens
-            token_model = (model_name or "")[:50]
-        except Exception as tok_err:
-            logger.warning(f"[run_estimate] Job {job_id}: token/cost calc failed: {tok_err}")
-            api_cost_cents_val = 0
-            token_input = 0
-            token_output = 0
-            token_model = ""
+        api_cost_cents_val = 0
+        token_input = total_input_tokens
+        token_output = total_output_tokens
+        token_model = (model_name or "")[:50]
 
         async with AsyncSessionLocal() as db:
             # First try to add the column if it doesn't exist (safety net)
@@ -8032,7 +8163,7 @@ async def team_create_estimate(
             return JSONResponse(status_code=429, content=err)
         user = fresh_owner
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="AI service is not configured. Please contact support.")
 

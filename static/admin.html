@@ -397,6 +397,9 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
     <div class="form-row">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem"><input type="checkbox" id="eval-claude" checked> Claude Sonnet 4</label>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem"><input type="checkbox" id="eval-gpt41" checked> GPT-4.1 via OpenRouter</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem"><input type="checkbox" id="eval-qwen25vl72"> Qwen2.5-VL-72B via OpenRouter</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem"><input type="checkbox" id="eval-pixtral"> Pixtral Large via OpenRouter</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem"><input type="checkbox" id="eval-llama32vision"> Llama 3.2 90B Vision via OpenRouter</label>
     </div>
     <div class="btn-group" style="margin-top:12px">
       <button class="btn btn-primary" id="eval-run-btn" onclick="startModelEval()">Run Eval</button>
@@ -1146,8 +1149,19 @@ function selectedEvalModels() {
   const models = [];
   if ($('#eval-claude').checked) models.push('claude-sonnet-4-20250514');
   if ($('#eval-gpt41').checked) models.push('openai/gpt-4.1');
+  if ($('#eval-qwen25vl72').checked) models.push('qwen/qwen2.5-vl-72b-instruct');
+  if ($('#eval-pixtral').checked) models.push('mistralai/pixtral-large-2411');
+  if ($('#eval-llama32vision').checked) models.push('meta-llama/llama-3.2-90b-vision-instruct');
   return models;
 }
+
+const evalModelLabels = {
+  'claude-sonnet-4-20250514': 'Claude Sonnet 4',
+  'openai/gpt-4.1': 'GPT-4.1',
+  'qwen/qwen2.5-vl-72b-instruct': 'Qwen2.5-VL-72B',
+  'mistralai/pixtral-large-2411': 'Pixtral Large',
+  'meta-llama/llama-3.2-90b-vision-instruct': 'Llama 3.2 Vision',
+};
 
 async function loadModelEvals() {
   try {
@@ -1256,19 +1270,20 @@ async function viewModelEval(jobId, silent=false) {
         <div class="btn-group">${downloads.join('')}<button class="btn btn-red btn-sm" onclick="deleteModelEval('${jobId}')">Delete Batch</button></div>
       </div>
       ${(d.images || []).length ? `
-      <table><thead><tr><th>Image</th><th>Claude</th><th>GPT-4.1</th><th>Diff</th></tr></thead><tbody>
+      <table><thead><tr><th>Image</th>${(d.models || []).map(m => `<th>${esc(evalModelLabels[m] || m)}</th>`).join('')}<th>Diff vs Claude</th></tr></thead><tbody>
         ${(d.images || []).map(image => {
           const byModel = {};
           (image.results || []).forEach(result => { byModel[result.model] = result; });
           const cmp = image.comparison || {};
+          const diffLines = Object.keys(cmp || {}).map(model => {
+            const row = cmp[model] || {};
+            return `${esc(evalModelLabels[model] || model)}: CY Δ ${esc(String(row.cy_delta || '--'))}, Price Δ ${esc(String(row.price_mid_delta || '--'))}, Scene ${esc(String(row.scene_match || '--'))}`;
+          });
           return `<tr>
             <td style="min-width:180px"><div style="font-weight:600;margin-bottom:8px">${esc(image.filename || '')}</div><img src="${image.data_url}" alt="${esc(image.filename || '')}" style="width:160px;height:120px;object-fit:cover;border-radius:10px;border:1px solid var(--border)"></td>
-            <td>${renderEvalResultCell(byModel['claude-sonnet-4-20250514'])}</td>
-            <td>${renderEvalResultCell(byModel['openai/gpt-4.1'])}</td>
+            ${(d.models || []).map(m => `<td>${renderEvalResultCell(byModel[m])}</td>`).join('')}
             <td style="min-width:140px">
-              <div class="pill">CY Δ: ${esc(String(cmp.cy_delta || '--'))}</div>
-              <div class="pill">Price Δ: ${esc(String(cmp.price_mid_delta || '--'))}</div>
-              <div class="pill">Scene match: ${esc(String(cmp.scene_match || '--'))}</div>
+              ${diffLines.length ? diffLines.map(line => `<div style="font-size:0.76rem;margin-bottom:6px">${line}</div>`).join('') : '<div class="pill">No baseline diff</div>'}
             </td>
           </tr>`;
         }).join('')}

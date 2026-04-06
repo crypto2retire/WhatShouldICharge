@@ -104,6 +104,9 @@ Admin batch uploads can include `.DS_Store`, `._*`, and other non-image files fr
 ### 10. Stability gates matter more than swapping LLMs when both models miss inconsistently
 If two models miss at similar rates, model choice alone will not fix customer trust. Add deterministic fail-safe caps, clarification-required checks, and a production `needs_review` gate so unreliable quotes are held back instead of shown to customers.
 
+### 11. Model eval tooling should support multiple OpenRouter model presets with a Claude baseline
+When benchmarking alternate VLMs, keep Claude as a fixed baseline and compute per-model deltas against that baseline instead of hardcoding a single Claude-vs-GPT comparison.
+
 ## Railway Deployment — 2026-03-12
 
 ### 1. Railway PostgreSQL Networking

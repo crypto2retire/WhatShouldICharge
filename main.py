@@ -4831,7 +4831,7 @@ def normalize_verification_result(result: dict) -> dict:
 
 
 def normalize_model_eval_models(raw_models) -> list[str]:
-    allowed = set(MODEL_EVAL_DEFAULT_MODELS)
+    allowed = set(MODEL_EVAL_SUPPORTED_MODELS)
     out = []
     for model in raw_models or []:
         model_name = str(model or "").strip()
@@ -5018,9 +5018,11 @@ def generate_model_eval_csv(job: dict, output_path: Path) -> None:
         image_name = image.get("filename", "")
         cmp = comparisons.get(image_name, {})
         for result in image.get("results", []) or []:
+            model_name = result.get("model", "")
+            model_cmp = cmp.get(model_name, {}) if isinstance(cmp, dict) else {}
             rows.append({
                 "filename": image_name,
-                "model": result.get("model", ""),
+                "model": model_name,
                 "parse_ok": result.get("parse_ok", False),
                 "cy_estimate": result.get("cy_estimate", ""),
                 "price_low": result.get("price_low", ""),
@@ -5034,9 +5036,9 @@ def generate_model_eval_csv(job: dict, output_path: Path) -> None:
                 "items_summary": result.get("items_summary", ""),
                 "notes": result.get("notes", ""),
                 "error": result.get("error", ""),
-                "comparison_cy_delta": cmp.get("cy_delta", ""),
-                "comparison_price_mid_delta": cmp.get("price_mid_delta", ""),
-                "comparison_scene_match": cmp.get("scene_match", ""),
+                "comparison_cy_delta": model_cmp.get("cy_delta", ""),
+                "comparison_price_mid_delta": model_cmp.get("price_mid_delta", ""),
+                "comparison_scene_match": model_cmp.get("scene_match", ""),
             })
     with output_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -5060,7 +5062,18 @@ def generate_model_eval_html(job: dict, output_path: Path) -> None:
         parts.append("<div class='grid'>")
         parts.append(f"<div><img src='{image.get('data_url','')}' alt='{html.escape(filename)}'></div>")
         parts.append("<div>")
-        parts.append(f"<div class='muted'>CY delta: {html.escape(str(cmp.get('cy_delta','--')))} • Price midpoint delta: {html.escape(str(cmp.get('price_mid_delta','--')))} • Scene match: {html.escape(str(cmp.get('scene_match','--')))}</div>")
+        baseline_lines = []
+        if isinstance(cmp, dict) and cmp:
+            for model_name, model_cmp in cmp.items():
+                baseline_lines.append(
+                    f"{html.escape(str(model_name))}: CY Δ {html.escape(str((model_cmp or {}).get('cy_delta','--')))} • "
+                    f"Price Δ {html.escape(str((model_cmp or {}).get('price_mid_delta','--')))} • "
+                    f"Scene match {html.escape(str((model_cmp or {}).get('scene_match','--')))}"
+                )
+        if baseline_lines:
+            parts.append("<div class='muted'>vs Claude baseline: " + " | ".join(baseline_lines) + "</div>")
+        else:
+            parts.append("<div class='muted'>No baseline comparison available.</div>")
         parts.append("<table><thead><tr><th>Model</th><th>Parse</th><th>CY</th><th>Price</th><th>Scene</th><th>Confidence</th><th>Items</th><th>Notes</th></tr></thead><tbody>")
         for result in image.get("results", []) or []:
             parse_ok = bool(result.get("parse_ok"))
@@ -5215,6 +5228,13 @@ MODEL_EVAL_TTL_SECONDS = 6 * 60 * 60
 MODEL_EVAL_ROOT = Path(tempfile.gettempdir()) / "wsic_model_evals"
 MODEL_EVAL_ROOT.mkdir(parents=True, exist_ok=True)
 MODEL_EVAL_DEFAULT_MODELS = ("claude-sonnet-4-20250514", "openai/gpt-4.1")
+MODEL_EVAL_SUPPORTED_MODELS = (
+    "claude-sonnet-4-20250514",
+    "openai/gpt-4.1",
+    "qwen/qwen2.5-vl-72b-instruct",
+    "mistralai/pixtral-large-2411",
+    "meta-llama/llama-3.2-90b-vision-instruct",
+)
 
 
 def count_active_jobs() -> int:
@@ -5236,22 +5256,27 @@ def cleanup_expired_jobs():
 
 def _build_model_eval_comparisons(job: dict) -> dict:
     comparisons = {}
+    baseline_model = "claude-sonnet-4-20250514"
     for image in job.get("images", []) or []:
         results = image.get("results", []) or []
         by_model = {r.get("model"): r for r in results if isinstance(r, dict)}
-        claude = by_model.get("claude-sonnet-4-20250514")
-        gpt = by_model.get("openai/gpt-4.1")
-        if not claude or not gpt or not claude.get("parse_ok") or not gpt.get("parse_ok"):
-            comparisons[image.get("filename", "")] = {"cy_delta": "", "price_mid_delta": "", "scene_match": ""}
-            continue
-        cy_delta = round(abs(float(claude.get("cy_estimate", 0) or 0) - float(gpt.get("cy_estimate", 0) or 0)), 2)
-        price_mid_delta = round(abs(float(claude.get("price_mid", 0) or 0) - float(gpt.get("price_mid", 0) or 0)), 2)
-        scene_match = "yes" if (claude.get("scene_type") or "") == (gpt.get("scene_type") or "") else "no"
-        comparisons[image.get("filename", "")] = {
-            "cy_delta": cy_delta,
-            "price_mid_delta": price_mid_delta,
-            "scene_match": scene_match,
-        }
+        baseline = by_model.get(baseline_model)
+        per_model: dict[str, dict] = {}
+        for model_name, row in by_model.items():
+            if model_name == baseline_model:
+                continue
+            if not baseline or not baseline.get("parse_ok") or not row.get("parse_ok"):
+                per_model[model_name] = {"cy_delta": "", "price_mid_delta": "", "scene_match": ""}
+                continue
+            cy_delta = round(abs(float(baseline.get("cy_estimate", 0) or 0) - float(row.get("cy_estimate", 0) or 0)), 2)
+            price_mid_delta = round(abs(float(baseline.get("price_mid", 0) or 0) - float(row.get("price_mid", 0) or 0)), 2)
+            scene_match = "yes" if (baseline.get("scene_type") or "") == (row.get("scene_type") or "") else "no"
+            per_model[model_name] = {
+                "cy_delta": cy_delta,
+                "price_mid_delta": price_mid_delta,
+                "scene_match": scene_match,
+            }
+        comparisons[image.get("filename", "")] = per_model
     return comparisons
 
 
@@ -5280,7 +5305,7 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
                 try:
                     if model_name == "claude-sonnet-4-20250514":
                         raw_result, meta = await run_claude_model_eval(image["b64"], image["media_type"], extraction_prompt, anthropic_key)
-                    elif model_name == "openai/gpt-4.1":
+                    elif model_name in MODEL_EVAL_SUPPORTED_MODELS:
                         raw_result, meta = await run_openrouter_model_eval(image["b64"], image["media_type"], extraction_prompt, openrouter_key, model_name)
                     else:
                         raise RuntimeError(f"Unsupported model: {model_name}")
@@ -5358,7 +5383,8 @@ async def admin_create_model_eval(
     requested_models = normalize_model_eval_models(parsed_models)
     if "claude-sonnet-4-20250514" in requested_models and not anthropic_key:
         raise HTTPException(status_code=400, detail="ANTHROPIC_API_KEY is not configured")
-    if "openai/gpt-4.1" in requested_models and not openrouter_key:
+    needs_openrouter = any(model != "claude-sonnet-4-20250514" for model in requested_models)
+    if needs_openrouter and not openrouter_key:
         raise HTTPException(status_code=400, detail="OPENROUTER_API_KEY is not configured")
     if not files:
         raise HTTPException(status_code=400, detail="Upload at least one image")

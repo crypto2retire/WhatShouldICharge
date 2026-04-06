@@ -1865,8 +1865,8 @@ function showResults(data) {
   const dupeEl = document.getElementById('res-potential-dupes');
   var dupes = data.potential_duplicates || [];
   if (dupes.length > 0) {
-    let dhtml = '<div style="font-weight:600;color:#eab308;margin-bottom:10px;font-size:0.85rem;">&#9888; Potential Duplicate Items — Please Review</div>';
-    dhtml += '<div style="font-size:0.78rem;color:#ca8a04;margin-bottom:10px;">The AI found items that may be the same item seen from different angles. Uncheck duplicates in the item list above to exclude them.</div>';
+    let dhtml = '<div style="font-weight:600;color:#eab308;margin-bottom:10px;font-size:0.85rem;">&#9888; Duplicate Check — Review Only If This Changes Quantity</div>';
+    dhtml += '<div style="font-size:0.78rem;color:#ca8a04;margin-bottom:10px;">Only items that could still affect quantity or price are shown here. Duplicate angles that were already counted once are hidden.</div>';
     dupes.forEach(function(d) {
       dhtml += '<div style="padding:8px 0;border-top:1px solid rgba(234,179,8,0.15);">';
       dhtml += '<div style="font-size:0.82rem;color:#fde68a;font-weight:500;">' + esc(d.item_a) + ' vs ' + esc(d.item_b) + '</div>';

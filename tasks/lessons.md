@@ -83,6 +83,12 @@ Public/customer uploads are often unlabeled, so garage/basement jobs can still f
 ### 3. Pass-2 verification must see the original photos and be subtractive
 If WSIC uses a second AI pass, it must receive the same photos plus Pass 1 JSON. A verifier that only sees the text report cannot reliably remove false positives or fix duplicate-angle counts. Keep Pass 2 narrow: confirm, correct, or remove items, then hand final totals and pricing back to deterministic code.
 
+### 4. Duplicate warnings should only surface unresolved quantity decisions
+Do not show “potential duplicates” in the UI when the item is already counted once and the duplicate-angle issue is resolved. Only surface duplicate review when confirming separate-vs-same items could still change quantity or price; otherwise the warning reads like an error even when the estimate is behaving correctly.
+
+### 5. Outdoor mixed piles with broken furniture should not default to construction debris
+Curbside jobs often contain broken wood furniture, loose boards, and boxes in the same pile. That does not automatically make them `construction_debris`. When outdoor/curbside context is present and furniture is materially part of the pile, bias scene classification toward `curbside_mixed_junk` and normalize overlapping wood/furniture-debris labels so the same pile is not described twice in construction-heavy language.
+
 ## Railway Deployment — 2026-03-12
 
 ### 1. Railway PostgreSQL Networking

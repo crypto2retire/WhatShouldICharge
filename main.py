@@ -2327,7 +2327,7 @@ function showResults(r){{
   var sp=r.special_items||[];
   if(sp.length>0){{var sh='<strong>Recycling/Disposal Fee Items:</strong><br>';sp.forEach(function(s){{sh+=esc(s.name)+' &times;'+(s.quantity||1)+'<br>'}});sh+='<em style="font-size:0.75rem;opacity:0.8">Fees confirmed on arrival.</em>';document.getElementById('res-special').innerHTML=sh;document.getElementById('res-special').style.display='block'}}
   var dp=r.potential_duplicates||[];
-  if(dp.length>0){{var dh='<strong>Items to verify (may be duplicates):</strong><br>';dp.forEach(function(d){{dh+=esc(d.item_a)+' vs '+esc(d.item_b)+'<br>'}});document.getElementById('res-dupes').innerHTML=dh;document.getElementById('res-dupes').style.display='block'}}
+  if(dp.length>0){{var dh='<strong>Items to verify (could change quantity):</strong><br><span style="font-size:0.75rem;opacity:0.85">Only review these if they represent separate items. Already-confirmed duplicate angles are hidden.</span><br>';dp.forEach(function(d){{dh+=esc(d.item_a)+' vs '+esc(d.item_b)+'<br>'}});document.getElementById('res-dupes').innerHTML=dh;document.getElementById('res-dupes').style.display='block'}}
   if(r.notes){{document.getElementById('res-notes').textContent=r.notes;document.getElementById('res-notes-card').style.display='block'}}
   var sceneCard=document.getElementById('res-scene-card');
   var sceneNote=document.getElementById('res-scene-note');
@@ -2911,6 +2911,61 @@ def _small_job_group_total_cy(item: dict) -> float:
     return total_cy
 
 
+def filter_actionable_duplicates(result_data: dict) -> list[dict]:
+    duplicates = result_data.get("potential_duplicates", []) or []
+    items = result_data.get("items", []) or []
+    if not isinstance(duplicates, list) or not duplicates or not isinstance(items, list):
+        return []
+
+    item_map: dict[str, dict] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        norm_name = _normalized_item_name(item.get("name", ""))
+        if norm_name and norm_name not in item_map:
+            item_map[norm_name] = item
+
+    actionable: list[dict] = []
+    seen_pairs: set[tuple[str, str]] = set()
+
+    for dup in duplicates:
+        if not isinstance(dup, dict):
+            continue
+        base_a = _duplicate_base_name(dup.get("item_a", ""))
+        base_b = _duplicate_base_name(dup.get("item_b", ""))
+        bases = tuple(sorted([base_a, base_b]))
+        if not base_a or not base_b or bases in seen_pairs:
+            continue
+        seen_pairs.add(bases)
+
+        candidate_item = None
+        for base in (base_a, base_b):
+            if base in item_map:
+                candidate_item = item_map[base]
+                break
+            for item_name, item in item_map.items():
+                if base in item_name or item_name in base:
+                    candidate_item = item
+                    break
+            if candidate_item:
+                break
+
+        if not candidate_item:
+            continue
+
+        qty = max(1, int(candidate_item.get("quantity") or 1))
+        if qty <= 1:
+            continue
+
+        actionable.append({
+            "item_a": dup.get("item_a", ""),
+            "item_b": dup.get("item_b", ""),
+            "reason": dup.get("reason", ""),
+        })
+
+    return actionable
+
+
 def _sync_result_totals_to_items(result_data: dict) -> float:
     items = result_data.get("items", []) or []
     item_sum = 0.0
@@ -3042,6 +3097,43 @@ def apply_small_job_volume_guardrails(result_data: dict, scene_type: str, room_l
     return result_data, notes
 
 
+def normalize_curbside_mixed_item_labels(result_data: dict, room_labels: list[str]) -> tuple[dict, list[str]]:
+    items = result_data.get("items", []) or []
+    if not isinstance(items, list) or not items:
+        return result_data, []
+
+    context = _scene_context_text(result_data, room_labels)
+    outdoor_like = any(k in context for k in ("outdoor", "curb", "curbside", "driveway"))
+    if not outdoor_like:
+        return result_data, []
+
+    notes: list[str] = []
+    has_broken_wood_furniture = any(
+        isinstance(item, dict) and any(k in _normalized_item_name(item.get("name", "")) for k in ("broken wooden furniture", "broken wood furniture"))
+        for item in items
+    )
+    has_wood_debris = any(
+        isinstance(item, dict) and any(k in _normalized_item_name(item.get("name", "")) for k in ("lumber", "wood debris"))
+        for item in items
+    )
+
+    if has_broken_wood_furniture and has_wood_debris:
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            norm_name = _normalized_item_name(item.get("name", ""))
+            if "lumber" in norm_name or "wood debris" in norm_name:
+                item["name"] = "wood debris pieces"
+            elif "broken wooden furniture" in norm_name or "broken wood furniture" in norm_name:
+                item["name"] = "broken wood furniture pieces"
+        notes.append("Outdoor mixed wood pile labels were normalized to avoid over-classifying curbside junk as construction debris.")
+
+    if notes:
+        existing_notes = str(result_data.get("notes", "") or "").strip()
+        result_data["notes"] = (existing_notes + "\n" if existing_notes else "") + " ".join(notes)
+    return result_data, notes
+
+
 def _normalize_room_labels(photo_data: list[dict]) -> list[str]:
     out = []
     for pd in photo_data:
@@ -3088,6 +3180,7 @@ def classify_scene_type(
     names = " ".join(str(it.get("name", "") or "").lower() for it in items)
     job_type = str(result_data.get("job_type", "") or "").lower()
     conditions = {str(c).lower() for c in (result_data.get("conditions", []) or [])}
+    outdoor_like = any(k in context for k in ("outdoor", "yard", "curb", "driveway"))
 
     if truck_load_pct is not None or job_type == "truck_load" or "truck load" in context:
         return "truck_load"
@@ -3104,11 +3197,14 @@ def classify_scene_type(
         "dresser", "desk", "bed", "mattress", "box spring", "nightstand", "bookshelf",
     )
 
-    if any(k in names for k in yard_keywords) and any(k in context for k in ("outdoor", "yard", "curb", "driveway")):
+    if any(k in names for k in yard_keywords) and outdoor_like:
         return "yard_waste_outdoor_pile"
     construction_hits = sum(1 for k in construction_keywords if k in names)
+    furniture_hits = sum(1 for k in furniture_keywords if k in names)
     if any(k in context for k in ("garage",)) and construction_hits < 2:
         return "garage_clutter"
+    if outdoor_like and furniture_hits > 0 and construction_hits < 3:
+        return "curbside_mixed_junk"
     if any(k in names for k in construction_keywords):
         return "construction_debris"
     if job_type == "hoarder" or "hoarder" in conditions:
@@ -3119,7 +3215,7 @@ def classify_scene_type(
         return "garage_clutter"
     if any(k in context for k in ("basement", "attic", "shed", "storage")):
         return "storage_overflow"
-    if any(k in context for k in ("outdoor", "yard", "curb", "driveway")):
+    if outdoor_like:
         return "curbside_mixed_junk"
     if any(k in names for k in furniture_keywords) or any(k in context for k in ("living room", "bedroom", "kitchen", "bathroom", "office", "dining")):
         return "room_interior_furniture"
@@ -5047,6 +5143,8 @@ async def run_estimate(
 
         result_data = validate_estimate(result_data)
         _sync_result_totals_to_items(result_data)
+        result_data, _curbside_label_notes = normalize_curbside_mixed_item_labels(result_data, room_labels)
+        _sync_result_totals_to_items(result_data)
         scene_type = classify_scene_type(result_data, room_labels, job.get("truck_load_pct"))
         result_data, _small_job_notes = apply_small_job_volume_guardrails(result_data, scene_type, room_labels)
         _sync_result_totals_to_items(result_data)
@@ -5100,6 +5198,8 @@ async def run_estimate(
                 result_data["total_cubic_yards"] = round(max_reasonable_total, 1)
                 confidence_bucket = "medium"
                 confidence_reasons.append("Small visible garage/storage pickups are capped unless truck-load context or broader room coverage is confirmed.")
+
+        actionable_duplicates = filter_actionable_duplicates(result_data)
 
         # --- Custom per-company pricing (skip Tavily when rates are set) ---
         custom_standard = getattr(user, 'price_per_cy_standard', None)
@@ -5353,7 +5453,7 @@ async def run_estimate(
             "rate_premium": user.price_per_cy_premium or 55.0,
             "min_charge": user.min_charge or 75.0,
             "min_charge_applied": min_charge_applied,
-            "potential_duplicates": result_data.get("potential_duplicates", []),
+            "potential_duplicates": actionable_duplicates,
         }
 
         if market_context:

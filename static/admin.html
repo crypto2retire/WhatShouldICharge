@@ -185,6 +185,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
     <button class="nav-item" data-section="plans"><span class="nav-icon">&#x1f4b3;</span> Plans &amp; Pricing</button>
     <button class="nav-item" data-section="promos"><span class="nav-icon">&#x1f3ab;</span> Promo Codes</button>
     <button class="nav-item" data-section="accuracy"><span class="nav-icon">&#x1f3af;</span> Accuracy</button>
+    <button class="nav-item" data-section="modeleval"><span class="nav-icon">&#x1f52c;</span> Model Eval</button>
     <button class="nav-item" data-section="settings"><span class="nav-icon">&#x2699;&#xfe0f;</span> Site Settings</button>
   </nav>
   <div class="sidebar-footer"><a href="/estimate">Back to App</a></div>
@@ -374,6 +375,35 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
 </div>
 
 <!-- ============ SITE SETTINGS ============ -->
+<div class="section" id="sec-modeleval">
+  <div class="page-title">Model Eval</div>
+  <div class="card">
+    <div class="card-title">Run Temporary Batch Eval</div>
+    <div class="form-group">
+      <label class="form-label">Upload Images or a Folder</label>
+      <input class="form-input" type="file" id="eval-files" accept="image/*" multiple webkitdirectory directory>
+      <div style="font-size:0.78rem;color:var(--muted);margin-top:6px">Admin only. Uploaded files are stored temporarily for this eval run and can be deleted when you finish reviewing.</div>
+    </div>
+    <div class="form-row">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem"><input type="checkbox" id="eval-claude" checked> Claude Sonnet 4</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem"><input type="checkbox" id="eval-gpt41" checked> GPT-4.1 via OpenRouter</label>
+    </div>
+    <div class="btn-group" style="margin-top:12px">
+      <button class="btn btn-primary" id="eval-run-btn" onclick="startModelEval()">Run Eval</button>
+      <button class="btn btn-outline" onclick="refreshModelEvals()">Refresh</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Eval Jobs</div>
+    <div id="modeleval-jobs"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Eval Detail</div>
+    <div id="modeleval-detail" class="empty">Run a batch or select a recent job to review results.</div>
+  </div>
+</div>
+
+<!-- ============ SITE SETTINGS ============ -->
 <div class="section" id="sec-settings">
   <div class="page-title">Site Settings</div>
   <div class="card">
@@ -435,11 +465,12 @@ $$('.nav-item').forEach(item => {
     if (sec === 'plans') loadPacks();
     if (sec === 'promos' && !loaded.promos) loadPromos();
     if (sec === 'accuracy' && !loaded.accuracy) loadAccuracy();
+    if (sec === 'modeleval' && !loaded.modeleval) loadModelEvals();
     if (sec === 'settings' && !loaded.settings) loadSettings();
   });
 });
 
-const loaded = { dashboard: false, clients: false, estimates: false, promos: false, accuracy: false, settings: false };
+const loaded = { dashboard: false, clients: false, estimates: false, promos: false, accuracy: false, modeleval: false, settings: false };
 let _adminPacksCache = [];
 
 function getCsrfToken() {
@@ -1089,12 +1120,178 @@ $('#estimates-filter-bar').addEventListener('click', function(e) {
   loadEstimates(1);
 });
 
+// ── Model Eval ──
+let currentModelEvalId = '';
+let modelEvalPollTimer = null;
+
+function selectedEvalModels() {
+  const models = [];
+  if ($('#eval-claude').checked) models.push('claude-sonnet-4-20250514');
+  if ($('#eval-gpt41').checked) models.push('openai/gpt-4.1');
+  return models;
+}
+
+async function loadModelEvals() {
+  try {
+    const d = await apiFetch('/api/admin/model-evals');
+    const jobs = d.jobs || [];
+    const jobsEl = $('#modeleval-jobs');
+    if (!jobs.length) {
+      jobsEl.innerHTML = '<div class="empty">No eval jobs yet</div>';
+      $('#modeleval-detail').innerHTML = '<div class="empty">Run a batch or select a recent job to review results.</div>';
+    } else {
+      jobsEl.innerHTML = `<table><thead><tr><th>ID</th><th>Date</th><th>Status</th><th>Images</th><th>Models</th><th>Actions</th></tr></thead><tbody>${
+        jobs.map(job => `<tr>
+          <td>#${job.id}</td>
+          <td>${fmtDate(job.created_at)}</td>
+          <td>${esc(job.status)}<div style="font-size:0.72rem;color:var(--muted)">${esc(job.message||'')}</div></td>
+          <td>${job.completed_images || 0}/${job.image_count || 0}</td>
+          <td>${esc((job.models || []).join(', '))}</td>
+          <td>
+            <button class="btn btn-outline btn-sm" onclick="viewModelEval('${job.id}')">View</button>
+            <button class="btn btn-red btn-sm" onclick="deleteModelEval('${job.id}')">Delete</button>
+          </td>
+        </tr>`).join('')
+      }</tbody></table>`;
+      if (!currentModelEvalId) currentModelEvalId = jobs[0].id;
+      if (currentModelEvalId) await viewModelEval(currentModelEvalId, true);
+    }
+    loaded.modeleval = true;
+  } catch (e) {
+    console.error(e);
+    $('#modeleval-jobs').innerHTML = '<div class="empty">Error loading model eval jobs</div>';
+  }
+}
+
+async function startModelEval() {
+  const files = $('#eval-files').files;
+  const models = selectedEvalModels();
+  if (!files || !files.length) return toast('Select one or more images first', 'error');
+  if (!models.length) return toast('Select at least one model', 'error');
+  const btn = $('#eval-run-btn');
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+  try {
+    const fd = new FormData();
+    Array.from(files).forEach(file => fd.append('files', file));
+    fd.append('models', JSON.stringify(models));
+    const res = await fetch('/api/admin/model-evals', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'X-CSRF-Token': getCsrfToken() },
+      body: fd,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `Error ${res.status}`);
+    currentModelEvalId = data.job_id;
+    toast('Model eval started');
+    await loadModelEvals();
+    startModelEvalPolling();
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Run Eval';
+  }
+}
+
+function renderEvalResultCell(result) {
+  if (!result) return '<div class="empty">No result</div>';
+  if (!result.parse_ok) {
+    return `<div style="color:var(--red);font-size:0.82rem">${esc(result.error || 'Parse failed')}</div>`;
+  }
+  return `
+    <div><span class="pill">${esc(result.scene_label || result.scene_type || '--')}</span><span class="pill">${esc(String(result.confidence || '--'))}%</span></div>
+    <div style="margin-top:8px;font-weight:700">${esc(String(result.cy_estimate || '--'))} CY</div>
+    <div style="font-size:0.82rem;color:var(--muted)">$${esc(String(result.price_low || '--'))} – $${esc(String(result.price_high || '--'))}</div>
+    <div style="font-size:0.78rem;margin-top:8px">${esc(result.items_summary || '')}</div>
+    <div style="font-size:0.75rem;color:var(--muted);margin-top:8px">${esc(result.notes || '')}</div>
+  `;
+}
+
+async function viewModelEval(jobId, silent=false) {
+  currentModelEvalId = jobId;
+  try {
+    const d = await apiFetch(`/api/admin/model-evals/${jobId}`);
+    const detailEl = $('#modeleval-detail');
+    const downloads = [];
+    if (d.csv_download_url) downloads.push(`<a class="btn btn-outline btn-sm" href="${d.csv_download_url}" target="_blank">Download CSV</a>`);
+    if (d.html_download_url) downloads.push(`<a class="btn btn-outline btn-sm" href="${d.html_download_url}" target="_blank">Open HTML Report</a>`);
+    detailEl.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+        <div>
+          <div style="font-weight:700">Eval #${esc(d.id)}</div>
+          <div style="font-size:0.8rem;color:var(--muted)">${fmtDate(d.created_at)} • ${esc(d.status)} • ${d.completed_images || 0}/${d.image_count || 0} images</div>
+          <div style="font-size:0.8rem;color:var(--muted)">${esc(d.message || '')}</div>
+        </div>
+        <div class="btn-group">${downloads.join('')}<button class="btn btn-red btn-sm" onclick="deleteModelEval('${jobId}')">Delete Batch</button></div>
+      </div>
+      ${(d.images || []).length ? `
+      <table><thead><tr><th>Image</th><th>Claude</th><th>GPT-4.1</th><th>Diff</th></tr></thead><tbody>
+        ${(d.images || []).map(image => {
+          const byModel = {};
+          (image.results || []).forEach(result => { byModel[result.model] = result; });
+          const cmp = image.comparison || {};
+          return `<tr>
+            <td style="min-width:180px"><div style="font-weight:600;margin-bottom:8px">${esc(image.filename || '')}</div><img src="${image.data_url}" alt="${esc(image.filename || '')}" style="width:160px;height:120px;object-fit:cover;border-radius:10px;border:1px solid var(--border)"></td>
+            <td>${renderEvalResultCell(byModel['claude-sonnet-4-20250514'])}</td>
+            <td>${renderEvalResultCell(byModel['openai/gpt-4.1'])}</td>
+            <td style="min-width:140px">
+              <div class="pill">CY Δ: ${esc(String(cmp.cy_delta || '--'))}</div>
+              <div class="pill">Price Δ: ${esc(String(cmp.price_mid_delta || '--'))}</div>
+              <div class="pill">Scene match: ${esc(String(cmp.scene_match || '--'))}</div>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody></table>` : '<div class="empty">No image results yet</div>'}
+    `;
+    if (d.status === 'running') startModelEvalPolling();
+    else stopModelEvalPolling();
+    if (!silent) toast('Eval loaded');
+  } catch (e) {
+    console.error(e);
+    $('#modeleval-detail').innerHTML = '<div class="empty">Error loading eval detail</div>';
+  }
+}
+
+function startModelEvalPolling() {
+  stopModelEvalPolling();
+  modelEvalPollTimer = setInterval(async () => {
+    if (!currentModelEvalId) return;
+    await loadModelEvals();
+    const d = await apiFetch(`/api/admin/model-evals/${currentModelEvalId}`).catch(() => null);
+    if (!d || d.status !== 'running') stopModelEvalPolling();
+  }, 4000);
+}
+
+function stopModelEvalPolling() {
+  if (modelEvalPollTimer) clearInterval(modelEvalPollTimer);
+  modelEvalPollTimer = null;
+}
+
+async function refreshModelEvals() {
+  await loadModelEvals();
+}
+
+async function deleteModelEval(jobId) {
+  if (!confirm('Delete this temporary eval batch and its files?')) return;
+  try {
+    await apiFetch(`/api/admin/model-evals/${jobId}`, { method: 'DELETE' });
+    if (currentModelEvalId === jobId) currentModelEvalId = '';
+    stopModelEvalPolling();
+    toast('Eval batch deleted');
+    await loadModelEvals();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
 // ── Site Settings ──
 async function loadSettings() {
   try {
     const [config, env] = await Promise.all([apiFetch('/api/admin/site-config'), apiFetch('/api/admin/env-status')]);
     // Env status
-    const envKeys = {'ANTHROPIC_API_KEY':'Anthropic API Key','STRIPE_SECRET_KEY':'Stripe Secret Key','STRIPE_WEBHOOK_SECRET':'Stripe Webhook Secret','TAVILY_API_KEY':'Tavily API Key (optional)','SENDGRID_API_KEY':'SendGrid API Key (optional)'};
+    const envKeys = {'ANTHROPIC_API_KEY':'Anthropic API Key','OPENROUTER_API_KEY':'OpenRouter API Key','STRIPE_SECRET_KEY':'Stripe Secret Key','STRIPE_WEBHOOK_SECRET':'Stripe Webhook Secret','TAVILY_API_KEY':'Tavily API Key (optional)','SENDGRID_API_KEY':'SendGrid API Key (optional)'};
     $('#env-status').innerHTML = Object.entries(envKeys).map(([k,label]) => `<div class="env-row"><span>${label}</span><span>${env[k]?'<span class="badge badge-green">Configured</span>':'<span class="badge badge-red">Not Set</span>'}</span></div>`).join('');
     // Site config
     const entries = Object.entries(config);

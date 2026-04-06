@@ -89,6 +89,15 @@ Do not show “potential duplicates” in the UI when the item is already counte
 ### 5. Outdoor mixed piles with broken furniture should not default to construction debris
 Curbside jobs often contain broken wood furniture, loose boards, and boxes in the same pile. That does not automatically make them `construction_debris`. When outdoor/curbside context is present and furniture is materially part of the pile, bias scene classification toward `curbside_mixed_junk` and normalize overlapping wood/furniture-debris labels so the same pile is not described twice in construction-heavy language.
 
+### 6. Do not show small-garage cap messaging on broader multi-photo jobs
+The garage/storage cap can still be useful as a backend guardrail, but the customer-facing confidence reason should only appear on true partial-view jobs. If there are four or more photos or clear evidence of broader room coverage, suppress the “small visible garage/storage pickups are capped” message even if the backend cap happens to land near the final total.
+
+### 7. Generic 5-gallon buckets are not automatically special-fee items
+Do not treat buckets as hazardous disposal just because the model labels them as paint buckets. Keep special-fee status for paint cans, clearly identified paint residue, or other visible hazardous-material evidence; otherwise generic buckets should remain normal items.
+
+### 8. Admin-only eval tooling should use temporary workspaces and never leak to customer routes
+Internal model testing is useful, but it must stay separate from the customer estimator. Temporary evaluator uploads and reports should live in short-lived temp workspaces, be accessible only through admin-authenticated endpoints, and be removable from the dashboard when review is done.
+
 ## Railway Deployment — 2026-03-12
 
 ### 1. Railway PostgreSQL Networking

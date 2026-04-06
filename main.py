@@ -5,8 +5,13 @@ import math
 import base64
 import secrets
 import time
+import csv
+import html
+import shutil
+import tempfile
 from datetime import datetime, timedelta
 from typing import Optional
+from pathlib import Path
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request, Response, Cookie
@@ -3134,6 +3139,41 @@ def normalize_curbside_mixed_item_labels(result_data: dict, room_labels: list[st
     return result_data, notes
 
 
+def normalize_special_fee_items(result_data: dict) -> tuple[dict, list[str]]:
+    items = result_data.get("items", []) or []
+    if not isinstance(items, list) or not items:
+        return result_data, []
+
+    notes: list[str] = []
+    adjusted = False
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        norm_name = _normalized_item_name(item.get("name", ""))
+        if not item.get("is_special"):
+            continue
+
+        generic_bucket = (
+            ("bucket" in norm_name or "5-gallon" in norm_name or "5 gallon" in norm_name)
+            and "paint can" not in norm_name
+            and "paint cans" not in norm_name
+            and "residue" not in norm_name
+            and "full" not in norm_name
+            and "hazard" not in norm_name
+        )
+        if generic_bucket:
+            item["is_special"] = False
+            adjusted = True
+
+    if adjusted:
+        notes.append("Generic buckets were not flagged for special disposal unless visible paint cans or paint residue were clearly identified.")
+
+    if notes:
+        existing_notes = str(result_data.get("notes", "") or "").strip()
+        result_data["notes"] = (existing_notes + "\n" if existing_notes else "") + " ".join(notes)
+    return result_data, notes
+
+
 def _normalize_room_labels(photo_data: list[dict]) -> list[str]:
     out = []
     for pd in photo_data:
@@ -4645,6 +4685,244 @@ def normalize_verification_result(result: dict) -> dict:
     return result
 
 
+def normalize_model_eval_models(raw_models) -> list[str]:
+    allowed = set(MODEL_EVAL_DEFAULT_MODELS)
+    out = []
+    for model in raw_models or []:
+        model_name = str(model or "").strip()
+        if model_name in allowed and model_name not in out:
+            out.append(model_name)
+    return out or list(MODEL_EVAL_DEFAULT_MODELS)
+
+
+def cleanup_expired_model_eval_jobs():
+    now = datetime.utcnow()
+    expired = [
+        job_id for job_id, job in model_eval_jobs.items()
+        if (now - job.get("created_at", now)).total_seconds() > MODEL_EVAL_TTL_SECONDS
+    ]
+    for job_id in expired:
+        workspace = Path(model_eval_jobs[job_id].get("workspace", "") or "")
+        if workspace.exists():
+            shutil.rmtree(workspace, ignore_errors=True)
+        model_eval_jobs.pop(job_id, None)
+
+
+def _safe_eval_filename(filename: str, index: int) -> str:
+    suffix = Path(filename or "").suffix.lower() or ".jpg"
+    base = re.sub(r"[^A-Za-z0-9._-]+", "_", Path(filename or "").stem).strip("._") or f"image_{index+1}"
+    return f"{index+1:03d}_{base}{suffix}"
+
+
+def _model_eval_price_mid(low: float, high: float) -> float:
+    try:
+        return round((float(low or 0) + float(high or 0)) / 2.0, 2)
+    except Exception:
+        return 0.0
+
+
+def _build_eval_image_content(image_b64: str, media_type: str) -> list[dict]:
+    return [
+        {"type": "text", "text": "Photo 1 (Room: Main):"},
+        {
+            "type": "image",
+            "source": {"type": "base64", "media_type": media_type, "data": image_b64},
+        },
+    ]
+
+
+def _model_eval_data_uri(image_b64: str, media_type: str) -> str:
+    return f"data:{media_type};base64,{image_b64}"
+
+
+async def run_claude_model_eval(image_b64: str, media_type: str, system_prompt: str, api_key: str) -> tuple[dict, dict]:
+    client = anthropic.Anthropic(api_key=api_key, timeout=90.0)
+
+    def _run():
+        return client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2048,
+            temperature=0,
+            system=system_prompt,
+            messages=[{
+                "role": "user",
+                "content": _build_eval_image_content(image_b64, media_type) + [{
+                    "type": "text",
+                    "text": "Analyze these junk removal photos and provide your estimate as JSON."
+                }]
+            }]
+        )
+
+    response = await asyncio.to_thread(_run)
+    raw_text = response.content[0].text
+    parsed = parse_ai_json(raw_text)
+    in_tok, out_tok, used_model = _claude_response_usage(response)
+    meta = {
+        "input_tokens": in_tok,
+        "output_tokens": out_tok,
+        "model_used": used_model or "claude-sonnet-4-20250514",
+        "api_cost_cents": estimate_anthropic_cost_cents(in_tok, out_tok, used_model or "claude-sonnet-4-20250514"),
+    }
+    return parsed, meta
+
+
+async def run_openrouter_model_eval(image_b64: str, media_type: str, system_prompt: str, api_key: str, model_name: str) -> tuple[dict, dict]:
+    payload = {
+        "model": model_name,
+        "temperature": 0,
+        "max_tokens": 2048,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Photo 1 (Room: Main):"},
+                    {"type": "image_url", "image_url": {"url": _model_eval_data_uri(image_b64, media_type)}},
+                    {"type": "text", "text": "Analyze these junk removal photos and provide your estimate as JSON."},
+                ],
+            },
+        ],
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://whatshouldicharge.app",
+        "X-Title": "WhatShouldICharge Admin Eval",
+    }
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        response = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
+        response.raise_for_status()
+        data = response.json()
+    choice = (((data.get("choices") or [{}])[0]).get("message") or {})
+    raw_text = choice.get("content") or ""
+    parsed = parse_ai_json(raw_text)
+    usage = data.get("usage") or {}
+    meta = {
+        "input_tokens": int(usage.get("prompt_tokens", 0) or 0),
+        "output_tokens": int(usage.get("completion_tokens", 0) or 0),
+        "model_used": str(data.get("model") or model_name),
+        "api_cost_cents": 0,
+    }
+    return parsed, meta
+
+
+def finalize_model_eval_result(result_data: dict, room_labels: Optional[list[str]] = None) -> dict:
+    labels = list(room_labels or ["Main"])
+    result_data = validate_estimate(result_data)
+    _sync_result_totals_to_items(result_data)
+    result_data, _ = normalize_curbside_mixed_item_labels(result_data, labels)
+    result_data, _ = normalize_special_fee_items(result_data)
+    _sync_result_totals_to_items(result_data)
+    scene_type = classify_scene_type(result_data, labels, None)
+    result_data, _ = apply_small_job_volume_guardrails(result_data, scene_type, labels)
+    _sync_result_totals_to_items(result_data)
+    scene_type = classify_scene_type(result_data, labels, None)
+    result_data, scene_type = apply_job_label_guardrails(result_data, scene_type, labels)
+    _sync_result_totals_to_items(result_data)
+    price_low, price_high, cy_mid, special_items, min_charge_applied = calculate_price(
+        result_data,
+        rate_low=35.0,
+        rate_high=40.0,
+        rate_premium=55.0,
+        min_charge=75.0,
+        market_rates=None,
+    )
+    return {
+        "result_data": result_data,
+        "scene_type": scene_type,
+        "scene_label": SCENE_DISPLAY_NAMES.get(scene_type, scene_type.replace("_", " ").title() if scene_type else ""),
+        "price_low": price_low,
+        "price_high": price_high,
+        "price_mid": _model_eval_price_mid(price_low, price_high),
+        "cy_estimate": cy_mid,
+        "special_items": special_items,
+        "min_charge_applied": min_charge_applied,
+        "item_count": len(result_data.get("items", []) or []),
+        "items_summary": "; ".join(
+            f"{it.get('name','')} x{it.get('quantity',1)} ({float(it.get('cubic_yards',0) or 0):.2f} CY)"
+            for it in (result_data.get("items", []) or [])[:10]
+            if isinstance(it, dict)
+        ),
+        "notes": str(result_data.get("notes", "") or "")[:500],
+        "confidence": int(result_data.get("confidence", 0) or 0),
+    }
+
+
+def generate_model_eval_csv(job: dict, output_path: Path) -> None:
+    fieldnames = [
+        "filename", "model", "parse_ok", "cy_estimate", "price_low", "price_high", "price_mid",
+        "scene_type", "scene_label", "confidence", "item_count", "special_item_count",
+        "items_summary", "notes", "error", "comparison_cy_delta", "comparison_price_mid_delta", "comparison_scene_match"
+    ]
+    rows = []
+    comparisons = job.get("comparisons", {}) or {}
+    for image in job.get("images", []) or []:
+        image_name = image.get("filename", "")
+        cmp = comparisons.get(image_name, {})
+        for result in image.get("results", []) or []:
+            rows.append({
+                "filename": image_name,
+                "model": result.get("model", ""),
+                "parse_ok": result.get("parse_ok", False),
+                "cy_estimate": result.get("cy_estimate", ""),
+                "price_low": result.get("price_low", ""),
+                "price_high": result.get("price_high", ""),
+                "price_mid": result.get("price_mid", ""),
+                "scene_type": result.get("scene_type", ""),
+                "scene_label": result.get("scene_label", ""),
+                "confidence": result.get("confidence", ""),
+                "item_count": result.get("item_count", ""),
+                "special_item_count": len(result.get("special_items", []) or []),
+                "items_summary": result.get("items_summary", ""),
+                "notes": result.get("notes", ""),
+                "error": result.get("error", ""),
+                "comparison_cy_delta": cmp.get("cy_delta", ""),
+                "comparison_price_mid_delta": cmp.get("price_mid_delta", ""),
+                "comparison_scene_match": cmp.get("scene_match", ""),
+            })
+    with output_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def generate_model_eval_html(job: dict, output_path: Path) -> None:
+    images = job.get("images", []) or []
+    comparisons = job.get("comparisons", {}) or {}
+    parts = [
+        "<!DOCTYPE html><html><head><meta charset='utf-8'><title>WSIC Model Eval Report</title>",
+        "<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#0f1117;color:#e8eaf0;padding:24px;}h1,h2{margin:0 0 12px;} .meta{color:#7b82a0;margin-bottom:20px;} .card{background:#1a1d27;border:1px solid #2e3352;border-radius:14px;padding:18px;margin-bottom:18px;} .grid{display:grid;grid-template-columns:280px 1fr;gap:16px;} img{max-width:100%;border-radius:10px;border:1px solid #2e3352;} table{width:100%;border-collapse:collapse;margin-top:12px;} th,td{border-top:1px solid #2e3352;padding:8px 10px;text-align:left;vertical-align:top;} th{color:#7b82a0;font-size:12px;text-transform:uppercase;letter-spacing:.06em;} .ok{color:#22c55e;} .bad{color:#ef4444;} .muted{color:#7b82a0;} .pill{display:inline-block;background:#22263a;border-radius:999px;padding:3px 8px;font-size:12px;margin-right:6px;}</style></head><body>",
+        f"<h1>WSIC Model Eval Report</h1><div class='meta'>Created {html.escape(str(job.get('created_at_label','')))} • {len(images)} images • models: {html.escape(', '.join(job.get('models', [])))}</div>",
+    ]
+    for image in images:
+        filename = image.get("filename", "")
+        cmp = comparisons.get(filename, {})
+        parts.append("<div class='card'>")
+        parts.append(f"<h2>{html.escape(filename)}</h2>")
+        parts.append("<div class='grid'>")
+        parts.append(f"<div><img src='{image.get('data_url','')}' alt='{html.escape(filename)}'></div>")
+        parts.append("<div>")
+        parts.append(f"<div class='muted'>CY delta: {html.escape(str(cmp.get('cy_delta','--')))} • Price midpoint delta: {html.escape(str(cmp.get('price_mid_delta','--')))} • Scene match: {html.escape(str(cmp.get('scene_match','--')))}</div>")
+        parts.append("<table><thead><tr><th>Model</th><th>Parse</th><th>CY</th><th>Price</th><th>Scene</th><th>Confidence</th><th>Items</th><th>Notes</th></tr></thead><tbody>")
+        for result in image.get("results", []) or []:
+            parse_ok = bool(result.get("parse_ok"))
+            parts.append(
+                "<tr>"
+                f"<td>{html.escape(result.get('model',''))}</td>"
+                f"<td class='{'ok' if parse_ok else 'bad'}'>{'ok' if parse_ok else 'error'}</td>"
+                f"<td>{html.escape(str(result.get('cy_estimate','--')))}</td>"
+                f"<td>${html.escape(str(result.get('price_low','--')))} – ${html.escape(str(result.get('price_high','--')))}</td>"
+                f"<td>{html.escape(result.get('scene_label','') or result.get('scene_type',''))}</td>"
+                f"<td>{html.escape(str(result.get('confidence','--')))}</td>"
+                f"<td>{html.escape(result.get('items_summary',''))}</td>"
+                f"<td>{html.escape(result.get('error','') or result.get('notes',''))}</td>"
+                "</tr>"
+            )
+        parts.append("</tbody></table></div></div></div>")
+    parts.append("</body></html>")
+    output_path.write_text("".join(parts), encoding="utf-8")
+
+
 async def lookup_item_dimensions(item_name: str, api_key: str) -> dict:
     tavily_key = os.environ.get("TAVILY_API_KEY")
     if not tavily_key:
@@ -4774,6 +5052,12 @@ estimate_jobs = {}
 JOB_TTL_SECONDS = 300
 MAX_CONCURRENT_JOBS = 10
 
+model_eval_jobs = {}
+MODEL_EVAL_TTL_SECONDS = 6 * 60 * 60
+MODEL_EVAL_ROOT = Path(tempfile.gettempdir()) / "wsic_model_evals"
+MODEL_EVAL_ROOT.mkdir(parents=True, exist_ok=True)
+MODEL_EVAL_DEFAULT_MODELS = ("claude-sonnet-4-20250514", "openai/gpt-4.1")
+
 
 def count_active_jobs() -> int:
     return sum(1 for j in estimate_jobs.values() if j.get("status") in ("analyzing", "looking_up"))
@@ -4790,6 +5074,250 @@ def cleanup_expired_jobs():
                if (now - v.get("created_at", now)).total_seconds() > JOB_TTL_SECONDS]
     for k in expired:
         del estimate_jobs[k]
+
+
+def _build_model_eval_comparisons(job: dict) -> dict:
+    comparisons = {}
+    for image in job.get("images", []) or []:
+        results = image.get("results", []) or []
+        by_model = {r.get("model"): r for r in results if isinstance(r, dict)}
+        claude = by_model.get("claude-sonnet-4-20250514")
+        gpt = by_model.get("openai/gpt-4.1")
+        if not claude or not gpt or not claude.get("parse_ok") or not gpt.get("parse_ok"):
+            comparisons[image.get("filename", "")] = {"cy_delta": "", "price_mid_delta": "", "scene_match": ""}
+            continue
+        cy_delta = round(abs(float(claude.get("cy_estimate", 0) or 0) - float(gpt.get("cy_estimate", 0) or 0)), 2)
+        price_mid_delta = round(abs(float(claude.get("price_mid", 0) or 0) - float(gpt.get("price_mid", 0) or 0)), 2)
+        scene_match = "yes" if (claude.get("scene_type") or "") == (gpt.get("scene_type") or "") else "no"
+        comparisons[image.get("filename", "")] = {
+            "cy_delta": cy_delta,
+            "price_mid_delta": price_mid_delta,
+            "scene_match": scene_match,
+        }
+    return comparisons
+
+
+async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key: str, openrouter_key: str):
+    job = model_eval_jobs[job_id]
+    try:
+        for image in job.get("images", []) or []:
+            image["results"] = []
+            for model_name in job.get("models", []):
+                result_row = {
+                    "model": model_name,
+                    "parse_ok": False,
+                    "cy_estimate": "",
+                    "price_low": "",
+                    "price_high": "",
+                    "price_mid": "",
+                    "scene_type": "",
+                    "scene_label": "",
+                    "confidence": "",
+                    "item_count": "",
+                    "items_summary": "",
+                    "notes": "",
+                    "special_items": [],
+                    "error": "",
+                }
+                try:
+                    if model_name == "claude-sonnet-4-20250514":
+                        raw_result, meta = await run_claude_model_eval(image["b64"], image["media_type"], extraction_prompt, anthropic_key)
+                    elif model_name == "openai/gpt-4.1":
+                        raw_result, meta = await run_openrouter_model_eval(image["b64"], image["media_type"], extraction_prompt, openrouter_key, model_name)
+                    else:
+                        raise RuntimeError(f"Unsupported model: {model_name}")
+
+                    if not validate_estimate_schema(raw_result):
+                        raise ValueError("Model returned invalid estimate schema")
+
+                    finalized = finalize_model_eval_result(raw_result, ["Main"])
+                    result_row.update({
+                        "parse_ok": True,
+                        "cy_estimate": finalized["cy_estimate"],
+                        "price_low": finalized["price_low"],
+                        "price_high": finalized["price_high"],
+                        "price_mid": finalized["price_mid"],
+                        "scene_type": finalized["scene_type"],
+                        "scene_label": finalized["scene_label"],
+                        "confidence": finalized["confidence"],
+                        "item_count": finalized["item_count"],
+                        "items_summary": finalized["items_summary"],
+                        "notes": finalized["notes"],
+                        "special_items": finalized["special_items"],
+                        "meta": meta,
+                    })
+                except Exception as err:
+                    result_row["error"] = f"{type(err).__name__}: {err}"
+                image["results"].append(result_row)
+            job["completed_images"] = int(job.get("completed_images", 0) or 0) + 1
+
+        job["comparisons"] = _build_model_eval_comparisons(job)
+        workspace = Path(job["workspace"])
+        csv_path = workspace / "results.csv"
+        html_path = workspace / "report.html"
+        generate_model_eval_csv(job, csv_path)
+        generate_model_eval_html(job, html_path)
+        job["csv_path"] = str(csv_path)
+        job["html_path"] = str(html_path)
+        job["status"] = "complete"
+        job["message"] = "Model eval complete."
+    except Exception as err:
+        job["status"] = "error"
+        job["message"] = f"Model eval failed: {type(err).__name__}: {err}"
+
+
+@app.post("/api/admin/model-evals")
+async def admin_create_model_eval(
+    request: Request,
+    files: list[UploadFile] = File(...),
+    models: str = Form(default='["claude-sonnet-4-20250514","openai/gpt-4.1"]'),
+):
+    await require_admin(request)
+    cleanup_expired_model_eval_jobs()
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+    requested_models = normalize_model_eval_models(json.loads(models or "[]"))
+    if "claude-sonnet-4-20250514" in requested_models and not anthropic_key:
+        raise HTTPException(status_code=400, detail="ANTHROPIC_API_KEY is not configured")
+    if "openai/gpt-4.1" in requested_models and not openrouter_key:
+        raise HTTPException(status_code=400, detail="OPENROUTER_API_KEY is not configured")
+    if not files:
+        raise HTTPException(status_code=400, detail="Upload at least one image")
+
+    job_id = secrets.token_hex(8)
+    workspace = MODEL_EVAL_ROOT / job_id
+    workspace.mkdir(parents=True, exist_ok=True)
+    created_at = datetime.utcnow()
+
+    images = []
+    for idx, upload in enumerate(files):
+        raw = await upload.read()
+        if not raw:
+            continue
+        safe_name = _safe_eval_filename(upload.filename or f"image_{idx+1}.jpg", idx)
+        file_path = workspace / safe_name
+        file_path.write_bytes(raw)
+        compressed = compress_image(raw)
+        b64 = base64.standard_b64encode(compressed).decode("utf-8")
+        media_type = "image/jpeg"
+        images.append({
+            "filename": safe_name,
+            "path": str(file_path),
+            "media_type": media_type,
+            "b64": b64,
+            "data_url": _model_eval_data_uri(b64, media_type),
+            "results": [],
+        })
+    if not images:
+        shutil.rmtree(workspace, ignore_errors=True)
+        raise HTTPException(status_code=400, detail="No usable images were uploaded")
+
+    model_eval_jobs[job_id] = {
+        "id": job_id,
+        "status": "running",
+        "message": "Running model comparison...",
+        "created_at": created_at,
+        "created_at_label": created_at.strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "workspace": str(workspace),
+        "models": requested_models,
+        "images": images,
+        "completed_images": 0,
+        "csv_path": "",
+        "html_path": "",
+        "comparisons": {},
+    }
+
+    extraction_prompt = get_extraction_prompt("junk_removal")
+    library_context = await get_library_context()
+    if library_context:
+        extraction_prompt += "\n" + library_context
+
+    asyncio.create_task(run_model_eval_job(job_id, extraction_prompt, anthropic_key, openrouter_key))
+    return {"job_id": job_id}
+
+
+@app.get("/api/admin/model-evals")
+async def admin_list_model_evals(request: Request):
+    await require_admin(request)
+    cleanup_expired_model_eval_jobs()
+    jobs = []
+    for job in sorted(model_eval_jobs.values(), key=lambda j: j.get("created_at") or datetime.utcnow(), reverse=True):
+        jobs.append({
+            "id": job["id"],
+            "status": job.get("status", ""),
+            "message": job.get("message", ""),
+            "created_at": job.get("created_at").isoformat() if job.get("created_at") else None,
+            "models": job.get("models", []),
+            "image_count": len(job.get("images", []) or []),
+            "completed_images": int(job.get("completed_images", 0) or 0),
+            "has_csv": bool(job.get("csv_path")),
+            "has_html": bool(job.get("html_path")),
+        })
+    return {"jobs": jobs}
+
+
+@app.get("/api/admin/model-evals/{job_id}")
+async def admin_model_eval_detail(request: Request, job_id: str):
+    await require_admin(request)
+    cleanup_expired_model_eval_jobs()
+    job = model_eval_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Model eval not found")
+    return {
+        "id": job["id"],
+        "status": job.get("status", ""),
+        "message": job.get("message", ""),
+        "created_at": job.get("created_at").isoformat() if job.get("created_at") else None,
+        "models": job.get("models", []),
+        "image_count": len(job.get("images", []) or []),
+        "completed_images": int(job.get("completed_images", 0) or 0),
+        "csv_download_url": f"/api/admin/model-evals/{job_id}/download/csv" if job.get("csv_path") else "",
+        "html_download_url": f"/api/admin/model-evals/{job_id}/download/html" if job.get("html_path") else "",
+        "images": [
+            {
+                "filename": image.get("filename", ""),
+                "data_url": image.get("data_url", ""),
+                "results": image.get("results", []),
+                "comparison": (job.get("comparisons", {}) or {}).get(image.get("filename", ""), {}),
+            }
+            for image in job.get("images", []) or []
+        ],
+    }
+
+
+@app.get("/api/admin/model-evals/{job_id}/download/{kind}")
+async def admin_download_model_eval(request: Request, job_id: str, kind: str):
+    await require_admin(request)
+    cleanup_expired_model_eval_jobs()
+    job = model_eval_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Model eval not found")
+    if kind == "csv":
+        path = job.get("csv_path", "")
+        media_type = "text/csv"
+        filename = f"wsic-model-eval-{job_id}.csv"
+    elif kind == "html":
+        path = job.get("html_path", "")
+        media_type = "text/html"
+        filename = f"wsic-model-eval-{job_id}.html"
+    else:
+        raise HTTPException(status_code=404, detail="Unknown download type")
+    if not path or not Path(path).exists():
+        raise HTTPException(status_code=404, detail="Report not ready")
+    return FileResponse(path, media_type=media_type, filename=filename)
+
+
+@app.delete("/api/admin/model-evals/{job_id}")
+async def admin_delete_model_eval(request: Request, job_id: str):
+    await require_admin(request)
+    job = model_eval_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Model eval not found")
+    workspace = Path(job.get("workspace", "") or "")
+    if workspace.exists():
+        shutil.rmtree(workspace, ignore_errors=True)
+    model_eval_jobs.pop(job_id, None)
+    return {"ok": True}
 
 
 @app.post("/api/estimate")
@@ -5144,6 +5672,7 @@ async def run_estimate(
         result_data = validate_estimate(result_data)
         _sync_result_totals_to_items(result_data)
         result_data, _curbside_label_notes = normalize_curbside_mixed_item_labels(result_data, room_labels)
+        result_data, _special_fee_notes = normalize_special_fee_items(result_data)
         _sync_result_totals_to_items(result_data)
         scene_type = classify_scene_type(result_data, room_labels, job.get("truck_load_pct"))
         result_data, _small_job_notes = apply_small_job_volume_guardrails(result_data, scene_type, room_labels)
@@ -5186,6 +5715,7 @@ async def run_estimate(
 
         final_item_sum = _sync_result_totals_to_items(result_data)
         scene_context = _scene_context_text(result_data, room_labels)
+        broad_coverage = num_photos >= 4 or any(k in scene_context for k in ("living room", "bedroom", "kitchen", "bathroom", "office", "dining"))
         if (
             scene_type in {"garage_clutter", "bagged_trash_soft_goods", "mixed_junk", "storage_overflow"}
             or any(k in scene_context for k in ("garage", "basement", "storage", "shed"))
@@ -5197,7 +5727,8 @@ async def run_estimate(
                 result_data["totals"]["cubic_yards_high"] = round(max_reasonable_total * 1.15, 1)
                 result_data["total_cubic_yards"] = round(max_reasonable_total, 1)
                 confidence_bucket = "medium"
-                confidence_reasons.append("Small visible garage/storage pickups are capped unless truck-load context or broader room coverage is confirmed.")
+                if not broad_coverage:
+                    confidence_reasons.append("Small visible garage/storage pickups are capped unless truck-load context or broader room coverage is confirmed.")
 
         actionable_duplicates = filter_actionable_duplicates(result_data)
 
@@ -6791,7 +7322,7 @@ async def admin_accuracy(request: Request, capture_mode: str = ""):
 @app.get("/api/admin/env-status")
 async def admin_env_status(request: Request) -> dict[str, bool]:
     await require_admin(request)
-    keys = ["ANTHROPIC_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
+    keys = ["ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
             "TAVILY_API_KEY", "SENDGRID_API_KEY"]
     out: dict[str, bool] = {}
     for k in keys:

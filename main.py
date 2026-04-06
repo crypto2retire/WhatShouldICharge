@@ -5228,6 +5228,7 @@ MODEL_EVAL_TTL_SECONDS = 6 * 60 * 60
 MODEL_EVAL_ROOT = Path(tempfile.gettempdir()) / "wsic_model_evals"
 MODEL_EVAL_ROOT.mkdir(parents=True, exist_ok=True)
 MODEL_EVAL_DEFAULT_MODELS = ("claude-sonnet-4-20250514", "openai/gpt-4.1")
+MODEL_EVAL_PER_RUN_TIMEOUT_SECONDS = 150
 MODEL_EVAL_SUPPORTED_MODELS = (
     "claude-sonnet-4-20250514",
     "openai/gpt-4.1",
@@ -5286,6 +5287,9 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
         for image in job.get("images", []) or []:
             image["results"] = []
             for model_name in job.get("models", []):
+                job["current_step"] = f"{image.get('filename', 'image')} • {model_name}"
+                job["message"] = f"Running model comparison... {int(job.get('completed_runs', 0) or 0)}/{int(job.get('total_runs', 0) or 0)} model runs completed."
+                job["updated_at"] = datetime.utcnow()
                 result_row = {
                     "model": model_name,
                     "parse_ok": False,
@@ -5304,9 +5308,15 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
                 }
                 try:
                     if model_name == "claude-sonnet-4-20250514":
-                        raw_result, meta = await run_claude_model_eval(image["b64"], image["media_type"], extraction_prompt, anthropic_key)
+                        raw_result, meta = await asyncio.wait_for(
+                            run_claude_model_eval(image["b64"], image["media_type"], extraction_prompt, anthropic_key),
+                            timeout=MODEL_EVAL_PER_RUN_TIMEOUT_SECONDS,
+                        )
                     elif model_name in MODEL_EVAL_SUPPORTED_MODELS:
-                        raw_result, meta = await run_openrouter_model_eval(image["b64"], image["media_type"], extraction_prompt, openrouter_key, model_name)
+                        raw_result, meta = await asyncio.wait_for(
+                            run_openrouter_model_eval(image["b64"], image["media_type"], extraction_prompt, openrouter_key, model_name),
+                            timeout=MODEL_EVAL_PER_RUN_TIMEOUT_SECONDS,
+                        )
                     else:
                         raise RuntimeError(f"Unsupported model: {model_name}")
 
@@ -5332,7 +5342,10 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
                 except Exception as err:
                     result_row["error"] = f"{type(err).__name__}: {err}"
                 image["results"].append(result_row)
+                job["completed_runs"] = int(job.get("completed_runs", 0) or 0) + 1
+                job["updated_at"] = datetime.utcnow()
             job["completed_images"] = int(job.get("completed_images", 0) or 0) + 1
+            job["updated_at"] = datetime.utcnow()
 
         job["comparisons"] = _build_model_eval_comparisons(job)
         workspace = Path(job["workspace"])
@@ -5353,6 +5366,8 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
                 elif result.get("error"):
                     errors.append(str(result.get("error")))
         job["status"] = "complete"
+        job["current_step"] = ""
+        job["updated_at"] = datetime.utcnow()
         if success_rows == total_rows:
             job["message"] = "Model eval complete."
         elif success_rows > 0:
@@ -5363,6 +5378,8 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
             job["message"] = f"Model eval failed for all model runs. First error: {first_error[:220]}"
     except Exception as err:
         job["status"] = "error"
+        job["current_step"] = ""
+        job["updated_at"] = datetime.utcnow()
         job["message"] = f"Model eval failed: {type(err).__name__}: {err}"
 
 
@@ -5455,12 +5472,16 @@ async def admin_create_model_eval(
             if skipped_files else "Running model comparison..."
         ),
         "created_at": created_at,
+        "updated_at": created_at,
         "created_at_label": created_at.strftime("%Y-%m-%d %H:%M:%S UTC"),
         "workspace": str(workspace),
         "models": requested_models,
         "images": images,
         "skipped_files": skipped_files,
         "completed_images": 0,
+        "completed_runs": 0,
+        "total_runs": len(images) * len(requested_models),
+        "current_step": "",
         "csv_path": "",
         "html_path": "",
         "comparisons": {},
@@ -5493,10 +5514,14 @@ async def admin_list_model_evals(request: Request):
             "status": job.get("status", ""),
             "message": job.get("message", ""),
             "created_at": job.get("created_at").isoformat() if job.get("created_at") else None,
+            "updated_at": job.get("updated_at").isoformat() if job.get("updated_at") else None,
             "models": job.get("models", []),
             "image_count": len(job.get("images", []) or []),
             "skipped_count": len(job.get("skipped_files", []) or []),
             "completed_images": int(job.get("completed_images", 0) or 0),
+            "completed_runs": int(job.get("completed_runs", 0) or 0),
+            "total_runs": int(job.get("total_runs", 0) or 0),
+            "current_step": job.get("current_step", ""),
             "has_csv": bool(job.get("csv_path")),
             "has_html": bool(job.get("html_path")),
         })
@@ -5515,11 +5540,15 @@ async def admin_model_eval_detail(request: Request, job_id: str):
         "status": job.get("status", ""),
         "message": job.get("message", ""),
         "created_at": job.get("created_at").isoformat() if job.get("created_at") else None,
+        "updated_at": job.get("updated_at").isoformat() if job.get("updated_at") else None,
         "models": job.get("models", []),
         "image_count": len(job.get("images", []) or []),
         "skipped_count": len(job.get("skipped_files", []) or []),
         "skipped_files": job.get("skipped_files", []),
         "completed_images": int(job.get("completed_images", 0) or 0),
+        "completed_runs": int(job.get("completed_runs", 0) or 0),
+        "total_runs": int(job.get("total_runs", 0) or 0),
+        "current_step": job.get("current_step", ""),
         "csv_download_url": f"/api/admin/model-evals/{job_id}/download/csv" if job.get("csv_path") else "",
         "html_download_url": f"/api/admin/model-evals/{job_id}/download/html" if job.get("html_path") else "",
         "images": [

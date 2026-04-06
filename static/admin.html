@@ -1172,12 +1172,13 @@ async function loadModelEvals() {
       jobsEl.innerHTML = '<div class="empty">No eval jobs yet</div>';
       $('#modeleval-detail').innerHTML = '<div class="empty">Run a batch or select a recent job to review results.</div>';
     } else {
-      jobsEl.innerHTML = `<table><thead><tr><th>ID</th><th>Date</th><th>Status</th><th>Images</th><th>Models</th><th>Actions</th></tr></thead><tbody>${
+      jobsEl.innerHTML = `<table><thead><tr><th>ID</th><th>Date</th><th>Status</th><th>Images</th><th>Model Runs</th><th>Models</th><th>Actions</th></tr></thead><tbody>${
         jobs.map(job => `<tr>
           <td>#${job.id}</td>
           <td>${fmtDate(job.created_at)}</td>
-          <td>${esc(job.status)}<div style="font-size:0.72rem;color:var(--muted)">${esc(job.message||'')}</div></td>
+          <td>${esc(job.status)}<div style="font-size:0.72rem;color:var(--muted)">${esc(job.message||'')}</div>${job.current_step ? `<div style="font-size:0.72rem;color:var(--muted)">Now: ${esc(job.current_step)}</div>` : ''}</td>
           <td>${job.completed_images || 0}/${job.image_count || 0}</td>
+          <td>${job.completed_runs || 0}/${job.total_runs || 0}</td>
           <td>${esc((job.models || []).join(', '))}</td>
           <td>
             <button class="btn btn-outline btn-sm" onclick="viewModelEval('${job.id}')">View</button>
@@ -1263,7 +1264,8 @@ async function viewModelEval(jobId, silent=false) {
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
         <div>
           <div style="font-weight:700">Eval #${esc(d.id)}</div>
-          <div style="font-size:0.8rem;color:var(--muted)">${fmtDate(d.created_at)} • ${esc(d.status)} • ${d.completed_images || 0}/${d.image_count || 0} images • skipped ${d.skipped_count || 0}</div>
+          <div style="font-size:0.8rem;color:var(--muted)">${fmtDate(d.created_at)} • ${esc(d.status)} • ${d.completed_images || 0}/${d.image_count || 0} images • ${d.completed_runs || 0}/${d.total_runs || 0} model runs • skipped ${d.skipped_count || 0}</div>
+          ${d.current_step ? `<div style="font-size:0.8rem;color:var(--muted)">Now running: ${esc(d.current_step)}</div>` : ''}
           <div style="font-size:0.8rem;color:var(--muted)">${esc(d.message || '')}</div>
           ${(d.skipped_files || []).length ? `<div style="font-size:0.76rem;color:var(--muted)">Skipped files: ${esc((d.skipped_files || []).slice(0, 8).join(', '))}</div>` : ''}
         </div>

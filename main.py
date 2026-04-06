@@ -2298,13 +2298,24 @@ async function pollStatus(jobId){{
 }}
 
 var lastResult=null;
+var adjustedQtys={{}};
+function effectiveQty(item,idx){{
+  if(!item) return 0;
+  var orig=Math.max(1,parseInt(item.quantity)||1);
+  var cb=document.getElementById('item-cb-'+idx);
+  if(cb && !cb.checked) return 0;
+  var q=adjustedQtys[idx];
+  if(q==null || isNaN(q)) return orig;
+  q=parseInt(q)||orig;
+  return Math.max(1,Math.min(orig,q));
+}}
 function recalcPrice(){{
   if(!lastResult) return;
   var items=lastResult.items||[];
   var totalCY=0;
   items.forEach(function(item,idx){{
-    var cb=document.getElementById('item-cb-'+idx);
-    if(cb&&cb.checked){{totalCY+=((item.cubic_yards||0)*(item.quantity||1))}}
+    var qty=effectiveQty(item,idx);
+    if(qty>0){{totalCY+=((item.cubic_yards||0)*qty)}}
   }});
   totalCY=Math.round(totalCY*10)/10;
   var rateLow=lastResult.rate_low||35;
@@ -2318,6 +2329,7 @@ function recalcPrice(){{
 
 function showResults(r){{
   lastResult=r;
+  adjustedQtys={{}};
   var el=document.getElementById('results');
   el.style.display='block';
   el.classList.add('show');
@@ -2333,7 +2345,8 @@ function showResults(r){{
   items.innerHTML='<div style="font-size:0.78rem;color:#94a3b8;margin-bottom:8px;">Uncheck items that are NOT being removed:</div>';
   (r.items||[]).forEach(function(item,idx){{
     var row=document.createElement('div');row.className='item-row';
-    row.innerHTML='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;margin:0"><input type="checkbox" id="item-cb-'+idx+'" checked onchange="recalcPrice()" style="width:18px;height:18px;accent-color:#16a34a;flex-shrink:0"><span class="item-name">'+esc(item.name||'Item')+'</span></label><div class="item-cy">'+(item.cubic_yards||0)+' CY</div><div class="item-qty">&times;'+(item.quantity||1)+'</div>';
+    var originalQty=Math.max(1,parseInt(item.quantity)||1);
+    row.innerHTML='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;margin:0"><input type="checkbox" id="item-cb-'+idx+'" checked onchange="recalcPrice()" style="width:18px;height:18px;accent-color:#16a34a;flex-shrink:0"><span class="item-name">'+esc(item.name||'Item')+'</span></label><div class="item-cy">'+(item.cubic_yards||0)+' CY</div><input type="number" id="item-qty-'+idx+'" min="1" max="'+originalQty+'" value="'+originalQty+'" onchange="(function(el,orig,i){{var v=parseInt(el.value)||orig;v=Math.max(1,Math.min(orig,v));el.value=v;if(v===orig){{delete adjustedQtys[i]}}else{{adjustedQtys[i]=v}}recalcPrice();}})(this,'+originalQty+','+idx+')" style="width:58px;padding:3px 6px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;color:#0f172a;font-size:0.78rem;"><button type="button" onclick="var cb=document.getElementById(\\'item-cb-'+idx+'\\');if(cb){{cb.checked=false;recalcPrice();}}" style="padding:3px 7px;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#334155;font-size:0.74rem;cursor:pointer;">Remove</button>';
     items.appendChild(row);
   }});
   var sp=r.special_items||[];

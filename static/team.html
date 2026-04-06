@@ -642,11 +642,25 @@ var catIcons = { furniture: '🪑', appliance: '🔌', debris: '🗑️', electr
 
 var currentEstimateData = null;
 var excludedItems = new Set();
+var adjustedQuantities = {};
+
+function getEffectiveQty(item, idx) {
+  var original = Math.max(1, parseInt(item.quantity) || 1);
+  if (excludedItems.has(idx)) return 0;
+  var adj = adjustedQuantities[idx];
+  if (adj == null || isNaN(adj)) return original;
+  return Math.max(1, Math.min(original, parseInt(adj) || original));
+}
+
+function hasItemAdjustments() {
+  return excludedItems.size > 0 || Object.keys(adjustedQuantities).length > 0;
+}
 
 function showResults(data) {
   currentEstimateId = data.id;
   currentEstimateData = data;
   excludedItems = new Set();
+  adjustedQuantities = {};
   document.getElementById('recalc-btn').style.display = 'none';
   document.getElementById('results').classList.add('visible');
 
@@ -685,25 +699,50 @@ function showResults(data) {
     row.className = 'item-row';
     row.style.cursor = 'pointer';
     row.style.transition = 'opacity 0.2s';
-    row.innerHTML = '<input type="checkbox" checked data-item-idx="' + idx + '" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;"><div class="item-icon">' + (catIcons[cat] || '📦') + '</div><div class="item-name">' + esc(item.name || 'Unknown') + (item.is_special ? ' <span style="color:var(--amber);font-size:0.72rem;">♻️</span>' : '') + '</div><div class="item-qty">×' + (parseInt(item.quantity) || 1) + '</div>';
+    var originalQty = Math.max(1, parseInt(item.quantity) || 1);
+    row.innerHTML = '<input type="checkbox" checked data-item-idx="' + idx + '" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;"><div class="item-icon">' + (catIcons[cat] || '📦') + '</div><div class="item-name">' + esc(item.name || 'Unknown') + (item.is_special ? ' <span style="color:var(--amber);font-size:0.72rem;">♻️</span>' : '') + '</div><input type="number" min="1" max="' + originalQty + '" value="' + originalQty + '" data-item-qty="' + idx + '" style="width:64px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.8rem;"><button type="button" data-item-remove="' + idx + '" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-soft);color:var(--text);font-size:0.75rem;cursor:pointer;">Remove</button>';
     var cb = row.querySelector('input[type="checkbox"]');
+    var qtyInput = row.querySelector('input[type="number"]');
+    var removeBtn = row.querySelector('button[data-item-remove]');
     cb.addEventListener('change', function() {
       if (this.checked) {
         excludedItems.delete(idx);
         row.style.opacity = '1';
         row.style.textDecoration = 'none';
+        qtyInput.disabled = false;
+        removeBtn.disabled = false;
       } else {
         excludedItems.add(idx);
         row.style.opacity = '0.4';
         row.style.textDecoration = 'line-through';
+        qtyInput.disabled = true;
+        removeBtn.disabled = true;
       }
-      if (excludedItems.size > 0) {
+      if (hasItemAdjustments()) {
         document.getElementById('recalc-btn').style.display = 'inline-block';
         recalcEstimate();
       } else {
         document.getElementById('recalc-btn').style.display = 'none';
         restoreOriginalEstimate();
       }
+    });
+    qtyInput.addEventListener('change', function() {
+      var nextQty = parseInt(this.value) || originalQty;
+      nextQty = Math.max(1, Math.min(originalQty, nextQty));
+      this.value = String(nextQty);
+      if (nextQty === originalQty) delete adjustedQuantities[idx];
+      else adjustedQuantities[idx] = nextQty;
+      if (hasItemAdjustments()) {
+        document.getElementById('recalc-btn').style.display = 'inline-block';
+        recalcEstimate();
+      } else {
+        document.getElementById('recalc-btn').style.display = 'none';
+        restoreOriginalEstimate();
+      }
+    });
+    removeBtn.addEventListener('click', function() {
+      cb.checked = false;
+      cb.dispatchEvent(new Event('change'));
     });
     itemsEl.appendChild(row);
   });
@@ -740,7 +779,13 @@ function recalcEstimate() {
   if (!currentEstimateData) return;
   var data = currentEstimateData;
   var allItems = data.items || [];
-  var includedItems = allItems.filter(function(_, idx) { return !excludedItems.has(idx); });
+  var includedItems = allItems
+    .map(function(item, idx) {
+      var qty = getEffectiveQty(item, idx);
+      if (qty <= 0) return null;
+      return Object.assign({}, item, { quantity: qty });
+    })
+    .filter(Boolean);
 
   var totalCy = 0;
   includedItems.forEach(function(item) {

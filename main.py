@@ -5420,7 +5420,7 @@ MODEL_EVAL_ROOT.mkdir(parents=True, exist_ok=True)
 MODEL_EVAL_DEFAULT_MODELS = ("claude-sonnet-4-20250514", "openai/gpt-4.1")
 MODEL_EVAL_PER_RUN_TIMEOUT_SECONDS = 150
 PROD_PRIMARY_MODEL = "qwen/qwen2.5-vl-72b-instruct"
-PROD_VERIFIER_MODEL = "mistralai/pixtral-large-2411"
+PROD_VERIFIER_MODEL = "meta-llama/llama-3.2-90b-vision-instruct"
 MODEL_EVAL_SUPPORTED_MODELS = (
     "claude-sonnet-4-20250514",
     "openai/gpt-4.1",

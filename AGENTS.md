@@ -33,7 +33,7 @@ Older Cowork mount paths and session-specific mount instructions are deprecated.
 
 ### Key WSIC Files
 - `main.py` — THE main application file. FastAPI app, all API routes, `run_estimate()` function, `calculate_price()`, database models, everything. ~5000+ lines.
-- `services/industry_config.py` — Industry-specific configuration and the main junk-removal estimation prompt used by the Anthropic/Claude pipeline.
+- `services/industry_config.py` — Industry-specific configuration and the main junk-removal estimation prompt used by the OpenRouter vision pipeline.
 - `services/volume_lookup.py` — Volume lookup table + redistribution logic. Overrides AI per-item volumes with known-accurate values.
 - `services/__init__.py` — Service package marker.
 - `static/` — All frontend HTML files (admin.html, widget.js, landing.html, etc.)
@@ -96,7 +96,8 @@ Preferred workflow:
 ---
 
 ## Architecture Quick Reference
-- **Estimation flow:** Photo upload → Anthropic Claude vision/message analysis (prompt from `services/industry_config.py`, currently `claude-sonnet-4-20250514` in `main.py`) → `services/volume_lookup.py` validation → `calculate_price()` in `main.py` → response
+- **Estimation flow:** Photo upload → dual OpenRouter vision models (primary: Qwen2.5-VL-72B, verifier: Llama 3.2 90B Vision) with prompts from `services/industry_config.py` → price overlap gate → `services/volume_lookup.py` validation → `calculate_price()` in `main.py` → response
+- **Item dimension lookups:** Claude Sonnet (via Anthropic API) is used only for looking up unknown item dimensions with Tavily web search
 - **Pricing:** Users set $/CY rates during onboarding. `calculate_price()` multiplies CY × rate. Min charge clamp. Asymmetric range (-10% low, +20% high).
 - **Credit system:** Pay-per-use credit packs ($10/single through 250-pack). Credits checked before estimate runs. Stripe one-time payments.
 - **Free trial:** New accounts currently get 2 free estimates before paid credits are required.
@@ -111,4 +112,4 @@ Preferred workflow:
 
 ---
 
-*Last updated: April 3, 2026.*
+*Last updated: April 11, 2026.*

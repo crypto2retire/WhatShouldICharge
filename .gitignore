@@ -8,3 +8,5 @@ __pycache__/
 .DS_Store
 _instructions/
 node_modules/
+*.db
+.agents/

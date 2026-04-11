@@ -605,7 +605,6 @@ class Estimate(Base):
     customer_name = Column(String, default="")
     customer_email = Column(String, default="")
     customer_phone = Column(String, default="")
-    preferred_contact = Column(String, default="phone")
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     photos_count = Column(Integer)
     result_json = Column(Text)
@@ -699,7 +698,6 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS customer_name TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS customer_email TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS customer_phone TEXT DEFAULT ''",
-            "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS preferred_contact VARCHAR DEFAULT 'phone'",
             "ALTER TABLE item_reference_library ADD COLUMN IF NOT EXISTS dimensions TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS estimate_name TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS company_slug TEXT DEFAULT ''",
@@ -766,7 +764,6 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN customer_name TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN customer_email TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN customer_phone TEXT DEFAULT ''",
-            "ALTER TABLE estimates ADD COLUMN preferred_contact TEXT DEFAULT 'phone'",
             "ALTER TABLE item_reference_library ADD COLUMN dimensions TEXT DEFAULT ''",
             "ALTER TABLE estimates ADD COLUMN estimate_name TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN company_slug TEXT DEFAULT ''",
@@ -4169,27 +4166,30 @@ async def auth_forgot_password(request: Request):
         result = await db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
         if not user:
-            return JSONResponse({"success": True, "message": "If an account with that email exists, a new password has been sent."})
+            return JSONResponse({"success": True, "message": "If an account with that email exists, a reset link has been sent."})
 
-        new_password = secrets.token_urlsafe(12)
+        reset_token = secrets.token_urlsafe(32)
         new_hash = await asyncio.to_thread(
-            lambda: bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+            lambda: bcrypt.hashpw(reset_token.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         )
-        user.password_hash = new_hash
-        await db.commit()
 
-    send_email(
-        email,
-        "Your WhatShouldICharge Password Has Been Reset",
-        f"<h2>Password Reset</h2>"
-        f"<p>Your password has been reset. Here is your new temporary password:</p>"
-        f"<div style='background:#f4f4f4;padding:16px;border-radius:8px;font-family:monospace;font-size:18px;margin:16px 0;text-align:center;'>{new_password}</div>"
-        f"<p>Please log in with this password. We recommend changing it after logging in.</p>"
-        f"<p>If you did not request this reset, please contact support immediately.</p>"
-        f"<p>— The WhatShouldICharge Team</p>"
-    )
+        app_url = os.environ.get("APP_URL", "https://whatshouldicharge.app")
+        reset_link = f"{app_url}/reset-password?token={reset_token}&email={email}"
 
-    return JSONResponse({"success": True, "message": "If an account with that email exists, a new password has been sent."})
+        send_email(
+            email,
+            "Reset Your WhatShouldICharge Password",
+            f"<h2>Password Reset Request</h2>"
+            f"<p>We received a request to reset your password. Click the link below to set a new password:</p>"
+            f"<div style='margin:24px 0;text-align:center;'>"
+            f"<a href='{reset_link}' style='background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;'>Reset Password</a>"
+            f"</div>"
+            f"<p style='color:#666;font-size:14px;'>Or copy this link: {reset_link}</p>"
+            f"<p style='color:#666;font-size:14px;'>This link will expire in 1 hour. If you did not request this reset, you can safely ignore this email.</p>"
+            f"<p>— The WhatShouldICharge Team</p>"
+        )
+
+    return JSONResponse({"success": True, "message": "If an account with that email exists, a reset link has been sent."})
 
 
 @app.post("/api/auth/logout")
@@ -7521,7 +7521,18 @@ async def admin_reset_password(request: Request, user_id: int):
             raise HTTPException(status_code=404, detail="User not found.")
         u.password_hash = hashed
         await db.commit()
-        return {"ok": True, "new_password": new_password}
+
+        send_email(
+            u.email,
+            "Your WhatShouldICharge Password Has Been Reset",
+            f"<h2>Password Reset</h2>"
+            f"<p>An administrator has reset your password. Here is your new temporary password:</p>"
+            f"<div style='background:#f4f4f4;padding:16px;border-radius:8px;font-family:monospace;font-size:18px;margin:16px 0;text-align:center;'>{new_password}</div>"
+            f"<p>Please log in with this password and change it immediately.</p>"
+            f"<p>— The WhatShouldICharge Team</p>"
+        )
+
+    return {"ok": True, "message": "New password sent to user's email."}
 
 
 # ── Admin: Credit packs (DB + Stripe) ──

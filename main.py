@@ -15,7 +15,7 @@ from typing import Optional
 from pathlib import Path
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request, Response, Cookie
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request, Response, Cookie, APIRouter
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -219,6 +219,22 @@ app = FastAPI(
 
 limiter = Limiter(key_func=get_client_ip)
 app.state.limiter = limiter
+
+
+# ── API Routers ──────────────────────────────────────────────────────────
+router_health = APIRouter()
+router_credits = APIRouter()
+router_pages = APIRouter()
+router_public = APIRouter()
+router_auth = APIRouter()
+router_settings = APIRouter()
+router_library = APIRouter()
+router_estimates = APIRouter()
+router_payments = APIRouter()
+router_admin = APIRouter()
+router_team = APIRouter()
+router_pdf = APIRouter()
+router_promo = APIRouter()
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
@@ -991,6 +1007,21 @@ async def lifespan(app):
     await engine.dispose()
 
 
+# ── Mount Routers ────────────────────────────────────────────────────────
+app.include_router(router_health)
+app.include_router(router_credits)
+app.include_router(router_pages)
+app.include_router(router_public)
+app.include_router(router_auth)
+app.include_router(router_settings)
+app.include_router(router_library)
+app.include_router(router_estimates)
+app.include_router(router_payments)
+app.include_router(router_admin)
+app.include_router(router_team)
+app.include_router(router_pdf)
+app.include_router(router_promo)
+
 app.router.lifespan_context = lifespan
 
 
@@ -998,7 +1029,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 
-@app.get("/api/health")
+@router_health.get("/api/health")
 async def health_check():
     """Minimal health check for load balancers — no DB URLs, counts, or env metadata."""
     try:
@@ -1009,13 +1040,13 @@ async def health_check():
         return JSONResponse(status_code=503, content={"status": "unhealthy"})
 
 
-@app.get("/api/industries")
+@router_health.get("/api/industries")
 async def list_available_industries():
     from services.industry_config import list_industries
     return {"industries": list_industries()}
 
 
-@app.get("/api/credits")
+@router_credits.get("/api/credits")
 async def get_credit_balance(request: Request):
     """Get current credit balance and transaction history."""
     user = await require_user(request)
@@ -1049,7 +1080,7 @@ async def get_credit_balance(request: Request):
     }
 
 
-@app.get("/api/credits/packs")
+@router_credits.get("/api/credits/packs")
 async def get_available_packs():
     """List available credit packs for purchase."""
     async with AsyncSessionLocal() as db:
@@ -1062,52 +1093,52 @@ async def get_available_packs():
     return {"packs": [_credit_pack_to_public(p) for p in rows]}
 
 
-@app.get("/robots.txt")
+@router_pages.get("/robots.txt")
 async def robots_txt():
     return FileResponse("static/robots.txt", media_type="text/plain")
 
 
-@app.get("/sitemap.xml")
+@router_pages.get("/sitemap.xml")
 async def sitemap_xml():
     return FileResponse("static/sitemap.xml", media_type="application/xml")
 
 
-@app.get("/", response_class=HTMLResponse)
+@router_pages.get("/", response_class=HTMLResponse)
 async def root():
     return FileResponse("static/landing.html")
 
 
-@app.get("/terms", response_class=HTMLResponse)
+@router_pages.get("/terms", response_class=HTMLResponse)
 async def terms_page():
     return FileResponse("static/terms.html")
 
 
-@app.get("/privacy", response_class=HTMLResponse)
+@router_pages.get("/privacy", response_class=HTMLResponse)
 async def privacy_page():
     return FileResponse("static/privacy.html")
 
 
-@app.get("/blog", response_class=HTMLResponse)
+@router_pages.get("/blog", response_class=HTMLResponse)
 async def blog_index_page():
     return FileResponse("static/blog/index.html")
 
 
-@app.get("/blog/how-to-price-junk-removal-jobs", response_class=HTMLResponse)
+@router_pages.get("/blog/how-to-price-junk-removal-jobs", response_class=HTMLResponse)
 async def blog_how_to_price_junk_removal_jobs():
     return FileResponse("static/blog/how-to-price-junk-removal-jobs.html")
 
 
-@app.get("/blog/junk-removal-startup-costs", response_class=HTMLResponse)
+@router_pages.get("/blog/junk-removal-startup-costs", response_class=HTMLResponse)
 async def blog_junk_removal_startup_costs():
     return FileResponse("static/blog/junk-removal-startup-costs.html")
 
 
-@app.get("/blog/junk-removal-marketing", response_class=HTMLResponse)
+@router_pages.get("/blog/junk-removal-marketing", response_class=HTMLResponse)
 async def blog_junk_removal_marketing():
     return FileResponse("static/blog/junk-removal-marketing.html")
 
 
-@app.get("/estimate", response_class=HTMLResponse)
+@router_pages.get("/estimate", response_class=HTMLResponse)
 async def estimator(request: Request):
     user = await get_current_user(request)
     if not user:
@@ -1115,22 +1146,22 @@ async def estimator(request: Request):
     return FileResponse("static/index.html")
 
 
-@app.get("/login", response_class=HTMLResponse)
+@router_pages.get("/login", response_class=HTMLResponse)
 async def login_page():
     return FileResponse("static/login.html")
 
 
-@app.get("/signup", response_class=HTMLResponse)
+@router_pages.get("/signup", response_class=HTMLResponse)
 async def signup_page():
     return FileResponse("static/signup.html")
 
 
-@app.get("/reset-password", response_class=HTMLResponse)
+@router_pages.get("/reset-password", response_class=HTMLResponse)
 async def reset_password_page():
     return FileResponse("static/reset-password.html")
 
 
-@app.get("/library", response_class=HTMLResponse)
+@router_pages.get("/library", response_class=HTMLResponse)
 async def library_page(request: Request):
     user = await get_current_user(request)
     if not user:
@@ -1138,7 +1169,7 @@ async def library_page(request: Request):
     return FileResponse("static/library.html")
 
 
-@app.get("/admin", response_class=HTMLResponse)
+@router_pages.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request):
     user = await get_current_user(request)
     if not user:
@@ -1148,12 +1179,12 @@ async def admin_page(request: Request):
     return FileResponse("static/admin.html")
 
 
-@app.get("/team", response_class=HTMLResponse)
+@router_pages.get("/team", response_class=HTMLResponse)
 async def team_login_page():
     return FileResponse("static/team-login.html")
 
 
-@app.get("/team/app", response_class=HTMLResponse)
+@router_pages.get("/team/app", response_class=HTMLResponse)
 async def team_app_page(request: Request):
     member, owner = await get_team_member(request)
     if not member:
@@ -1161,7 +1192,7 @@ async def team_app_page(request: Request):
     return FileResponse("static/team.html")
 
 
-@app.get("/upgrade", response_class=HTMLResponse)
+@router_pages.get("/upgrade", response_class=HTMLResponse)
 async def upgrade_page(request: Request):
     user = await get_current_user(request)
     if not user:
@@ -1169,12 +1200,12 @@ async def upgrade_page(request: Request):
     return FileResponse("static/upgrade.html")
 
 
-@app.get("/payment-success", response_class=HTMLResponse)
+@router_pages.get("/payment-success", response_class=HTMLResponse)
 async def payment_success_page():
     return FileResponse("static/payment-success.html")
 
 
-@app.get("/estimate/{slug}", response_class=HTMLResponse)
+@router_pages.get("/estimate/{slug}", response_class=HTMLResponse)
 async def customer_estimate_page(slug: str):
     """Public customer-facing estimate page — server-side rendered for SEO."""
     async with AsyncSessionLocal() as db:
@@ -2049,7 +2080,7 @@ if(window.parent!==window){{
 _verify_codes: dict[str, dict] = {}
 
 
-@app.post("/api/public/verify/send")
+@router_public.post("/api/public/verify/send")
 @limiter.limit("30/minute")
 async def public_verify_send(request: Request):
     """Send a 6-digit verification code to customer email."""
@@ -2092,7 +2123,7 @@ async def public_verify_send(request: Request):
     return {"ok": True, "message": "Verification code sent"}
 
 
-@app.post("/api/public/verify/check")
+@router_public.post("/api/public/verify/check")
 @limiter.limit("60/minute")
 async def public_verify_check(request: Request):
     """Verify the 6-digit code and return a verification token."""
@@ -2119,7 +2150,7 @@ async def public_verify_check(request: Request):
     return {"ok": True, "token": token}
 
 
-@app.get("/api/public/company/{slug}")
+@router_public.get("/api/public/company/{slug}")
 async def public_company_info(slug: str):
     """Public endpoint — returns company branding info, no auth required."""
     async with AsyncSessionLocal() as db:
@@ -3281,7 +3312,7 @@ def build_required_clarification_questions(
     return questions[:3]
 
 
-@app.post("/api/public/estimate/{slug}")
+@router_public.post("/api/public/estimate/{slug}")
 @limiter.limit("10/hour")
 async def public_create_estimate(
     request: Request,
@@ -3398,7 +3429,7 @@ async def public_create_estimate(
     return {"job_id": job_id}
 
 
-@app.get("/api/public/estimate/status/{job_id}")
+@router_public.get("/api/public/estimate/status/{job_id}")
 @limiter.limit("120/minute")
 async def public_estimate_status(request: Request, job_id: str):
     """Public status check — no auth, but limited response."""
@@ -3462,7 +3493,7 @@ async def public_estimate_status(request: Request, job_id: str):
     return {"status": job["status"], "message": job["message"], "result": None}
 
 
-@app.post("/api/public/appointment-request")
+@router_public.post("/api/public/appointment-request")
 @limiter.limit("10/minute")
 async def public_appointment_request(request: Request):
     """Customer requests an appointment after receiving an estimate."""
@@ -3618,7 +3649,7 @@ async def public_appointment_request(request: Request):
     return {"ok": True, "message": "Appointment request submitted"}
 
 
-@app.post("/api/auth/signup")
+@router_auth.post("/api/auth/signup")
 @limiter.limit("10/minute")
 async def auth_signup(request: Request):
     body = await request.json()
@@ -3702,7 +3733,7 @@ async def auth_signup(request: Request):
     return response
 
 
-@app.post("/api/auth/login")
+@router_auth.post("/api/auth/login")
 @limiter.limit("10/minute")
 async def auth_login(request: Request):
     body = await request.json()
@@ -3742,7 +3773,7 @@ async def auth_login(request: Request):
     return response
 
 
-@app.post("/api/auth/forgot-password")
+@router_auth.post("/api/auth/forgot-password")
 @limiter.limit("5/15minutes")
 async def auth_forgot_password(request: Request):
     body = await request.json()
@@ -3788,7 +3819,7 @@ async def auth_forgot_password(request: Request):
     return JSONResponse({"success": True, "message": "If an account with that email exists, a reset link has been sent."})
 
 
-@app.post("/api/auth/logout")
+@router_auth.post("/api/auth/logout")
 async def auth_logout(request: Request):
     token = request.cookies.get("session_token")
     if token:
@@ -3804,7 +3835,7 @@ async def auth_logout(request: Request):
     return response
 
 
-@app.post("/api/auth/reset-password")
+@router_auth.post("/api/auth/reset-password")
 @limiter.limit("10/15minutes")
 async def auth_reset_password(request: Request):
     body = await request.json()
@@ -3850,7 +3881,7 @@ async def auth_reset_password(request: Request):
     return JSONResponse({"success": True, "message": "Password has been reset. You can now log in with your new password."})
 
 
-@app.get("/api/auth/me")
+@router_auth.get("/api/auth/me")
 async def auth_me(request: Request):
     user = await get_current_user(request)
     if not user:
@@ -3884,7 +3915,7 @@ async def auth_me(request: Request):
     }
 
 
-@app.get("/api/settings")
+@router_settings.get("/api/settings")
 async def get_settings(request: Request):
     """Return all user settings from the database."""
     user = await require_user(request)
@@ -3923,7 +3954,7 @@ async def get_settings(request: Request):
     return data
 
 
-@app.put("/api/settings")
+@router_settings.put("/api/settings")
 async def update_settings(request: Request):
     import logging
     logger = logging.getLogger("wsic.settings")
@@ -4040,7 +4071,7 @@ async def update_settings(request: Request):
         }
 
 
-@app.post("/api/settings/check-market-rates")
+@router_settings.post("/api/settings/check-market-rates")
 async def check_market_rates(request: Request):
     """On-demand market rate lookup via Tavily — not used in estimates."""
     user = await require_user(request)
@@ -4048,7 +4079,7 @@ async def check_market_rates(request: Request):
     return rates
 
 
-@app.put("/api/settings/password")
+@router_settings.put("/api/settings/password")
 async def change_password(request: Request):
     user = await require_user(request)
     body = await request.json()
@@ -4089,7 +4120,7 @@ async def change_password(request: Request):
     return {"ok": True}
 
 
-@app.post("/api/settings/logout-all")
+@router_settings.post("/api/settings/logout-all")
 async def logout_all_devices(request: Request):
     user = await require_user(request)
     token = request.cookies.get("session_token")
@@ -4117,7 +4148,7 @@ async def logout_all_devices(request: Request):
     return response
 
 
-@app.get("/api/library")
+@router_library.get("/api/library")
 async def get_library(request: Request):
     await require_user(request)
     cached = cache_get("library")
@@ -4149,7 +4180,7 @@ async def get_library(request: Request):
         return data
 
 
-@app.get("/api/library/search")
+@router_library.get("/api/library/search")
 async def search_library(request: Request, q: str = ""):
     await require_user(request)
     if not q.strip():
@@ -4177,7 +4208,7 @@ async def search_library(request: Request, q: str = ""):
         ]
 
 
-@app.post("/api/library/add")
+@router_library.post("/api/library/add")
 async def add_library_item(request: Request):
     user = await require_user(request)
     body = await request.json()
@@ -4212,7 +4243,7 @@ async def add_library_item(request: Request):
         return {"id": item.id, "item_name": item.item_name, "cubic_yards": item.cubic_yards}
 
 
-@app.put("/api/library/{item_id}")
+@router_library.put("/api/library/{item_id}")
 async def update_library_item(request: Request, item_id: int):
     await require_user(request)
     body = await request.json()
@@ -4239,7 +4270,7 @@ async def update_library_item(request: Request, item_id: int):
         return {"success": True}
 
 
-@app.get("/api/library/stats")
+@router_library.get("/api/library/stats")
 async def library_stats(request: Request):
     await require_user(request)
     async with AsyncSessionLocal() as db:
@@ -5156,7 +5187,7 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
         job["message"] = f"Model eval failed: {type(err).__name__}: {err}"
 
 
-@app.post("/api/admin/model-evals")
+@router_admin.post("/api/admin/model-evals")
 async def admin_create_model_eval(
     request: Request,
     files: list[UploadFile] = File(...),
@@ -5276,7 +5307,7 @@ async def admin_create_model_eval(
     }
 
 
-@app.get("/api/admin/model-evals")
+@router_admin.get("/api/admin/model-evals")
 async def admin_list_model_evals(request: Request):
     await require_admin(request)
     cleanup_expired_model_eval_jobs()
@@ -5301,7 +5332,7 @@ async def admin_list_model_evals(request: Request):
     return {"jobs": jobs}
 
 
-@app.get("/api/admin/model-evals/{job_id}")
+@router_admin.get("/api/admin/model-evals/{job_id}")
 async def admin_model_eval_detail(request: Request, job_id: str):
     await require_admin(request)
     cleanup_expired_model_eval_jobs()
@@ -5336,7 +5367,7 @@ async def admin_model_eval_detail(request: Request, job_id: str):
     }
 
 
-@app.get("/api/admin/model-evals/{job_id}/download/{kind}")
+@router_admin.get("/api/admin/model-evals/{job_id}/download/{kind}")
 async def admin_download_model_eval(request: Request, job_id: str, kind: str):
     await require_admin(request)
     cleanup_expired_model_eval_jobs()
@@ -5358,7 +5389,7 @@ async def admin_download_model_eval(request: Request, job_id: str, kind: str):
     return FileResponse(path, media_type=media_type, filename=filename)
 
 
-@app.delete("/api/admin/model-evals/{job_id}")
+@router_admin.delete("/api/admin/model-evals/{job_id}")
 async def admin_delete_model_eval(request: Request, job_id: str):
     await require_admin(request)
     job = model_eval_jobs.get(job_id)
@@ -5371,7 +5402,7 @@ async def admin_delete_model_eval(request: Request, job_id: str):
     return {"ok": True}
 
 
-@app.post("/api/estimate")
+@router_estimates.post("/api/estimate")
 async def create_estimate(
     request: Request,
     files: list[UploadFile] = File(...),
@@ -6177,7 +6208,7 @@ async def run_estimate(
         job["result"] = None
 
 
-@app.get("/api/estimate/status/{job_id}")
+@router_estimates.get("/api/estimate/status/{job_id}")
 async def estimate_status(request: Request, job_id: str):
     user = await require_user(request)
     job = estimate_jobs.get(job_id)
@@ -6209,7 +6240,7 @@ async def estimate_status(request: Request, job_id: str):
     return resp
 
 
-@app.post("/api/payments/create-checkout")
+@router_payments.post("/api/payments/create-checkout")
 async def create_checkout(request: Request):
     user = await require_user(request)
     body = await request.json()
@@ -6265,7 +6296,7 @@ async def create_checkout(request: Request):
     return {"checkout_url": session.url}
 
 
-@app.post("/api/payments/webhook")
+@router_payments.post("/api/payments/webhook")
 @limiter.limit("300/minute")
 async def stripe_webhook(request: Request):
     payload = await request.body()
@@ -6328,7 +6359,7 @@ async def stripe_webhook(request: Request):
     return {"received": True}
 
 
-@app.get("/api/estimates")
+@router_estimates.get("/api/estimates")
 async def get_estimates(request: Request):
     user = await require_user(request)
     async with AsyncSessionLocal() as db:
@@ -6357,7 +6388,7 @@ async def get_estimates(request: Request):
         ]
 
 
-@app.get("/api/estimates/{estimate_id}")
+@router_estimates.get("/api/estimates/{estimate_id}")
 async def get_estimate_detail(request: Request, estimate_id: int):
     user = await require_user(request)
     async with AsyncSessionLocal() as db:
@@ -6445,7 +6476,7 @@ def _normalize_adjustment_payload(payload: dict) -> dict:
     return out
 
 
-@app.put("/api/estimates/{estimate_id}/adjustments")
+@router_estimates.put("/api/estimates/{estimate_id}/adjustments")
 async def save_estimate_adjustments(request: Request, estimate_id: int):
     user = await require_user(request)
     body = await request.json()
@@ -6460,7 +6491,7 @@ async def save_estimate_adjustments(request: Request, estimate_id: int):
     return {"ok": True, "adjustments": normalized}
 
 
-@app.put("/api/team/estimates/{estimate_id}/adjustments")
+@router_team.put("/api/team/estimates/{estimate_id}/adjustments")
 async def team_save_estimate_adjustments(request: Request, estimate_id: int):
     member, owner = await require_team_member(request)
     body = await request.json()
@@ -6482,7 +6513,7 @@ async def team_save_estimate_adjustments(request: Request, estimate_id: int):
     return {"ok": True, "adjustments": normalized}
 
 
-@app.get("/api/estimates/{estimate_id}/photos")
+@router_estimates.get("/api/estimates/{estimate_id}/photos")
 async def get_estimate_photos(request: Request, estimate_id: int):
     """Return stored photos for an estimate (base64 JPEG array)."""
     user = await require_user(request)
@@ -6502,7 +6533,7 @@ async def get_estimate_photos(request: Request, estimate_id: int):
         return {"photos": photos, "count": len(photos)}
 
 
-@app.get("/api/estimates/{estimate_id}/photo/{photo_index}")
+@router_estimates.get("/api/estimates/{estimate_id}/photo/{photo_index}")
 async def get_estimate_photo_image(request: Request, estimate_id: int, photo_index: int):
     """Serve a single photo as a JPEG image (for <img> tags)."""
     user = await require_user(request)
@@ -6528,7 +6559,7 @@ async def get_estimate_photo_image(request: Request, estimate_id: int, photo_ind
 # ============== USAGE API ==============
 
 
-@app.get("/api/usage")
+@router_estimates.get("/api/usage")
 async def get_usage(request: Request):
     user = await require_user(request)
     async with AsyncSessionLocal() as db:
@@ -6556,7 +6587,7 @@ async def get_usage(request: Request):
         }
 
 
-@app.put("/api/usage/settings")
+@router_estimates.put("/api/usage/settings")
 async def update_usage_settings(request: Request):
     user = await require_user(request)
     async with AsyncSessionLocal() as db:
@@ -6577,7 +6608,7 @@ async def update_usage_settings(request: Request):
         return {"ok": True}
 
 
-@app.post("/api/usage/add-funds")
+@router_estimates.post("/api/usage/add-funds")
 async def add_usage_funds(request: Request):
     user = await require_user(request)
     async with AsyncSessionLocal() as db:
@@ -6599,7 +6630,7 @@ async def add_usage_funds(request: Request):
 # ============== ADMIN API ==============
 
 
-@app.get("/api/admin/analytics")
+@router_admin.get("/api/admin/analytics")
 async def admin_analytics(request: Request):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
@@ -6656,7 +6687,7 @@ async def admin_analytics(request: Request):
         }
 
 
-@app.get("/api/admin/api-costs")
+@router_admin.get("/api/admin/api-costs")
 async def admin_api_costs(request: Request):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
@@ -6703,7 +6734,7 @@ async def admin_api_costs(request: Request):
         }
 
 
-@app.get("/api/admin/users")
+@router_admin.get("/api/admin/users")
 async def admin_users(request: Request, q: str = "", page: int = 1):
     await require_admin(request)
     limit = 25
@@ -6734,7 +6765,7 @@ async def admin_users(request: Request, q: str = "", page: int = 1):
         }
 
 
-@app.get("/api/admin/plans")
+@router_admin.get("/api/admin/plans")
 async def admin_plans(request: Request):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
@@ -6749,7 +6780,7 @@ async def admin_plans(request: Request):
         ]
 
 
-@app.put("/api/admin/plans/{plan_id}")
+@router_admin.put("/api/admin/plans/{plan_id}")
 async def admin_update_plan(request: Request, plan_id: int):
     await require_admin(request)
     body = await request.json()
@@ -6774,7 +6805,7 @@ async def admin_update_plan(request: Request, plan_id: int):
         return {"success": True}
 
 
-@app.get("/api/site-config")
+@router_admin.get("/api/site-config")
 async def public_site_config():
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(SiteConfig))
@@ -6782,7 +6813,7 @@ async def public_site_config():
         return {c.config_key: c.config_value for c in configs}
 
 
-@app.get("/api/admin/site-config")
+@router_admin.get("/api/admin/site-config")
 async def admin_get_site_config(request: Request):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
@@ -6791,7 +6822,7 @@ async def admin_get_site_config(request: Request):
         return {c.config_key: c.config_value for c in configs}
 
 
-@app.put("/api/admin/site-config")
+@router_admin.put("/api/admin/site-config")
 async def admin_update_site_config(request: Request):
     await require_admin(request)
     body = await request.json()
@@ -6808,7 +6839,7 @@ async def admin_update_site_config(request: Request):
         return {"success": True}
 
 
-@app.get("/api/admin/estimates")
+@router_admin.get("/api/admin/estimates")
 async def admin_estimates(
     request: Request,
     page: int = 1,
@@ -6861,7 +6892,7 @@ async def admin_estimates(
         }
 
 
-@app.get("/api/admin/estimates/{estimate_id}")
+@router_admin.get("/api/admin/estimates/{estimate_id}")
 async def admin_estimate_detail(request: Request, estimate_id: int):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
@@ -6954,7 +6985,7 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
         }
 
 
-@app.put("/api/admin/estimates/{estimate_id}/actual-price")
+@router_admin.put("/api/admin/estimates/{estimate_id}/actual-price")
 async def admin_update_actual_price(request: Request, estimate_id: int):
     await require_admin(request)
     body = await request.json()
@@ -6990,7 +7021,7 @@ async def admin_update_actual_price(request: Request, estimate_id: int):
         }
 
 
-@app.get("/api/admin/users/{user_id}")
+@router_admin.get("/api/admin/users/{user_id}")
 async def admin_user_detail(request: Request, user_id: int):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
@@ -7044,7 +7075,7 @@ async def admin_user_detail(request: Request, user_id: int):
         }
 
 
-@app.put("/api/admin/users/{user_id}")
+@router_admin.put("/api/admin/users/{user_id}")
 async def admin_update_user(request: Request, user_id: int):
     await require_admin(request)
     body = await request.json()
@@ -7079,7 +7110,7 @@ async def admin_update_user(request: Request, user_id: int):
         return {"ok": True}
 
 
-@app.post("/api/admin/users/{user_id}/reset-password")
+@router_admin.post("/api/admin/users/{user_id}/reset-password")
 async def admin_reset_password(request: Request, user_id: int):
     await require_admin(request)
     new_password = secrets.token_urlsafe(12)
@@ -7107,7 +7138,7 @@ async def admin_reset_password(request: Request, user_id: int):
 
 # ── Admin: Credit packs (DB + Stripe) ──
 
-@app.get("/api/admin/credit-packs")
+@router_admin.get("/api/admin/credit-packs")
 async def admin_list_credit_packs(request: Request):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
@@ -7116,7 +7147,7 @@ async def admin_list_credit_packs(request: Request):
     return {"packs": [_credit_pack_admin_dict(p) for p in rows]}
 
 
-@app.post("/api/admin/credit-packs")
+@router_admin.post("/api/admin/credit-packs")
 async def admin_create_credit_pack(request: Request):
     await require_admin(request)
     body = await request.json()
@@ -7184,7 +7215,7 @@ async def admin_create_credit_pack(request: Request):
     return {"ok": True, "pack": _credit_pack_admin_dict(pack)}
 
 
-@app.put("/api/admin/credit-packs/{pack_id}")
+@router_admin.put("/api/admin/credit-packs/{pack_id}")
 async def admin_update_credit_pack(request: Request, pack_id: int):
     await require_admin(request)
     body = await request.json()
@@ -7298,7 +7329,7 @@ async def admin_update_credit_pack(request: Request, pack_id: int):
     return {"ok": True, "pack": _credit_pack_admin_dict(p)}
 
 
-@app.delete("/api/admin/credit-packs/{pack_id}")
+@router_admin.delete("/api/admin/credit-packs/{pack_id}")
 async def admin_delete_credit_pack(request: Request, pack_id: int):
     """Deactivate pack (soft delete)."""
     await require_admin(request)
@@ -7314,7 +7345,7 @@ async def admin_delete_credit_pack(request: Request, pack_id: int):
 
 # ── Promo Code API ──
 
-@app.get("/api/admin/promos")
+@router_admin.get("/api/admin/promos")
 async def admin_list_promos(request: Request):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
@@ -7331,7 +7362,7 @@ async def admin_list_promos(request: Request):
         ]
 
 
-@app.post("/api/admin/promos")
+@router_admin.post("/api/admin/promos")
 async def admin_create_promo(request: Request):
     await require_admin(request)
     body = await request.json()
@@ -7357,7 +7388,7 @@ async def admin_create_promo(request: Request):
         return {"ok": True, "id": promo.id}
 
 
-@app.put("/api/admin/promos/{promo_id}")
+@router_admin.put("/api/admin/promos/{promo_id}")
 async def admin_update_promo(request: Request, promo_id: int):
     await require_admin(request)
     body = await request.json()
@@ -7382,7 +7413,7 @@ async def admin_update_promo(request: Request, promo_id: int):
         return {"ok": True}
 
 
-@app.delete("/api/admin/promos/{promo_id}")
+@router_admin.delete("/api/admin/promos/{promo_id}")
 async def admin_delete_promo(request: Request, promo_id: int):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
@@ -7395,7 +7426,7 @@ async def admin_delete_promo(request: Request, promo_id: int):
         return {"ok": True}
 
 
-@app.post("/api/promo/validate")
+@router_promo.post("/api/promo/validate")
 async def validate_promo_code(request: Request):
     body = await request.json()
     code = (body.get("code") or "").strip().upper()
@@ -7417,7 +7448,7 @@ async def validate_promo_code(request: Request):
 
 # ── Accuracy API ──
 
-@app.get("/api/admin/accuracy")
+@router_admin.get("/api/admin/accuracy")
 async def admin_accuracy(request: Request, capture_mode: str = ""):
     await require_admin(request)
     capture_mode = normalize_capture_mode(capture_mode) if capture_mode else ""
@@ -7611,7 +7642,7 @@ async def admin_accuracy(request: Request, capture_mode: str = ""):
         }
 
 
-@app.get("/api/admin/accuracy/export.csv")
+@router_admin.get("/api/admin/accuracy/export.csv")
 async def admin_accuracy_export(
     request: Request,
     capture_mode: str = "",
@@ -7700,7 +7731,7 @@ async def admin_accuracy_export(
 
 # ── Env Status API ──
 
-@app.get("/api/admin/env-status")
+@router_admin.get("/api/admin/env-status")
 async def admin_env_status(request: Request) -> dict[str, bool]:
     await require_admin(request)
     keys = ["ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
@@ -7712,7 +7743,7 @@ async def admin_env_status(request: Request) -> dict[str, bool]:
     return out
 
 
-@app.get("/api/admin/usage")
+@router_admin.get("/api/admin/usage")
 async def admin_usage_overview(request: Request):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
@@ -7743,7 +7774,7 @@ async def admin_usage_overview(request: Request):
         }
 
 
-@app.get("/api/admin/users/{user_id}/usage")
+@router_admin.get("/api/admin/users/{user_id}/usage")
 async def admin_user_usage(request: Request, user_id: int):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
@@ -7767,7 +7798,7 @@ async def admin_user_usage(request: Request, user_id: int):
 # ============== TEAM API ==============
 
 
-@app.post("/api/team/members")
+@router_team.post("/api/team/members")
 async def create_team_member(request: Request):
     user = await require_user(request)
     body = await request.json()
@@ -7792,7 +7823,7 @@ async def create_team_member(request: Request):
         return {"id": member.id, "name": member.name, "role": member.role}
 
 
-@app.get("/api/team/members")
+@router_team.get("/api/team/members")
 async def list_team_members(request: Request):
     user = await require_user(request)
     async with AsyncSessionLocal() as db:
@@ -7807,7 +7838,7 @@ async def list_team_members(request: Request):
         ]
 
 
-@app.put("/api/team/members/{member_id}")
+@router_team.put("/api/team/members/{member_id}")
 async def update_team_member(request: Request, member_id: int):
     user = await require_user(request)
     body = await request.json()
@@ -7832,7 +7863,7 @@ async def update_team_member(request: Request, member_id: int):
         return {"success": True}
 
 
-@app.delete("/api/team/members/{member_id}")
+@router_team.delete("/api/team/members/{member_id}")
 async def delete_team_member(request: Request, member_id: int):
     user = await require_user(request)
     async with AsyncSessionLocal() as db:
@@ -7847,7 +7878,7 @@ async def delete_team_member(request: Request, member_id: int):
         return {"success": True}
 
 
-@app.post("/api/team/auth")
+@router_team.post("/api/team/auth")
 @limiter.limit("10/minute")
 async def team_auth(request: Request):
     body = await request.json()
@@ -7913,7 +7944,7 @@ async def team_auth(request: Request):
     return response
 
 
-@app.get("/api/team/me")
+@router_team.get("/api/team/me")
 async def team_me(request: Request):
     member, owner = await get_team_member(request)
     if not member:
@@ -7930,7 +7961,7 @@ async def team_me(request: Request):
     }
 
 
-@app.post("/api/team/estimate")
+@router_team.post("/api/team/estimate")
 async def team_create_estimate(
     request: Request,
     files: list[UploadFile] = File(...),
@@ -8035,7 +8066,7 @@ async def team_create_estimate(
     return {"job_id": job_id}
 
 
-@app.get("/api/team/estimate/status/{job_id}")
+@router_team.get("/api/team/estimate/status/{job_id}")
 async def team_estimate_status(request: Request, job_id: str):
     member, owner = await require_team_member(request)
     job = estimate_jobs.get(job_id)
@@ -8064,7 +8095,7 @@ async def team_estimate_status(request: Request, job_id: str):
     return resp
 
 
-@app.get("/api/team/estimates")
+@router_team.get("/api/team/estimates")
 async def team_estimates(request: Request):
     member, owner = await require_team_member(request)
     async with AsyncSessionLocal() as db:
@@ -8085,7 +8116,7 @@ async def team_estimates(request: Request):
         ]
 
 
-@app.post("/api/team/logout")
+@router_team.post("/api/team/logout")
 async def team_logout(request: Request):
     token = request.cookies.get("team_token")
     if token:
@@ -8224,7 +8255,7 @@ def generate_estimate_pdf(estimate, user, items, special_items):
     return buffer
 
 
-@app.post("/api/estimate/{estimate_id}/pdf")
+@router_pdf.post("/api/estimate/{estimate_id}/pdf")
 async def generate_pdf(request: Request, estimate_id: int):
     user = None
     member = None
@@ -8259,7 +8290,7 @@ async def generate_pdf(request: Request, estimate_id: int):
     )
 
 
-@app.post("/api/estimate/{estimate_id}/send")
+@router_pdf.post("/api/estimate/{estimate_id}/send")
 async def send_estimate(request: Request, estimate_id: int):
     user = None
     team_token = request.cookies.get("team_token")

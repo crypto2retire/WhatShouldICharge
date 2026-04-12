@@ -3902,6 +3902,16 @@ def validate_estimate_schema(result: dict) -> bool:
     return True
 
 
+def validate_spotting_schema(result: dict) -> bool:
+    if not isinstance(result, dict):
+        return False
+    if not isinstance(result.get("items"), list):
+        return False
+    if len(result.get("items", [])) == 0:
+        return False
+    return True
+
+
 def _clean_string_list(values) -> list[str]:
     cleaned = []
     for value in values or []:
@@ -4971,7 +4981,7 @@ async def run_estimate(
                 timeout=160.0,
             )
 
-            if not validate_estimate_schema(spotting_result):
+            if not validate_spotting_schema(spotting_result):
                 logger.error(f"[run_estimate] Agent 1 malformed response for job {job_id}: invalid schema")
                 job["status"] = "error"
                 job["message"] = "We received an unexpected response from our AI. Please try again."

@@ -33,7 +33,7 @@ from PIL import Image, ImageFilter, ImageStat, UnidentifiedImageError
 import io
 from cryptography.fernet import Fernet, InvalidToken
 
-from database import init_engine, engine, AsyncSessionLocal, Base, _is_postgres
+from database import engine, AsyncSessionLocal, Base, _is_postgres, DATABASE_URL
 from models import (
     User, TeamMember, TeamSession, SiteConfig, PlanConfig,
     CreditPack, CreditTransaction, PromoCode, Session, PasswordReset,
@@ -54,7 +54,6 @@ from services.industry_config import (
     get_business_rules,
 )
 
-init_engine()
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
 _STRIPE_PACK_PRICES = {

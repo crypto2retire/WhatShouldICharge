@@ -27,14 +27,22 @@ import anthropic
 import bcrypt
 import stripe
 import httpx
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy import Column, Integer, Float, DateTime, Text, String, Boolean, ForeignKey, select, text, func, update, or_
+from sqlalchemy import select, text, func, update, or_
 import asyncio
 from PIL import Image, ImageFilter, ImageStat, UnidentifiedImageError
 import io
 from cryptography.fernet import Fernet, InvalidToken
 
+from database import init_engine, engine, AsyncSessionLocal, Base, _is_postgres
+from models import (
+    User, TeamMember, TeamSession, SiteConfig, PlanConfig,
+    CreditPack, CreditTransaction, PromoCode, Session, PasswordReset,
+    Estimate, ItemReferenceLibrary,
+)
+from cache import cache_get, cache_set, cache_invalidate
+from auth import get_current_user, require_user, require_admin, get_team_member, require_team_member
+from email import send_email
+from billing import check_usage_limit, record_usage, PLAN_CALL_LIMITS, OVERAGE_RATE_CENTS
 from services.volume_lookup import validate_estimate
 from services.industry_config import (
     get_industry_config,
@@ -44,6 +52,60 @@ from services.industry_config import (
     get_calibration_items,
     get_business_rules,
 )
+
+init_engine()
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+
+_STRIPE_PACK_PRICES = {
+    "single": os.environ.get("STRIPE_PRICE_SINGLE", ""),
+    "10_pack": os.environ.get("STRIPE_PRICE_10PACK", ""),
+    "25_pack": os.environ.get("STRIPE_PRICE_25PACK", ""),
+    "50_pack": os.environ.get("STRIPE_PRICE_50PACK", ""),
+    "100_pack": os.environ.get("STRIPE_PRICE_100PACK", ""),
+    "250_pack": os.environ.get("STRIPE_PRICE_250PACK", ""),
+}
+
+_STRIPE_PLAN_PRICES = {
+    "solo": os.environ.get("STRIPE_PRICE_SOLO", ""),
+    "team": os.environ.get("STRIPE_PRICE_TEAM", ""),
+    "enterprise": os.environ.get("STRIPE_PRICE_ENTERPRISE", ""),
+    "starter": os.environ.get("STRIPE_PRICE_STARTER", ""),
+    "pro": os.environ.get("STRIPE_PRICE_PRO", ""),
+    "agency": os.environ.get("STRIPE_PRICE_AGENCY", ""),
+}
+
+_DEFAULT_CREDIT_PACKS_SEED = {
+    "single": {"name": "Single Estimate", "credits": 1, "price_cents": 1000, "discount_pct": 0, "description": "1 estimate credit", "is_featured": False},
+    "10_pack": {"name": "10-Pack", "credits": 10, "price_cents": 6000, "discount_pct": 40, "description": "10 estimate credits (40% off)", "is_featured": False},
+    "25_pack": {"name": "25-Pack", "credits": 25, "price_cents": 12500, "discount_pct": 50, "description": "25 estimate credits (50% off)", "is_featured": False},
+    "50_pack": {"name": "50-Pack", "credits": 50, "price_cents": 20000, "discount_pct": 60, "description": "50 estimate credits (60% off)", "is_featured": True},
+    "100_pack": {"name": "100-Pack", "credits": 100, "price_cents": 30000, "discount_pct": 70, "description": "100 estimate credits (70% off)", "is_featured": False},
+    "250_pack": {"name": "250-Pack", "credits": 250, "price_cents": 50000, "discount_pct": 80, "description": "250 estimate credits (80% off)", "is_featured": False},
+}
+
+_PACK_KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_]{0,62}$")
+
+STATE_TIMEZONE_MAP = {
+    "CT": "America/New_York", "DE": "America/New_York", "GA": "America/New_York",
+    "MA": "America/New_York", "MD": "America/New_York", "ME": "America/New_York",
+    "NC": "America/New_York", "NH": "America/New_York", "NJ": "America/New_York",
+    "NY": "America/New_York", "OH": "America/New_York", "PA": "America/New_York",
+    "RI": "America/New_York", "SC": "America/New_York", "VA": "America/New_York",
+    "VT": "America/New_York", "WV": "America/New_York", "DC": "America/New_York",
+    "MI": "America/New_York", "FL": "America/New_York",
+    "AL": "America/Chicago", "AR": "America/Chicago", "IA": "America/Chicago",
+    "IL": "America/Chicago", "KS": "America/Chicago", "KY": "America/Chicago",
+    "LA": "America/Chicago", "MN": "America/Chicago", "MO": "America/Chicago",
+    "MS": "America/Chicago", "OK": "America/Chicago", "TN": "America/Chicago",
+    "TX": "America/Chicago", "WI": "America/Chicago", "IN": "America/Chicago",
+    "ND": "America/Chicago", "NE": "America/Chicago", "SD": "America/Chicago",
+    "AZ": "America/Phoenix", "CO": "America/Denver", "MT": "America/Denver",
+    "NM": "America/Denver", "UT": "America/Denver", "WY": "America/Denver",
+    "ID": "America/Boise",
+    "CA": "America/Los_Angeles", "NV": "America/Los_Angeles",
+    "OR": "America/Los_Angeles", "WA": "America/Los_Angeles",
+    "AK": "America/Anchorage", "HI": "Pacific/Honolulu",
+}
 
 _encryption_key = os.environ.get("ENCRYPTION_KEY")
 _fernet = Fernet(_encryption_key.encode()) if _encryption_key else None
@@ -225,39 +287,6 @@ app.add_middleware(CSRFMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
-_response_cache: dict[str, dict] = {}
-_CACHE_MAX_SIZE = 500
-
-
-def _cache_evict():
-    now = time.time()
-    expired = [k for k, v in _response_cache.items() if v["expires"] <= now]
-    for k in expired:
-        del _response_cache[k]
-    if len(_response_cache) > _CACHE_MAX_SIZE:
-        sorted_keys = sorted(_response_cache, key=lambda k: _response_cache[k]["expires"])
-        for k in sorted_keys[: len(_response_cache) - _CACHE_MAX_SIZE]:
-            del _response_cache[k]
-
-
-def cache_get(key: str):
-    entry = _response_cache.get(key)
-    if entry and entry["expires"] > time.time():
-        return entry["data"]
-    if entry:
-        del _response_cache[key]
-    return None
-
-
-def cache_set(key: str, data, ttl: int = 60):
-    if len(_response_cache) > _CACHE_MAX_SIZE:
-        _cache_evict()
-    _response_cache[key] = {"data": data, "expires": time.time() + ttl}
-
-
-def cache_invalidate(key: str):
-    _response_cache.pop(key, None)
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -267,434 +296,7 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-CSRF-Token"],
 )
 
-def _get_database_url() -> str:
-    """Resolve database URL for Railway PostgreSQL or local SQLite fallback."""
-    import logging
-    logger = logging.getLogger("wsic.db")
 
-    # Method 1: Check for full connection URL env vars
-    for key in ("DATABASE_PRIVATE_URL", "DATABASE_PUBLIC_URL", "DATABASE_URL"):
-        url = os.environ.get(key, "").strip()
-        if url and url.startswith("postgres"):
-            # Normalize to async driver
-            if url.startswith("postgres://"):
-                url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-            elif url.startswith("postgresql://"):
-                url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-            logger.info(f"[db] Using {key} (PostgreSQL)")
-            return url
-
-    # Method 2: Build URL from individual PG* variables (Railway Postgres always has these)
-    pghost = os.environ.get("PGHOST", "").strip()
-    pgport = os.environ.get("PGPORT", "5432").strip()
-    pguser = os.environ.get("PGUSER", "").strip()
-    pgpassword = os.environ.get("PGPASSWORD", "").strip()
-    pgdatabase = os.environ.get("PGDATABASE", "").strip()
-    if pghost and pguser and pgpassword and pgdatabase:
-        url = f"postgresql+asyncpg://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}"
-        logger.info(f"[db] Built URL from PG* env vars (host={pghost})")
-        return url
-
-    # Method 3: Local dev fallback to SQLite
-    logger.warning("[db] No PostgreSQL config found — falling back to SQLite (DATA WILL BE LOST ON DEPLOY)")
-    return "sqlite+aiosqlite:///./estimates.db"
-
-
-DATABASE_URL = _get_database_url()
-_is_postgres = "asyncpg" in DATABASE_URL
-
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=False,
-    pool_pre_ping=True,
-    **({
-        "pool_size": 10,
-        "max_overflow": 5,
-        "pool_recycle": 3600,
-    } if _is_postgres else {})
-)
-AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-Base = declarative_base()
-
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
-
-# Legacy — kept for reference but no longer used for gating
-TIER_LIMITS = {
-    "free": 3,
-    "solo": 999,
-    "team": 999,
-    "enterprise": 999,
-    "custom": 999,
-    "starter": 20,
-    "pro": 40,
-    "agency": 999,
-}
-
-# Seeded into `credit_packs` on first deploy (see seed_credit_packs). Runtime reads packs from the database.
-_STRIPE_PACK_PRICES = {
-    "single": os.environ.get("STRIPE_PRICE_SINGLE", ""),
-    "10_pack": os.environ.get("STRIPE_PRICE_10PACK", ""),
-    "25_pack": os.environ.get("STRIPE_PRICE_25PACK", ""),
-    "50_pack": os.environ.get("STRIPE_PRICE_50PACK", ""),
-    "100_pack": os.environ.get("STRIPE_PRICE_100PACK", ""),
-    "250_pack": os.environ.get("STRIPE_PRICE_250PACK", ""),
-}
-
-_STRIPE_PLAN_PRICES = {
-    "solo": os.environ.get("STRIPE_PRICE_SOLO", ""),
-    "team": os.environ.get("STRIPE_PRICE_TEAM", ""),
-    "enterprise": os.environ.get("STRIPE_PRICE_ENTERPRISE", ""),
-    "starter": os.environ.get("STRIPE_PRICE_STARTER", ""),
-    "pro": os.environ.get("STRIPE_PRICE_PRO", ""),
-    "agency": os.environ.get("STRIPE_PRICE_AGENCY", ""),
-}
-
-_DEFAULT_CREDIT_PACKS_SEED = {
-    "single": {
-        "name": "Single Estimate",
-        "credits": 1,
-        "price_cents": 1000,
-        "discount_pct": 0,
-        "description": "1 estimate credit",
-        "is_featured": False,
-    },
-    "10_pack": {
-        "name": "10-Pack",
-        "credits": 10,
-        "price_cents": 6000,
-        "discount_pct": 40,
-        "description": "10 estimate credits (40% off)",
-        "is_featured": False,
-    },
-    "25_pack": {
-        "name": "25-Pack",
-        "credits": 25,
-        "price_cents": 12500,
-        "discount_pct": 50,
-        "description": "25 estimate credits (50% off)",
-        "is_featured": False,
-    },
-    "50_pack": {
-        "name": "50-Pack",
-        "credits": 50,
-        "price_cents": 20000,
-        "discount_pct": 60,
-        "description": "50 estimate credits (60% off)",
-        "is_featured": True,
-    },
-    "100_pack": {
-        "name": "100-Pack",
-        "credits": 100,
-        "price_cents": 30000,
-        "discount_pct": 70,
-        "description": "100 estimate credits (70% off)",
-        "is_featured": False,
-    },
-    "250_pack": {
-        "name": "250-Pack",
-        "credits": 250,
-        "price_cents": 50000,
-        "discount_pct": 80,
-        "description": "250 estimate credits (80% off)",
-        "is_featured": False,
-    },
-}
-
-_PACK_KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_]{0,62}$")
-
-STATE_TIMEZONE_MAP = {
-    "CT": "America/New_York", "DE": "America/New_York", "GA": "America/New_York",
-    "MA": "America/New_York", "MD": "America/New_York", "ME": "America/New_York",
-    "NC": "America/New_York", "NH": "America/New_York", "NJ": "America/New_York",
-    "NY": "America/New_York", "OH": "America/New_York", "PA": "America/New_York",
-    "RI": "America/New_York", "SC": "America/New_York", "VA": "America/New_York",
-    "VT": "America/New_York", "WV": "America/New_York", "DC": "America/New_York",
-    "MI": "America/New_York", "FL": "America/New_York",
-    "AL": "America/Chicago", "AR": "America/Chicago", "IA": "America/Chicago",
-    "IL": "America/Chicago", "KS": "America/Chicago", "KY": "America/Chicago",
-    "LA": "America/Chicago", "MN": "America/Chicago", "MO": "America/Chicago",
-    "MS": "America/Chicago", "OK": "America/Chicago", "TN": "America/Chicago",
-    "TX": "America/Chicago", "WI": "America/Chicago", "IN": "America/Chicago",
-    "ND": "America/Chicago", "NE": "America/Chicago", "SD": "America/Chicago",
-    "AZ": "America/Phoenix", "CO": "America/Denver", "MT": "America/Denver",
-    "NM": "America/Denver", "UT": "America/Denver", "WY": "America/Denver",
-    "ID": "America/Boise",
-    "CA": "America/Los_Angeles", "NV": "America/Los_Angeles",
-    "OR": "America/Los_Angeles", "WA": "America/Los_Angeles",
-    "AK": "America/Anchorage", "HI": "Pacific/Honolulu",
-}
-
-
-PLAN_CALL_LIMITS = {"free": 3, "solo": 150, "team": 750, "enterprise": 2500, "custom": 999}
-OVERAGE_RATE_CENTS = {"solo": 10, "team": 10, "enterprise": 8, "custom": 10}
-
-
-def _reset_billing_cycle_if_needed(user):
-    """Reset monthly usage if billing cycle has elapsed. Returns True if reset."""
-    today = datetime.now(timezone.utc).replace(tzinfo=None)
-    if user.billing_cycle_start is None or (today - user.billing_cycle_start).days >= 30:
-        user.monthly_calls_used = 0
-        user.overage_charges_cents = 0
-        user.billing_cycle_start = today
-        return True
-    return False
-
-
-def _check_usage_limit(user):
-    """Check if user can make an estimate. Returns (allowed, error_response_dict_or_None)."""
-    _reset_billing_cycle_if_needed(user)
-    limit = user.monthly_call_limit or PLAN_CALL_LIMITS.get(user.subscription_tier, 3)
-    used = user.monthly_calls_used or 0
-
-    if used < limit:
-        return True, None
-
-    # Over limit — check overage mode
-    mode = getattr(user, 'overage_mode', 'warn_and_charge') or 'warn_and_charge'
-
-    if mode == 'hard_stop':
-        return False, {
-            "detail": "monthly_limit_reached",
-            "message": "You've reached your monthly estimate limit. An owner or manager can add more funds or change your overage settings.",
-            "used": used, "limit": limit
-        }
-
-    if mode == 'capped':
-        cap = getattr(user, 'overage_cap_cents', 0) or 0
-        charged = getattr(user, 'overage_charges_cents', 0) or 0
-        if charged >= cap:
-            return False, {
-                "detail": "overage_cap_reached",
-                "message": f"You've reached your ${cap/100:.2f} overage cap. An owner or manager can increase the cap or add funds.",
-                "used": used, "limit": limit, "overage_spent": charged
-            }
-
-    return True, None
-
-
-def _record_usage(user):
-    """Increment usage and add overage charge if over limit."""
-    user.monthly_calls_used = (user.monthly_calls_used or 0) + 1
-    limit = user.monthly_call_limit or PLAN_CALL_LIMITS.get(user.subscription_tier, 3)
-    if user.monthly_calls_used > limit:
-        rate = OVERAGE_RATE_CENTS.get(user.subscription_tier, 10)
-        user.overage_charges_cents = (user.overage_charges_cents or 0) + rate
-
-
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, nullable=False, index=True)
-    password_hash = Column(String, nullable=False)
-    company_name = Column(String, default="")
-    company_city = Column(String, default="")
-    company_state = Column(String, default="")
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    subscription_tier = Column(String, default="free", index=True)
-    estimates_used = Column(Integer, default=0)
-    estimates_limit = Column(Integer, default=3)
-    stripe_customer_id = Column(String, default="")
-    stripe_subscription_id = Column(String, default="")
-    price_per_cy_low = Column(Float, default=35.0)
-    price_per_cy_high = Column(Float, default=40.0)
-    price_per_cy_premium = Column(Float, default=55.0)
-    min_charge = Column(Float, default=75.0)
-    truck_capacity_cy = Column(Float, default=16.0)
-    is_admin = Column(Boolean, default=False)
-    company_slug = Column(String, default="", index=True)
-    company_phone = Column(String, default="")
-    company_logo_url = Column(String, default="")
-    price_per_cy_standard = Column(Float, default=None)
-    price_per_cy_heavy = Column(Float, default=None)
-    is_active = Column(Boolean, default=True)
-    admin_notes = Column(Text, default="")
-    timezone = Column(String, default="America/Chicago")
-    monthly_call_limit = Column(Integer, default=150)
-    monthly_calls_used = Column(Integer, default=0)
-    billing_cycle_start = Column(DateTime, default=None)
-    overage_mode = Column(String, default="warn_and_charge")
-    overage_cap_cents = Column(Integer, default=0)
-    overage_charges_cents = Column(Integer, default=0)
-    role = Column(String, default="owner")
-    industry = Column(String, default="junk_removal")
-    credit_balance = Column(Integer, default=0)
-    credits_purchased_total = Column(Integer, default=0)
-    credits_used_total = Column(Integer, default=0)
-    free_trial_used = Column(Integer, default=0)
-    free_trial_email = Column(String, nullable=True)
-    google_tag_id = Column(String, default="")
-    fb_pixel_id = Column(String, default="")
-
-
-class TeamMember(Base):
-    __tablename__ = "team_members"
-    id = Column(Integer, primary_key=True, index=True)
-    owner_user_id = Column(Integer, nullable=False, index=True)
-    name = Column(String, nullable=False)
-    pin_hash = Column(String, nullable=False)
-    role = Column(String, default="estimator")
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-
-
-class TeamSession(Base):
-    __tablename__ = "team_sessions"
-    id = Column(Integer, primary_key=True, index=True)
-    team_member_id = Column(Integer, nullable=False)
-    owner_user_id = Column(Integer, nullable=False)
-    token = Column(String, unique=True, nullable=False, index=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    expires_at = Column(DateTime)
-
-
-class SiteConfig(Base):
-    __tablename__ = "site_config"
-    id = Column(Integer, primary_key=True, index=True)
-    config_key = Column(String, unique=True, nullable=False, index=True)
-    config_value = Column(Text, default="")
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-
-
-class PlanConfig(Base):
-    __tablename__ = "plan_configs"
-    id = Column(Integer, primary_key=True, index=True)
-    tier_name = Column(String, unique=True, nullable=False)
-    display_name = Column(String, nullable=False)
-    price_cents = Column(Integer, default=0)
-    estimate_limit = Column(Integer, default=3)
-    features_json = Column(Text, default="[]")
-    stripe_price_id = Column(String, default="")
-    is_active = Column(Boolean, default=True)
-
-
-class CreditPack(Base):
-    __tablename__ = "credit_packs"
-    id = Column(Integer, primary_key=True, index=True)
-    pack_key = Column(String(64), unique=True, nullable=False, index=True)
-    name = Column(String(200), nullable=False)
-    credits = Column(Integer, nullable=False)
-    price_cents = Column(Integer, nullable=False)
-    discount_pct = Column(Integer, default=0)
-    description = Column(Text, default="")
-    stripe_product_id = Column(String(120), default="")
-    stripe_price_id = Column(String(120), default="")
-    is_active = Column(Boolean, default=True)
-    is_featured = Column(Boolean, default=False)
-    sort_order = Column(Integer, default=0)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-
-
-class CreditTransaction(Base):
-    __tablename__ = "credit_transactions"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
-    transaction_type = Column(String, nullable=False)  # "purchase", "usage", "free_trial", "refund", "bonus"
-    credits = Column(Integer, nullable=False)  # positive = added, negative = used
-    balance_after = Column(Integer, nullable=False)  # balance after this transaction
-    description = Column(String, nullable=True)
-    stripe_session_id = Column(String, nullable=True)
-    pack_type = Column(String, nullable=True)
-    amount_cents = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=func.now(), index=True)
-
-
-class PromoCode(Base):
-    __tablename__ = "promo_codes"
-    id = Column(Integer, primary_key=True, index=True)
-    code = Column(String(50), unique=True, nullable=False, index=True)
-    discount_type = Column(String(20), nullable=False)  # 'percentage' or 'fixed'
-    discount_value = Column(Float, nullable=False)
-    applies_to = Column(Text, default='{"products":["all"]}')
-    usage_limit = Column(Integer, default=0)  # 0 = unlimited
-    times_used = Column(Integer, default=0)
-    expires_at = Column(DateTime, default=None)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-
-
-class Session(Base):
-    __tablename__ = "sessions"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=False)
-    token = Column(String, unique=True, nullable=False, index=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    expires_at = Column(DateTime)
-
-
-class PasswordReset(Base):
-    __tablename__ = "password_resets"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=False, index=True)
-    token_hash = Column(String, nullable=False, index=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    expires_at = Column(DateTime, nullable=False)
-    used_at = Column(DateTime, default=None)
-
-
-class Estimate(Base):
-    __tablename__ = "estimates"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, default=0, index=True)
-    team_member_id = Column(Integer, default=0, index=True)
-    estimate_name = Column(String, default="")
-    customer_name = Column(String, default="")
-    customer_email = Column(String, default="")
-    customer_phone = Column(String, default="")
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
-    photos_count = Column(Integer)
-    result_json = Column(Text)
-    price_low = Column(Float)
-    price_high = Column(Float)
-    cy_estimate = Column(Float)
-    pass1_json = Column(Text, default="")
-    pass2_json = Column(Text, default="")
-    lookups_json = Column(Text, default="")
-    photos_json = Column(Text, default="")
-    actual_price = Column(Float, default=None)
-    actual_cy = Column(Float, default=None)
-    actual_truck_fraction = Column(Float, default=None)
-    accuracy_notes = Column(Text, default="")
-    correction_reason = Column(String(40), default="")
-    preferred_contact = Column(String, default="phone")
-    input_tokens = Column(Integer, default=0)
-    output_tokens = Column(Integer, default=0)
-    api_cost_cents = Column(Integer, default=0)
-    model_used = Column(String(50), default="")
-    capture_mode = Column(String(30), default="remote")
-    confidence_bucket = Column(String(20), default="")
-    confidence_reasons = Column(Text, default="")
-    photo_quality_flags = Column(Text, default="")
-    scene_type = Column(String(50), default="")
-    occupancy_class = Column(String(30), default="")
-    sanity_flags = Column(Text, default="")
-    geometry_summary = Column(Text, default="")
-    review_status = Column(String(30), default="auto_approved")
-    review_reason = Column(Text, default="")
-    appointment_requested = Column(Boolean, default=False)
-    appointment_contact_method = Column(String, default="")
-    appointment_preferred_day = Column(String, default="")
-    appointment_preferred_time = Column(String, default="")
-    appointment_requested_at = Column(DateTime, default=None)
-    additional_items_text = Column(Text, default="")
-    adjustments_json = Column(Text, default="")
-
-
-class ItemReferenceLibrary(Base):
-    __tablename__ = "item_reference_library"
-    id = Column(Integer, primary_key=True, index=True)
-    item_name = Column(String, unique=True, nullable=False, index=True)
-    item_category = Column(String, default="other")
-    cubic_yards = Column(Float, nullable=False)
-    dimensions = Column(String, default="")
-    is_special = Column(Boolean, default=False)
-    special_fee = Column(Float, default=0.0)
-    confidence = Column(Float, default=1.0)
-    source = Column(String, default="builtin")
-    search_query_used = Column(String, default="")
-    times_seen = Column(Integer, default=0)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 async def init_db():
@@ -1394,90 +996,6 @@ app.router.lifespan_context = lifespan
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-
-async def get_current_user(request: Request) -> Optional[User]:
-    token = request.cookies.get("session_token")
-    if not token:
-        return None
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(Session).where(Session.token == token, Session.expires_at > datetime.now(timezone.utc).replace(tzinfo=None))
-        )
-        sess = result.scalar_one_or_none()
-        if not sess:
-            return None
-        result = await db.execute(select(User).where(User.id == sess.user_id))
-        return result.scalar_one_or_none()
-
-
-async def require_user(request: Request) -> User:
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return user
-
-
-async def require_admin(request: Request) -> User:
-    user = await require_user(request)
-    if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return user
-
-
-async def get_team_member(request: Request):
-    token = request.cookies.get("team_token")
-    if not token:
-        return None, None
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(TeamSession).where(TeamSession.token == token, TeamSession.expires_at > datetime.now(timezone.utc).replace(tzinfo=None))
-        )
-        sess = result.scalar_one_or_none()
-        if not sess:
-            return None, None
-        result = await db.execute(select(TeamMember).where(TeamMember.id == sess.team_member_id, TeamMember.is_active == True))
-        member = result.scalar_one_or_none()
-        if not member:
-            return None, None
-        result = await db.execute(select(User).where(User.id == sess.owner_user_id))
-        owner = result.scalar_one_or_none()
-        return member, owner
-
-
-async def require_team_member(request: Request):
-    member, owner = await get_team_member(request)
-    if not member or not owner:
-        raise HTTPException(status_code=401, detail="Team authentication required")
-    return member, owner
-
-
-def send_email(to_email: str, subject: str, html_content: str):
-    import logging
-    logger = logging.getLogger("wsic.email")
-    api_key = os.environ.get("SENDGRID_API_KEY")
-    from_email = os.environ.get("SENDGRID_FROM_EMAIL", "noreply@whatshouldicharge.app")
-    if not api_key:
-        logger.error("[send_email] SENDGRID_API_KEY not set — email not sent")
-        return False
-    try:
-        from sendgrid import SendGridAPIClient
-        from sendgrid.helpers.mail import Mail
-        message = Mail(
-            from_email=from_email,
-            to_emails=to_email,
-            subject=subject,
-            html_content=html_content,
-        )
-        sg = SendGridAPIClient(api_key)
-        response = sg.send(message)
-        logger.info(f"[send_email] Sent to {to_email} from {from_email}, status={response.status_code}")
-        if response.status_code >= 400:
-            logger.error(f"[send_email] SendGrid error status {response.status_code}")
-            return False
-        return True
-    except Exception as e:
-        logger.error(f"[send_email] FAILED to send to {to_email}: {type(e).__name__}: {e}")
-        return False
 
 
 @app.get("/api/health")
@@ -7079,7 +6597,7 @@ async def get_usage(request: Request):
         u = result.scalar_one_or_none()
         if not u:
             raise HTTPException(status_code=404)
-        _reset_billing_cycle_if_needed(u)
+        reset_billing_cycle_if_needed(u)
         await db.commit()
         limit = u.monthly_call_limit or PLAN_CALL_LIMITS.get(u.subscription_tier, 3)
         used = u.monthly_calls_used or 0
@@ -8495,8 +8013,8 @@ async def team_create_estimate(
         fresh_owner = result.scalar_one_or_none()
         if not fresh_owner:
             raise HTTPException(status_code=403, detail="estimate_limit_reached")
-        _reset_billing_cycle_if_needed(fresh_owner)
-        allowed, err = _check_usage_limit(fresh_owner)
+        reset_billing_cycle_if_needed(fresh_owner)
+        allowed, err = check_usage_limit(fresh_owner)
         if not allowed:
             return JSONResponse(status_code=429, content=err)
         user = fresh_owner
@@ -8528,11 +8046,11 @@ async def team_create_estimate(
         fresh_owner = result.scalar_one_or_none()
         if not fresh_owner:
             raise HTTPException(status_code=403, detail="estimate_limit_reached")
-        _reset_billing_cycle_if_needed(fresh_owner)
-        allowed, err = _check_usage_limit(fresh_owner)
+        reset_billing_cycle_if_needed(fresh_owner)
+        allowed, err = check_usage_limit(fresh_owner)
         if not allowed:
             return JSONResponse(status_code=429, content=err)
-        _record_usage(fresh_owner)
+        record_usage(fresh_owner)
         fresh_owner.estimates_used = (fresh_owner.estimates_used or 0) + 1
         await db.commit()
         user = fresh_owner

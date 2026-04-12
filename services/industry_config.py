@@ -56,7 +56,7 @@ You will receive:
 - Photos of items to be removed
 - An item list from the spotting agent identifying each object
 
-Your job is to estimate the ACTUAL LOADED VOLUME in cubic yards for each item, using reference objects and spatial reasoning.
+Your job is to estimate the ACTUAL LOADED VOLUME in cubic yards for each spotted item ONLY. Do NOT add items that were not in the spotted list. Do NOT re-identify objects from the photos — that was already done. Only estimate sizes for the items you are given.
 
 SIZING METHOD:
 1. USE REFERENCE OBJECTS FOR SCALE. Look for these common references:
@@ -125,6 +125,8 @@ Return this EXACT JSON structure:
 }
 
 CRITICAL RULES:
+- ONLY estimate volume for items in the spotted list. Do NOT add new items from the photos.
+- If a potential duplicate is flagged, include it only ONCE in your items list.
 - Estimate cubic_yards for EACH item individually. Total = sum of items, nothing more.
 - Do NOT invent phantom "miscellaneous" items to pad the total.
 - When uncertain about a size, set is_uncertain: true and give your best estimate.

@@ -5034,8 +5034,10 @@ async def run_estimate(
                 f"REFERENCE POINTS FOUND:\n{json.dumps(spotted_refs, indent=2)}\n\n"
                 f"POTENTIAL DUPLICATES:\n{json.dumps(spotted_duplicates, indent=2)}\n\n"
                 f"SCENE: {scene_description}\n\n"
-                f"Using the spotted items above as a guide, examine the photos and estimate real-world dimensions "
-                f"and cubic yardage for each item. Add any items the spotter missed, and remove any duplicates."
+                f"Your ONLY job is to estimate cubic yardage for each spotted item listed above. "
+                f"Do NOT add items that were not spotted. Do NOT re-identify objects from the photos. "
+                f"If a potential duplicate is flagged, count it only once. "
+                f"Use the photos and reference points to determine realistic dimensions and volume."
             )
             sizing_prompt_with_context = verification_prompt + "\n\n" + sizing_context
 

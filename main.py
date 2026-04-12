@@ -5309,12 +5309,6 @@ async def run_estimate(
         min_charge = user.min_charge or 75.0
         range_widened = False
 
-        primary_pct = _model_uncertainty_pct(confidence_bucket, scene_type, num_photos)
-        primary_low, primary_high = _expand_model_range(price_low, price_high, min_charge, primary_pct)
-        price_low, price_high = primary_low, primary_high
-        range_widened = True
-        confidence_reasons.append(f"Primary model range expanded by ±{int(primary_pct * 100)}% for uncertainty.")
-
         if verifier_result:
             verifier_data = validate_estimate(verifier_result)
             _sync_result_totals_to_items(verifier_data)

@@ -3899,13 +3899,16 @@ def parse_ai_json(raw_text: str) -> dict:
             return json.loads(candidate)
         except json.JSONDecodeError:
             pass
-        cleaned = re.sub(r',\s*([}\]])', r'\1', candidate)
-        cleaned = re.sub(r'[\x00-\x1f]', ' ', cleaned)
+        candidate = re.sub(r'(\d)"([A-Za-z(])', r'\1in\2', candidate)
+        candidate = re.sub(r'(\d)"(\s)', r'\1in\2', candidate)
+        candidate = re.sub(r'(\d)"$', r'\1in', candidate, flags=re.MULTILINE)
+        candidate = re.sub(r',\s*([}\]])', r'\1', candidate)
+        candidate = re.sub(r'[\x00-\x1f]', ' ', candidate)
         try:
-            return json.loads(cleaned)
+            return json.loads(candidate)
         except json.JSONDecodeError:
             pass
-    raise ValueError(f"Could not parse AI JSON response: {raw_text[:200]}")
+    raise ValueError(f"Could not parse AI JSON response: {raw_text[:500]}")
 
 
 def validate_estimate_schema(result: dict) -> bool:

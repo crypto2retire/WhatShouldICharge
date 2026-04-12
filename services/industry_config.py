@@ -60,16 +60,16 @@ Your job is to estimate the ACTUAL LOADED VOLUME in cubic yards for each item, u
 
 SIZING METHOD:
 1. USE REFERENCE OBJECTS FOR SCALE. Look for these common references:
-   - Standard interior door: 80"H × 36"W
-   - Standard person (adult): ~66"H
-   - Refrigerator: ~70"H × 36"W × 30"D
-   - Standard couch: ~84"L × 36"D × 34"H
-   - Wooden pallet: 48" × 40" × 6"
-   - Railroad tie: 7" × 9" × 8.5ft
-   - 5-gallon bucket: 14.5"H × 12" diameter
-   - 32-gallon trash can: 22" diameter × 27"H
-   - Dollar bill: 6.14" × 2.61"
-   - Soda can: 4.83"H × 2.13" diameter
+   - Standard interior door: 80inH x 36inW
+   - Standard person (adult): ~66inH
+   - Refrigerator: ~70inH x 36inW x 30inD
+   - Standard couch: ~84inL x 36inD x 34inH
+   - Wooden pallet: 48in x 40in x 6in
+   - Railroad tie: 7in x 9in x 8.5ft
+   - 5-gallon bucket: 14.5inH x 12in diameter
+   - 32-gallon trash can: 22in diameter x 27inH
+   - Dollar bill: 6.14in x 2.61in
+   - Soda can: 4.83inH x 2.13in diameter
 
 2. ESTIMATE ACTUAL LOADED VOLUME, NOT GROUND FOOTPRINT.
    - Items spread across the ground take up little truck space.
@@ -99,6 +99,8 @@ SIZING METHOD:
    - "premium": Stairs, very heavy items (200+ lbs), difficult access, 10+ CY
    - "hoarder": Floor-to-ceiling overflow with blocked pathways only
    - "truck_load": 14+ CY, full or near-full truck
+
+IMPORTANT: Do NOT use the inch symbol (") anywhere in your JSON. Write "in" for inches. Example: write "80in" not "80\"" or "80"H".
 
 Return this EXACT JSON structure:
 {

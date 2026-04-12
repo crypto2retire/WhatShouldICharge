@@ -3849,6 +3849,7 @@ ANTHROPIC_PRICING_PER_MILLION = {
 OPENROUTER_PRICING_PER_MILLION = {
     "qwen/qwen2.5-vl-72b-instruct": (0.80, 0.80),
     "mistralai/pixtral-large-2411": (2.00, 6.00),
+    "z-ai/glm-5v-turbo": (1.20, 4.00),
     "openai/gpt-4.1": (2.00, 8.00),
 }
 
@@ -4402,12 +4403,14 @@ MODEL_EVAL_ROOT.mkdir(parents=True, exist_ok=True)
 MODEL_EVAL_DEFAULT_MODELS = ("claude-sonnet-4-20250514", "openai/gpt-4.1")
 MODEL_EVAL_PER_RUN_TIMEOUT_SECONDS = 150
 PROD_PRIMARY_MODEL = "qwen/qwen2.5-vl-72b-instruct"
-PROD_VERIFIER_MODEL = "mistralai/pixtral-large-2411"
+PROD_SIZING_MODEL = "z-ai/glm-5v-turbo"
+PROD_VERIFIER_MODEL = PROD_SIZING_MODEL
 MODEL_EVAL_SUPPORTED_MODELS = (
     "claude-sonnet-4-20250514",
     "openai/gpt-4.1",
     "qwen/qwen2.5-vl-72b-instruct",
     "mistralai/pixtral-large-2411",
+    "z-ai/glm-5v-turbo",
 )
 
 
@@ -4952,26 +4955,65 @@ async def run_estimate(
         total_input_tokens = 0
         total_output_tokens = 0
         total_api_cost_cents = 0
-        model_name = f"{PROD_PRIMARY_MODEL}|{PROD_VERIFIER_MODEL}"
+        model_name = f"{PROD_PRIMARY_MODEL}|{PROD_SIZING_MODEL}"
 
         try:
-            primary_result, primary_meta = await asyncio.wait_for(
+            # ── Agent 1: Item Spotter (Qwen) ──
+            job["message"] = "Identifying items..."
+            spotting_result, spotting_meta = await asyncio.wait_for(
                 run_openrouter_estimate(
                     image_content,
                     extraction_prompt,
                     api_key,
                     PROD_PRIMARY_MODEL,
-                    title="WhatShouldICharge Primary Estimate",
+                    title="WSIC Agent 1: Item Spotter",
                 ),
                 timeout=160.0,
             )
-            verifier_result_raw, verifier_meta = await asyncio.wait_for(
+
+            if not validate_estimate_schema(spotting_result):
+                logger.error(f"[run_estimate] Agent 1 malformed response for job {job_id}: invalid schema")
+                job["status"] = "error"
+                job["message"] = "We received an unexpected response from our AI. Please try again."
+                job["result"] = None
+                return
+
+            spotted_items = spotting_result.get("items", [])
+            spotted_refs = spotting_result.get("reference_points", [])
+            spotted_conditions = spotting_result.get("conditions", [])
+            spotted_duplicates = spotting_result.get("potential_duplicates", [])
+            scene_description = spotting_result.get("scene_description", "")
+            pass1_json_str = json.dumps(spotting_result)
+
+            total_input_tokens += int(spotting_meta.get("input_tokens", 0) or 0)
+            total_output_tokens += int(spotting_meta.get("output_tokens", 0) or 0)
+            total_api_cost_cents += int(spotting_meta.get("api_cost_cents", 0) or 0)
+
+            logger.info(
+                f"[run_estimate] Agent 1 spotted {len(spotted_items)} items, "
+                f"{len(spotted_refs)} reference points for job {job_id}"
+            )
+
+            # ── Agent 2: Size Estimator (GLM 5V Turbo) ──
+            job["message"] = "Estimating sizes..."
+            sizing_context = (
+                f"The spotter agent identified {len(spotted_items)} items across the photos.\n\n"
+                f"SPOTTED ITEMS:\n{json.dumps(spotted_items, indent=2)}\n\n"
+                f"REFERENCE POINTS FOUND:\n{json.dumps(spotted_refs, indent=2)}\n\n"
+                f"POTENTIAL DUPLICATES:\n{json.dumps(spotted_duplicates, indent=2)}\n\n"
+                f"SCENE: {scene_description}\n\n"
+                f"Using the spotted items above as a guide, examine the photos and estimate real-world dimensions "
+                f"and cubic yardage for each item. Add any items the spotter missed, and remove any duplicates."
+            )
+            sizing_prompt_with_context = verification_prompt + "\n\n" + sizing_context
+
+            sizing_result, sizing_meta = await asyncio.wait_for(
                 run_openrouter_estimate(
                     image_content,
-                    extraction_prompt,
+                    sizing_prompt_with_context,
                     api_key,
-                    PROD_VERIFIER_MODEL,
-                    title="WhatShouldICharge Verifier Estimate",
+                    PROD_SIZING_MODEL,
+                    title="WSIC Agent 2: Size Estimator",
                 ),
                 timeout=160.0,
             )
@@ -4984,32 +5026,22 @@ async def run_estimate(
             job["result"] = None
             return
 
-        total_input_tokens += int(primary_meta.get("input_tokens", 0) or 0)
-        total_input_tokens += int(verifier_meta.get("input_tokens", 0) or 0)
-        total_output_tokens += int(primary_meta.get("output_tokens", 0) or 0)
-        total_output_tokens += int(verifier_meta.get("output_tokens", 0) or 0)
-        total_api_cost_cents += int(primary_meta.get("api_cost_cents", 0) or 0)
-        total_api_cost_cents += int(verifier_meta.get("api_cost_cents", 0) or 0)
+        total_input_tokens += int(sizing_meta.get("input_tokens", 0) or 0)
+        total_output_tokens += int(sizing_meta.get("output_tokens", 0) or 0)
+        total_api_cost_cents += int(sizing_meta.get("api_cost_cents", 0) or 0)
 
-        pass1_result = primary_result
-        pass1_json_str = json.dumps(pass1_result)
-
-        # H7: Validate AI response schema
-        if not validate_estimate_schema(pass1_result):
-            logger.error(f"[run_estimate] Malformed AI response for job {job_id}: invalid pass-1 schema")
+        if not validate_estimate_schema(sizing_result):
+            logger.error(f"[run_estimate] Agent 2 malformed response for job {job_id}: invalid schema")
             job["status"] = "error"
             job["message"] = "We received an unexpected response from our AI. Please try again."
             job["result"] = None
             return
 
-        result_data = pass1_result
-        job["message"] = "Verifying estimate..."
+        result_data = sizing_result
+        pass2_json_str = json.dumps(sizing_result)
         verifier_result = None
-        if validate_estimate_schema(verifier_result_raw):
-            verifier_result = normalize_verification_result(verifier_result_raw)
-            pass2_json_str = json.dumps(verifier_result)
-        else:
-            logger.warning(f"[run_estimate] Job {job_id}: verifier model returned invalid schema; skipping overlap gate")
+
+        job["message"] = "Calculating volume..."
 
         result_data, _guardrail_notes = apply_visual_estimate_guardrails(result_data, room_labels)
 

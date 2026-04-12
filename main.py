@@ -226,6 +226,18 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 _response_cache: dict[str, dict] = {}
+_CACHE_MAX_SIZE = 500
+
+
+def _cache_evict():
+    now = time.time()
+    expired = [k for k, v in _response_cache.items() if v["expires"] <= now]
+    for k in expired:
+        del _response_cache[k]
+    if len(_response_cache) > _CACHE_MAX_SIZE:
+        sorted_keys = sorted(_response_cache, key=lambda k: _response_cache[k]["expires"])
+        for k in sorted_keys[: len(_response_cache) - _CACHE_MAX_SIZE]:
+            del _response_cache[k]
 
 
 def cache_get(key: str):
@@ -238,6 +250,8 @@ def cache_get(key: str):
 
 
 def cache_set(key: str, data, ttl: int = 60):
+    if len(_response_cache) > _CACHE_MAX_SIZE:
+        _cache_evict()
     _response_cache[key] = {"data": data, "expires": time.time() + ttl}
 
 
@@ -317,13 +331,30 @@ TIER_LIMITS = {
 }
 
 # Seeded into `credit_packs` on first deploy (see seed_credit_packs). Runtime reads packs from the database.
+_STRIPE_PACK_PRICES = {
+    "single": os.environ.get("STRIPE_PRICE_SINGLE", ""),
+    "10_pack": os.environ.get("STRIPE_PRICE_10PACK", ""),
+    "25_pack": os.environ.get("STRIPE_PRICE_25PACK", ""),
+    "50_pack": os.environ.get("STRIPE_PRICE_50PACK", ""),
+    "100_pack": os.environ.get("STRIPE_PRICE_100PACK", ""),
+    "250_pack": os.environ.get("STRIPE_PRICE_250PACK", ""),
+}
+
+_STRIPE_PLAN_PRICES = {
+    "solo": os.environ.get("STRIPE_PRICE_SOLO", ""),
+    "team": os.environ.get("STRIPE_PRICE_TEAM", ""),
+    "enterprise": os.environ.get("STRIPE_PRICE_ENTERPRISE", ""),
+    "starter": os.environ.get("STRIPE_PRICE_STARTER", ""),
+    "pro": os.environ.get("STRIPE_PRICE_PRO", ""),
+    "agency": os.environ.get("STRIPE_PRICE_AGENCY", ""),
+}
+
 _DEFAULT_CREDIT_PACKS_SEED = {
     "single": {
         "name": "Single Estimate",
         "credits": 1,
         "price_cents": 1000,
         "discount_pct": 0,
-        "stripe_price_id": "price_1TDUHaAPEzwLONiqUUjQTuTS",
         "description": "1 estimate credit",
         "is_featured": False,
     },
@@ -332,7 +363,6 @@ _DEFAULT_CREDIT_PACKS_SEED = {
         "credits": 10,
         "price_cents": 6000,
         "discount_pct": 40,
-        "stripe_price_id": "price_1TDUHbAPEzwLONiqhcyemzyF",
         "description": "10 estimate credits (40% off)",
         "is_featured": False,
     },
@@ -341,7 +371,6 @@ _DEFAULT_CREDIT_PACKS_SEED = {
         "credits": 25,
         "price_cents": 12500,
         "discount_pct": 50,
-        "stripe_price_id": "price_1TDUHcAPEzwLONiqwG3OZf9I",
         "description": "25 estimate credits (50% off)",
         "is_featured": False,
     },
@@ -350,7 +379,6 @@ _DEFAULT_CREDIT_PACKS_SEED = {
         "credits": 50,
         "price_cents": 20000,
         "discount_pct": 60,
-        "stripe_price_id": "price_1TDUHdAPEzwLONiqFtviLtbK",
         "description": "50 estimate credits (60% off)",
         "is_featured": True,
     },
@@ -359,7 +387,6 @@ _DEFAULT_CREDIT_PACKS_SEED = {
         "credits": 100,
         "price_cents": 30000,
         "discount_pct": 70,
-        "stripe_price_id": "price_1TDUHeAPEzwLONiqETAdtOiz",
         "description": "100 estimate credits (70% off)",
         "is_featured": False,
     },
@@ -368,7 +395,6 @@ _DEFAULT_CREDIT_PACKS_SEED = {
         "credits": 250,
         "price_cents": 50000,
         "discount_pct": 80,
-        "stripe_price_id": "price_1TDUHeAPEzwLONiqOoqQr7UP",
         "description": "250 estimate credits (80% off)",
         "is_featured": False,
     },
@@ -1124,26 +1150,26 @@ async def seed_plan_configs():
                        stripe_price_id="", is_active=True),
             PlanConfig(tier_name="solo", display_name="Solo", price_cents=14900, estimate_limit=999,
                        features_json='["1 user","AI photo estimates","Item detection & volume calc","Premium job detection","Customer estimate link","Estimate history","Email support"]',
-                       stripe_price_id="price_1TDJ2wAPEzwLONiqTut1n11W", is_active=True),
+                       stripe_price_id=_STRIPE_PLAN_PRICES.get("solo", ""), is_active=True),
             PlanConfig(tier_name="team", display_name="Team", price_cents=29900, estimate_limit=999,
                        features_json='["Up to 3 users","Everything in Solo","Truck load calculator","Custom rate settings","Priority support"]',
-                       stripe_price_id="price_1TDJ2xAPEzwLONiq56jpA1fH", is_active=True),
+                       stripe_price_id=_STRIPE_PLAN_PRICES.get("team", ""), is_active=True),
             PlanConfig(tier_name="enterprise", display_name="Enterprise", price_cents=49900, estimate_limit=999,
                        features_json='["Unlimited users","Everything in Team","API access","Dedicated onboarding","Phone support"]',
-                       stripe_price_id="price_1TDJ5OAPEzwLONiqVhcBQjPn", is_active=True),
+                       stripe_price_id=_STRIPE_PLAN_PRICES.get("enterprise", ""), is_active=True),
             PlanConfig(tier_name="custom", display_name="Custom", price_cents=99900, estimate_limit=999,
                        features_json='["Fully customized solution","Custom integrations","White-label options","Dedicated support"]',
                        stripe_price_id="", is_active=True),
             # Legacy tiers (inactive)
             PlanConfig(tier_name="starter", display_name="Starter (Legacy)", price_cents=2900, estimate_limit=20,
                        features_json='["Legacy plan"]',
-                       stripe_price_id="price_1T7PXXAPEzwLONiqIIrAtsQZ", is_active=False),
+                       stripe_price_id=_STRIPE_PLAN_PRICES.get("starter", ""), is_active=False),
             PlanConfig(tier_name="pro", display_name="Pro (Legacy)", price_cents=5900, estimate_limit=40,
                        features_json='["Legacy plan"]',
-                       stripe_price_id="price_1T6iUPAPEzwLONiqp31lIw9T", is_active=False),
+                       stripe_price_id=_STRIPE_PLAN_PRICES.get("pro", ""), is_active=False),
             PlanConfig(tier_name="agency", display_name="Agency (Legacy)", price_cents=9900, estimate_limit=999,
                        features_json='["Legacy plan"]',
-                       stripe_price_id="price_1T7PXXAPEzwLONiqpQbgpgZ8", is_active=False),
+                       stripe_price_id=_STRIPE_PLAN_PRICES.get("agency", ""), is_active=False),
         ]
         for p in plans:
             db.add(p)
@@ -1269,7 +1295,7 @@ async def seed_credit_packs():
                     discount_pct=int(v.get("discount_pct", 0)),
                     description=v.get("description", "") or "",
                     stripe_product_id="",
-                    stripe_price_id=v.get("stripe_price_id", "") or "",
+                    stripe_price_id=_STRIPE_PACK_PRICES.get(pack_key, ""),
                     is_active=True,
                     is_featured=bool(v.get("is_featured", False)),
                     sort_order=order,
@@ -6724,17 +6750,6 @@ async def estimate_status(request: Request, job_id: str):
         del estimate_jobs[job_id]
 
     return resp
-
-
-# Legacy mapping — kept for reference, no longer used for gating
-PRICE_TO_TIER = {
-    "price_1TDJ2wAPEzwLONiqTut1n11W": "solo",
-    "price_1TDJ2xAPEzwLONiq56jpA1fH": "team",
-    "price_1TDJ5OAPEzwLONiqVhcBQjPn": "enterprise",
-    "price_1T7PXXAPEzwLONiqIIrAtsQZ": "starter",
-    "price_1T6iUPAPEzwLONiqp31lIw9T": "pro",
-    "price_1T7PXXAPEzwLONiqpQbgpgZ8": "agency",
-}
 
 
 @app.post("/api/payments/create-checkout")

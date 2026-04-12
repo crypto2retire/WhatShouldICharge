@@ -3882,11 +3882,30 @@ def estimate_openrouter_cost_cents(input_tokens: int, output_tokens: int, model_
 
 
 def parse_ai_json(raw_text: str) -> dict:
+    import re
     raw_text = raw_text.strip()
     if raw_text.startswith("```"):
         lines = raw_text.split("\n")
         raw_text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-    return json.loads(raw_text)
+    raw_text = raw_text.strip()
+    try:
+        return json.loads(raw_text)
+    except json.JSONDecodeError:
+        pass
+    json_match = re.search(r'\{[\s\S]*\}', raw_text)
+    if json_match:
+        candidate = json_match.group(0)
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+        cleaned = re.sub(r',\s*([}\]])', r'\1', candidate)
+        cleaned = re.sub(r'[\x00-\x1f]', ' ', cleaned)
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+    raise ValueError(f"Could not parse AI JSON response: {raw_text[:200]}")
 
 
 def validate_estimate_schema(result: dict) -> bool:
@@ -4101,7 +4120,7 @@ async def run_openrouter_estimate(
     payload = {
         "model": model_name,
         "temperature": 0,
-        "max_tokens": 2048,
+        "max_tokens": 4096,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": content_blocks},

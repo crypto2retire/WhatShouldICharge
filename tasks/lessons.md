@@ -147,3 +147,24 @@ Railway uses ephemeral filesystem — SQLite data is lost on every deploy. Must 
 
 ### 10. Check for Missing Columns
 Schema mismatches cause silent failures. Always use `ADD COLUMN IF NOT EXISTS` and verify column names match between code and database.
+
+## APIRouter ordering — 2026-04-12
+
+### 1. include_router MUST come after all route decorators
+FastAPI's `include_router()` copies routes that already exist on the router at call time. If `@router.get("/api/health")` is defined AFTER `app.include_router(router_health)`, that route is never registered and returns 404. Always place the `include_router` block at the very end of the file.
+
+### 2. Test locally before pushing refactors
+A 502 on Railway from a refactor can take 2-3 minutes per deploy cycle. Run syntax checks (`ast.parse`) and unit tests before every push. If the site goes down, revert immediately and investigate locally.
+
+## Verifier model availability — 2026-04-12
+
+### 1. OpenRouter models can be removed without warning
+`meta-llama/llama-3.2-90b-vision-instruct` was removed from OpenRouter, causing all estimates to fail with a 404. Always use specific error messages that include the model name and HTTP status so failures are diagnosable from the user-facing error. Generic "AI service unavailable" hides the root cause.
+
+## Database module extraction — 2026-04-12
+
+### 2. Circular imports from database.py to models/
+`database.py` imports from `models/` (which imports `Base` from `database.py`). Seed functions in `database.py` use lazy imports (`from models import ...` inside the function body) to avoid circular import errors at module load time. Never put top-level model imports in `database.py`.
+
+### 3. Eager engine creation is required
+The `engine` and `AsyncSessionLocal` in `database.py` are created at module import time (not lazily). This is intentional — other modules like `auth.py` and `billing.py` need these at import time. Do not change to lazy initialization.

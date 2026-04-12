@@ -17,13 +17,21 @@
 ## Folder Locations
 - **Canonical local repo:** `~/dev/WhatShouldICharge/` (NOT iCloud — avoids `.git/HEAD` locking)
 - **CTC website:** `~/dev/ctc-website/` (separate project, do NOT mix)
-- **DEPRECATED paths:** `~/Documents/WhatShouldICharge/`, any iCloud-based path
 
 ### Key Files
-- `main.py` — THE main application file. FastAPI app, all API routes, `run_estimate()`, `calculate_price()`, database models. ~5000+ lines.
-- `services/industry_config.py` — Claude Vision system prompt, industry-specific configuration.
+- `main.py` — FastAPI app, all API routes (13 APIRouter groups), `run_estimate()`, ~7700 lines.
+- `database.py` — Database engine, session factory, `init_db()`, seed functions, Stripe price config.
+- `models/__init__.py` — 12 SQLAlchemy models (User, Estimate, Session, PasswordReset, etc.).
+- `auth.py` — Auth helpers (get_current_user, require_user, require_admin).
+- `billing.py` — Usage limits, overage billing.
+- `cache.py` — In-memory response cache with LRU eviction.
+- `pricing.py` — `calculate_price()` function.
+- `sendgrid_email.py` — Email sending via SendGrid.
+- `services/industry_config.py` — AI estimation prompts, industry config.
 - `services/volume_lookup.py` — Volume lookup table + redistribution logic.
-- `static/` — All frontend HTML files (admin.html, widget.js, landing.html, etc.)
+- `alembic/` — Database migration system.
+- `tests/` — Test suite (35 tests).
+- `static/` — All frontend HTML files.
 - `tasks/todo.md` — Current task tracking
 - `tasks/lessons.md` — Lessons learned from past corrections
 
@@ -38,7 +46,7 @@
 
 ### 2. Verification Before Done
 - Never mark a task complete without proving it works
-- Check logs, demonstrate correctness
+- Run tests, check syntax, verify Railway deployment
 - Ask yourself: "Would a staff engineer approve this?"
 
 ### 3. Autonomous Bug Fixing
@@ -54,6 +62,11 @@
 - Find root causes, no temporary fixes
 - Senior developer standards
 
+### 6. APIRouter Ordering
+- `app.include_router()` MUST be called AFTER all route decorators are defined
+- FastAPI only copies routes that already exist on a router at include time
+- The include_router block lives at the very end of `main.py`
+
 ---
 
 ## Task Management
@@ -63,10 +76,16 @@
 
 ---
 
+## Architecture Quick Reference
+- **Estimation flow:** Photo upload → dual OpenRouter vision models (primary: Qwen2.5-VL-72B, verifier: Pixtral Large 2411) → `volume_lookup.py` validation → `calculate_price()` → response
+- **Stripe config:** All Price IDs from environment variables, never hardcoded.
+
+---
+
 ## Core Principles
 - Simplicity First: minimal code changes
 - No Laziness: senior developer standards
 
 ---
 
-*Last updated: March 25, 2026.*
+*Last updated: April 12, 2026.*

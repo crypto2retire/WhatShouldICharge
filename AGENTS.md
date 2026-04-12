@@ -25,23 +25,22 @@ All canonical repos must live on Kevin's local hard drive, outside iCloud-manage
 ### Deprecated Mount Guidance
 Older Cowork mount paths and session-specific mount instructions are deprecated. Do not rely on `/sessions/.../mnt/...` or old `/mnt/...` conventions as the source of truth for this repo.
 
-**Deprecated examples** (do NOT treat as canonical):
-- `/sessions/.../mnt/dev--WhatShouldICharge/`
-- `/sessions/.../mnt/ctc-website/`
-- `/mnt/WhatShouldICharge/`
-- `/mnt/whatshouldicharge.app/`
-
 ### Key WSIC Files
-- `main.py` — THE main application file. FastAPI app, all API routes, `run_estimate()` function, `calculate_price()`, database models, everything. ~5000+ lines.
-- `services/industry_config.py` — Industry-specific configuration and the main junk-removal estimation prompt used by the OpenRouter vision pipeline.
-- `services/volume_lookup.py` — Volume lookup table + redistribution logic. Overrides AI per-item volumes with known-accurate values.
-- `services/__init__.py` — Service package marker.
+- `main.py` — FastAPI app, all API routes (organized into 13 APIRouter groups), `run_estimate()`, ~7700 lines.
+- `database.py` — Database engine, session factory, `init_db()`, seed functions, `SEED_ITEMS`, Stripe price config.
+- `models/__init__.py` — 12 SQLAlchemy models (User, Estimate, Session, PasswordReset, CreditPack, etc.).
+- `auth.py` — Auth helpers (get_current_user, require_user, require_admin, team auth).
+- `billing.py` — Usage limits, overage billing, plan call limits.
+- `cache.py` — In-memory response cache with LRU eviction.
+- `pricing.py` — `calculate_price()` function (extracted for testability).
+- `sendgrid_email.py` — Email sending via SendGrid.
+- `services/industry_config.py` — Industry-specific configuration and the main junk-removal estimation prompt.
+- `services/volume_lookup.py` — Volume lookup table + redistribution logic.
+- `alembic/` — Database migration system (Alembic).
+- `tests/` — Test suite (35 tests: billing, pricing, volume lookup).
 - `static/` — All frontend HTML files (admin.html, widget.js, landing.html, etc.)
 - `tasks/todo.md` — Current task tracking
 - `tasks/lessons.md` — Lessons learned from past corrections
-
-### Memory & Config
-Local tool memory/config paths may exist outside the repo, but they are environment-specific and not authoritative for deploy or source-of-truth workflow decisions.
 
 ---
 
@@ -53,18 +52,27 @@ The deploy flow is:
 2. Commit and push to GitHub
 3. Railway auto-deploys from `main`
 
-### Secondary: Cursor / Codex
-For complex multi-file refactors or when another tool is more efficient:
-- Cursor IDE with AI assist
-- Codex CLI
+### Running Tests
+```
+python3 -m pytest tests/ -v
+```
+
+### Database Migrations
+To create a new migration after model changes:
+```
+alembic revision --autogenerate -m "description of change"
+```
+To apply migrations:
+```
+alembic upgrade head
+```
+To mark an existing database as current (without running migrations):
+```
+alembic stamp head
+```
 
 ### Deprecated Push Workarounds
 Older Cowork-specific push workarounds such as `osascript` wrappers or GitHub Contents API uploads are deprecated. Do not treat them as the primary workflow unless a local git push is truly unavailable in the current environment.
-
-Preferred workflow:
-- Use standard git from the local repo checkout
-- Push to `origin main`
-- Verify Railway deployment after push
 
 ---
 
@@ -77,7 +85,7 @@ Preferred workflow:
 
 ### 2. Verification Before Done
 - Never mark a task complete without proving it works
-- Check logs, demonstrate correctness
+- Run tests, check syntax, verify Railway deployment
 - Ask yourself: "Would a staff engineer approve this?"
 
 ### 3. Autonomous Bug Fixing
@@ -93,15 +101,21 @@ Preferred workflow:
 - Find root causes, no temporary fixes
 - Senior developer standards
 
+### 6. APIRouter Ordering
+- `app.include_router()` MUST be called AFTER all route decorators are defined
+- FastAPI only copies routes that already exist on a router at include time
+- The include_router block lives at the very end of `main.py`
+
 ---
 
 ## Architecture Quick Reference
-- **Estimation flow:** Photo upload → dual OpenRouter vision models (primary: Qwen2.5-VL-72B, verifier: Llama 3.2 90B Vision) with prompts from `services/industry_config.py` → price overlap gate → `services/volume_lookup.py` validation → `calculate_price()` in `main.py` → response
+- **Estimation flow:** Photo upload → dual OpenRouter vision models (primary: Qwen2.5-VL-72B, verifier: Pixtral Large 2411) with prompts from `services/industry_config.py` → `services/volume_lookup.py` validation → `calculate_price()` from `pricing.py` → response
 - **Item dimension lookups:** Claude Sonnet (via Anthropic API) is used only for looking up unknown item dimensions with Tavily web search
 - **Pricing:** Users set $/CY rates during onboarding. `calculate_price()` multiplies CY × rate. Min charge clamp. Asymmetric range (-10% low, +20% high).
 - **Credit system:** Pay-per-use credit packs ($10/single through 250-pack). Credits checked before estimate runs. Stripe one-time payments.
 - **Free trial:** New accounts currently get 2 free estimates before paid credits are required.
 - **Widget:** Embedded on client sites (e.g., CTC). Lead capture mode — customer submits photos, operator gets estimate + contact info.
+- **Stripe config:** All Stripe Price IDs are read from environment variables (STRIPE_PRICE_SINGLE, STRIPE_PRICE_SOLO, etc.) — never hardcoded.
 
 ---
 
@@ -112,4 +126,4 @@ Preferred workflow:
 
 ---
 
-*Last updated: April 11, 2026.*
+*Last updated: April 12, 2026.*

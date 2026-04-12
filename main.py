@@ -10,7 +10,7 @@ import html
 import shutil
 import tempfile
 import statistics
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from pathlib import Path
 
@@ -405,7 +405,7 @@ OVERAGE_RATE_CENTS = {"solo": 10, "team": 10, "enterprise": 8, "custom": 10}
 
 def _reset_billing_cycle_if_needed(user):
     """Reset monthly usage if billing cycle has elapsed. Returns True if reset."""
-    today = datetime.utcnow()
+    today = datetime.now(timezone.utc)
     if user.billing_cycle_start is None or (today - user.billing_cycle_start).days >= 30:
         user.monthly_calls_used = 0
         user.overage_charges_cents = 0
@@ -463,7 +463,7 @@ class User(Base):
     company_name = Column(String, default="")
     company_city = Column(String, default="")
     company_state = Column(String, default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     subscription_tier = Column(String, default="free", index=True)
     estimates_used = Column(Integer, default=0)
     estimates_limit = Column(Integer, default=3)
@@ -508,7 +508,7 @@ class TeamMember(Base):
     pin_hash = Column(String, nullable=False)
     role = Column(String, default="estimator")
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class TeamSession(Base):
@@ -517,7 +517,7 @@ class TeamSession(Base):
     team_member_id = Column(Integer, nullable=False)
     owner_user_id = Column(Integer, nullable=False)
     token = Column(String, unique=True, nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     expires_at = Column(DateTime)
 
 
@@ -526,7 +526,7 @@ class SiteConfig(Base):
     id = Column(Integer, primary_key=True, index=True)
     config_key = Column(String, unique=True, nullable=False, index=True)
     config_value = Column(Text, default="")
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class PlanConfig(Base):
@@ -555,8 +555,8 @@ class CreditPack(Base):
     is_active = Column(Boolean, default=True)
     is_featured = Column(Boolean, default=False)
     sort_order = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class CreditTransaction(Base):
@@ -584,7 +584,7 @@ class PromoCode(Base):
     times_used = Column(Integer, default=0)
     expires_at = Column(DateTime, default=None)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class Session(Base):
@@ -592,7 +592,7 @@ class Session(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False)
     token = Column(String, unique=True, nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     expires_at = Column(DateTime)
 
 
@@ -601,7 +601,7 @@ class PasswordReset(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False, index=True)
     token_hash = Column(String, nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     expires_at = Column(DateTime, nullable=False)
     used_at = Column(DateTime, default=None)
 
@@ -615,7 +615,7 @@ class Estimate(Base):
     customer_name = Column(String, default="")
     customer_email = Column(String, default="")
     customer_phone = Column(String, default="")
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     photos_count = Column(Integer)
     result_json = Column(Text)
     price_low = Column(Float)
@@ -667,8 +667,8 @@ class ItemReferenceLibrary(Base):
     source = Column(String, default="builtin")
     search_query_used = Column(String, default="")
     times_seen = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 async def init_db():
@@ -838,8 +838,8 @@ async def init_db():
         for stmt in alter_statements:
             try:
                 await conn.execute(text(stmt))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Migration skip: %s — %s", stmt[:80], e)
 
     # Create credit_transactions table
     async with engine.begin() as conn:
@@ -876,8 +876,8 @@ async def init_db():
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("credit_transactions table creation skip: %s", e)
 
     # Create password_resets table
     async with engine.begin() as conn:
@@ -906,8 +906,8 @@ async def init_db():
                         used_at TIMESTAMP DEFAULT NULL
                     )
                 """))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("password_resets table creation skip: %s", e)
 
     # Backfill NULL values to defaults for existing users
     backfill_statements = [
@@ -924,17 +924,17 @@ async def init_db():
         for stmt in backfill_statements:
             try:
                 await conn.execute(text(stmt))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Backfill skip: %s — %s", stmt[:60], e)
 
-    # Grant 999 credits to admin accounts for testing
+    # Grant 999 credits to admin accounts for testing to admin accounts for testing
     async with engine.begin() as conn:
         try:
             await conn.execute(text(
                 "UPDATE users SET credit_balance = 999 WHERE is_admin = true AND (credit_balance IS NULL OR credit_balance < 999)"
             ))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Admin credit grant skip: %s", e)
 
     # Set CTC (Clear The Clutter) custom rates if not already set
     async with engine.begin() as conn:
@@ -943,8 +943,8 @@ async def init_db():
                 "UPDATE users SET price_per_cy_standard = 35.0, price_per_cy_heavy = 50.0 "
                 "WHERE company_slug = 'clear-the-clutter' AND price_per_cy_standard IS NULL"
             ))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("CTC rates backfill skip: %s", e)
     logger.info("Database migrations and backfills complete")
 
 
@@ -1236,8 +1236,8 @@ def _stripe_deactivate_price_sync(price_id: str) -> None:
         return
     try:
         stripe.Price.modify(price_id, active=False)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Operation failed: %s", e)
 
 
 def _stripe_product_id_from_price_sync(price_id: str) -> str:
@@ -1375,7 +1375,7 @@ async def get_current_user(request: Request) -> Optional[User]:
         return None
     async with AsyncSessionLocal() as db:
         result = await db.execute(
-            select(Session).where(Session.token == token, Session.expires_at > datetime.utcnow())
+            select(Session).where(Session.token == token, Session.expires_at > datetime.now(timezone.utc))
         )
         sess = result.scalar_one_or_none()
         if not sess:
@@ -1404,7 +1404,7 @@ async def get_team_member(request: Request):
         return None, None
     async with AsyncSessionLocal() as db:
         result = await db.execute(
-            select(TeamSession).where(TeamSession.token == token, TeamSession.expires_at > datetime.utcnow())
+            select(TeamSession).where(TeamSession.token == token, TeamSession.expires_at > datetime.now(timezone.utc))
         )
         sess = result.scalar_one_or_none()
         if not sess:
@@ -2614,14 +2614,14 @@ def _safe_json_loads_list(raw: str) -> list[str]:
     try:
         val = json.loads(raw)
         return val if isinstance(val, list) else []
-    except Exception:
+    except Exception as e:
         return []
 
 
 def _safe_json_loads(raw: str, default):
     try:
         return json.loads(raw)
-    except Exception:
+    except Exception as e:
         return default
 
 
@@ -2690,14 +2690,14 @@ def analyze_photo_quality(image_bytes: bytes, photo_index: int) -> dict:
             metrics["context_score"] = round(context_score, 2)
             if context_score < 0.62 and center_mean > 14:
                 flags.append("needs_wider_context")
-    except Exception:
+    except Exception as e:
         flags.append("unreadable")
     finally:
         if img is not None:
             try:
                 img.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Fallback handled: %s", e)
 
     return {
         "photo_index": photo_index,
@@ -2875,7 +2875,7 @@ async def prepare_estimate_photos(
             img.load()
             analysis["hash"] = _image_average_hash(img)
             img.close()
-        except Exception:
+        except Exception as e:
             analysis["hash"] = None
         analyses.append(analysis)
 
@@ -3462,7 +3462,7 @@ async def _get_lightweight_price_calibration(scene_type: str, capture_mode: str)
     if not st:
         return None
     cm = normalize_capture_mode(capture_mode)
-    cutoff = datetime.utcnow() - timedelta(days=180)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=180)
     async with AsyncSessionLocal() as db:
         query = (
             select(Estimate.price_low, Estimate.price_high, Estimate.actual_price)
@@ -3485,7 +3485,7 @@ async def _get_lightweight_price_calibration(scene_type: str, capture_mode: str)
         try:
             mid = (float(low or 0) + float(high or 0)) / 2.0
             act = float(actual or 0)
-        except Exception:
+        except Exception as e:
             continue
         if mid <= 0 or act <= 0:
             continue
@@ -3623,8 +3623,8 @@ def parse_clarification_answers(raw: str | None) -> dict:
         data = json.loads(raw)
         if isinstance(data, dict):
             return data
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Fallback handled: %s", e)
     return {}
 
 
@@ -3667,7 +3667,7 @@ def apply_fail_safe_estimate_rules(
         if any(k in nm for k in ("trash bag", "bags", "contractor bag", "garbage bag")):
             try:
                 bag_qty += max(1, int(item.get("quantity") or 1))
-            except Exception:
+            except Exception as e:
                 bag_qty += 1
 
     # Hard cap impossible totals for small/partial garage storage views without truck context.
@@ -3830,7 +3830,7 @@ async def public_create_estimate(
         "customer_email": customer_email,
         "customer_phone": customer_phone,
         "preferred_contact": preferred_contact,
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
         "stored_photos": stored_photos,
         "company_email": company_user.email,
         "company_name": company_user.company_name or "Junk Removal Company",
@@ -3949,7 +3949,7 @@ async def public_appointment_request(request: Request):
         est.appointment_contact_method = contact_method
         est.appointment_preferred_day = preferred_day
         est.appointment_preferred_time = preferred_time
-        est.appointment_requested_at = datetime.utcnow()
+        est.appointment_requested_at = datetime.now(timezone.utc)
         if additional_items:
             est.additional_items_text = additional_items
 
@@ -4002,7 +4002,7 @@ async def public_appointment_request(request: Request):
                             photo_b64 = photo_b64.get("b64", "")
                         if photo_b64:
                             photos_html += f'<img src="data:image/jpeg;base64,{photo_b64}" style="width:150px;height:150px;object-fit:cover;border-radius:8px;margin:4px;border:1px solid #ddd" alt="Photo {idx+1}">'
-            except Exception:
+            except Exception as e:
                 pass  # If we can't load items/photos, still send the email
 
             items_section = ""
@@ -4068,7 +4068,7 @@ async def public_appointment_request(request: Request):
                     f"\U0001f514 SCHEDULE REQUEST: {cust_name} \u2014 {preferred_day} {time_label}",
                     appt_html,
                 )
-            except Exception:
+            except Exception as e:
                 pass  # Don't fail if email fails
 
     return {"ok": True, "message": "Appointment request submitted"}
@@ -4132,7 +4132,7 @@ async def auth_signup(request: Request):
         sess = Session(
             user_id=user.id,
             token=token,
-            expires_at=datetime.utcnow() + timedelta(days=30),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
         )
         db.add(sess)
         await db.commit()
@@ -4184,7 +4184,7 @@ async def auth_login(request: Request):
         sess = Session(
             user_id=user.id,
             token=token,
-            expires_at=datetime.utcnow() + timedelta(days=30),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
         )
         db.add(sess)
         await db.commit()
@@ -4221,7 +4221,7 @@ async def auth_forgot_password(request: Request):
         db.add(PasswordReset(
             user_id=user.id,
             token_hash=token_hash,
-            expires_at=datetime.utcnow() + timedelta(hours=1),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         ))
         await db.commit()
 
@@ -4283,7 +4283,7 @@ async def auth_reset_password(request: Request):
             select(PasswordReset)
             .where(PasswordReset.user_id == user.id)
             .where(PasswordReset.used_at == None)
-            .where(PasswordReset.expires_at > datetime.utcnow())
+            .where(PasswordReset.expires_at > datetime.now(timezone.utc))
             .order_by(PasswordReset.created_at.desc())
         )
         reset_entry = reset_result.scalars().first()
@@ -4300,7 +4300,7 @@ async def auth_reset_password(request: Request):
             lambda: bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         )
         user.password_hash = new_hash
-        reset_entry.used_at = datetime.utcnow()
+        reset_entry.used_at = datetime.now(timezone.utc)
         await db.commit()
 
     return JSONResponse({"success": True, "message": "Password has been reset. You can now log in with your new password."})
@@ -4561,7 +4561,7 @@ async def logout_all_devices(request: Request):
         db.add(Session(
             user_id=user.id,
             token=new_token,
-            expires_at=datetime.utcnow() + timedelta(days=30),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
         ))
         await db.commit()
 
@@ -4689,7 +4689,7 @@ async def update_library_item(request: Request, item_id: int):
             item.item_category = body["item_category"]
         if "dimensions" in body:
             item.dimensions = str(body["dimensions"])
-        item.updated_at = datetime.utcnow()
+        item.updated_at = datetime.now(timezone.utc)
         await db.commit()
         cache_invalidate("library")
         return {"success": True}
@@ -4864,8 +4864,8 @@ async def get_market_rates(city: str, state: str) -> dict:
                     "state": state,
                     "samples": len(all_prices),
                 }
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Fallback handled: %s", e)
 
     return default
 
@@ -4977,7 +4977,7 @@ def _claude_response_usage(resp) -> tuple[int, int, str]:
         out = int(getattr(u, "output_tokens", 0) or 0) if u else 0
         mod = str(getattr(resp, "model", "") or "")
         return inp, out, mod
-    except Exception:
+    except Exception as e:
         return 0, 0, ""
 
 
@@ -5047,7 +5047,7 @@ def normalize_model_eval_models(raw_models) -> list[str]:
 
 
 def cleanup_expired_model_eval_jobs():
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expired = [
         job_id for job_id, job in model_eval_jobs.items()
         if (now - job.get("created_at", now)).total_seconds() > MODEL_EVAL_TTL_SECONDS
@@ -5068,7 +5068,7 @@ def _safe_eval_filename(filename: str, index: int) -> str:
 def _model_eval_price_mid(low: float, high: float) -> float:
     try:
         return round((float(low or 0) + float(high or 0)) / 2.0, 2)
-    except Exception:
+    except Exception as e:
         return 0.0
 
 
@@ -5152,8 +5152,8 @@ async def run_openrouter_model_eval(image_b64: str, media_type: str, system_prom
                     detail = str(err_obj.get("message") or "").strip()
                 if not detail and isinstance(err_json, dict):
                     detail = str(err_json.get("message") or "").strip()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Fallback handled: %s", e)
             snippet = detail or raw_text[:300] or response.reason_phrase
             raise RuntimeError(f"OpenRouter {response.status_code}: {snippet}")
         data = response.json()
@@ -5230,8 +5230,8 @@ async def run_openrouter_estimate(
                     detail = str(err_obj.get("message") or "").strip()
                 if not detail and isinstance(err_json, dict):
                     detail = str(err_json.get("message") or "").strip()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Fallback handled: %s", e)
             snippet = detail or raw_text[:300] or response.reason_phrase
             raise RuntimeError(f"OpenRouter {response.status_code}: {snippet}")
         data = response.json()
@@ -5463,8 +5463,8 @@ If you cannot find dimensions, return cubic_yards: 0"""
 
         return result
 
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Fallback handled: %s", e)
 
     return {"cubic_yards": 0, "confidence": 0}
 
@@ -5490,7 +5490,7 @@ async def update_library_from_estimate(items: list):
         for name, item in item_map.items():
             if name in existing_items:
                 existing_items[name].times_seen = existing_items[name].times_seen + 1
-                existing_items[name].updated_at = datetime.utcnow()
+                existing_items[name].updated_at = datetime.now(timezone.utc)
             else:
                 cy = item.get("cubic_yards", 0)
                 if cy and cy > 0:
@@ -5538,7 +5538,7 @@ def check_concurrent_limit():
 
 
 def cleanup_expired_jobs():
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expired = [k for k, v in estimate_jobs.items()
                if (now - v.get("created_at", now)).total_seconds() > JOB_TTL_SECONDS]
     for k in expired:
@@ -5579,7 +5579,7 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
             for model_name in job.get("models", []):
                 job["current_step"] = f"{image.get('filename', 'image')} • {model_name}"
                 job["message"] = f"Running model comparison... {int(job.get('completed_runs', 0) or 0)}/{int(job.get('total_runs', 0) or 0)} model runs completed."
-                job["updated_at"] = datetime.utcnow()
+                job["updated_at"] = datetime.now(timezone.utc)
                 result_row = {
                     "model": model_name,
                     "parse_ok": False,
@@ -5633,9 +5633,9 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
                     result_row["error"] = f"{type(err).__name__}: {err}"
                 image["results"].append(result_row)
                 job["completed_runs"] = int(job.get("completed_runs", 0) or 0) + 1
-                job["updated_at"] = datetime.utcnow()
+                job["updated_at"] = datetime.now(timezone.utc)
             job["completed_images"] = int(job.get("completed_images", 0) or 0) + 1
-            job["updated_at"] = datetime.utcnow()
+            job["updated_at"] = datetime.now(timezone.utc)
 
         job["comparisons"] = _build_model_eval_comparisons(job)
         workspace = Path(job["workspace"])
@@ -5657,7 +5657,7 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
                     errors.append(str(result.get("error")))
         job["status"] = "complete"
         job["current_step"] = ""
-        job["updated_at"] = datetime.utcnow()
+        job["updated_at"] = datetime.now(timezone.utc)
         if success_rows == total_rows:
             job["message"] = "Model eval complete."
         elif success_rows > 0:
@@ -5669,7 +5669,7 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
     except Exception as err:
         job["status"] = "error"
         job["current_step"] = ""
-        job["updated_at"] = datetime.utcnow()
+        job["updated_at"] = datetime.now(timezone.utc)
         job["message"] = f"Model eval failed: {type(err).__name__}: {err}"
 
 
@@ -5699,7 +5699,7 @@ async def admin_create_model_eval(
     job_id = secrets.token_hex(8)
     workspace = MODEL_EVAL_ROOT / job_id
     workspace.mkdir(parents=True, exist_ok=True)
-    created_at = datetime.utcnow()
+    created_at = datetime.now(timezone.utc)
 
     images = []
     skipped_files = []
@@ -5730,8 +5730,8 @@ async def admin_create_model_eval(
             skipped_files.append(original_name)
             try:
                 file_path.unlink(missing_ok=True)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Fallback handled: %s", e)
             continue
         except Exception as err:
             shutil.rmtree(workspace, ignore_errors=True)
@@ -5780,7 +5780,7 @@ async def admin_create_model_eval(
     extraction_prompt = get_extraction_prompt("junk_removal")
     try:
         library_context = await get_library_context()
-    except Exception:
+    except Exception as e:
         library_context = ""
     if library_context:
         extraction_prompt += "\n" + library_context
@@ -5798,7 +5798,7 @@ async def admin_list_model_evals(request: Request):
     await require_admin(request)
     cleanup_expired_model_eval_jobs()
     jobs = []
-    for job in sorted(model_eval_jobs.values(), key=lambda j: j.get("created_at") or datetime.utcnow(), reverse=True):
+    for job in sorted(model_eval_jobs.values(), key=lambda j: j.get("created_at") or datetime.now(timezone.utc), reverse=True):
         jobs.append({
             "id": job["id"],
             "status": job.get("status", ""),
@@ -5999,7 +5999,7 @@ async def create_estimate(
         "result": None,
         "user_id": user.id,
         "estimate_name": estimate_name.strip(),
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
         "stored_photos": stored_photos,
         "capture_mode": capture_mode,
         "clarification_answers": parse_clarification_answers(clarification_answers_json),
@@ -6504,7 +6504,7 @@ async def run_estimate(
             try:
                 await db.execute(text("ALTER TABLE estimates ADD COLUMN IF NOT EXISTS photos_json TEXT DEFAULT ''"))
                 await db.commit()
-            except Exception:
+            except Exception as e:
                 await db.rollback()
 
         async with AsyncSessionLocal() as db:
@@ -6558,8 +6558,8 @@ async def run_estimate(
 
         try:
             await update_library_from_estimate(result_data.get("items", []))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Operation failed: %s", e)
 
         # ── Send lead email to company with photos, customer info, and estimate ──
         try:
@@ -6629,7 +6629,7 @@ async def run_estimate(
                     f"New Estimate Lead: {cust_name} — ${price_low:,.0f}-${price_high:,.0f}",
                     lead_html,
                 )
-        except Exception:
+        except Exception as e:
             pass  # Don't fail the estimate if email fails
 
         credit_bal = getattr(user, 'credit_balance', 0) or 0
@@ -6899,13 +6899,13 @@ async def get_estimate_detail(request: Request, estimate_id: int):
         if e.result_json:
             try:
                 result_data = json.loads(e.result_json)
-            except Exception:
+            except Exception as e:
                 pass
         adjustments_data = {}
         if getattr(e, "adjustments_json", ""):
             try:
                 adjustments_data = json.loads(e.adjustments_json)
-            except Exception:
+            except Exception as e:
                 adjustments_data = {}
         return {
             "id": e.id,
@@ -6942,7 +6942,7 @@ def _normalize_adjustment_payload(payload: dict) -> dict:
     qty_overrides = payload.get("quantity_overrides") or {}
     try:
         excluded_norm = sorted({int(x) for x in excluded if str(x).strip() != "" and int(x) >= 0})
-    except Exception:
+    except Exception as e:
         excluded_norm = []
     qty_norm = {}
     if isinstance(qty_overrides, dict):
@@ -6950,7 +6950,7 @@ def _normalize_adjustment_payload(payload: dict) -> dict:
             try:
                 idx = int(k)
                 qty = int(v)
-            except Exception:
+            except Exception as e:
                 continue
             if idx >= 0 and qty >= 1:
                 qty_norm[str(idx)] = qty
@@ -6959,7 +6959,7 @@ def _normalize_adjustment_payload(payload: dict) -> dict:
             return None
         try:
             return float(v)
-        except Exception:
+        except Exception as e:
             return None
 
     out = {
@@ -6969,7 +6969,7 @@ def _normalize_adjustment_payload(payload: dict) -> dict:
         "adjusted_price_low": _as_float(payload.get("adjusted_price_low")),
         "adjusted_price_high": _as_float(payload.get("adjusted_price_high")),
     }
-    out["updated_at"] = datetime.utcnow().isoformat()
+    out["updated_at"] = datetime.now(timezone.utc).isoformat()
     return out
 
 
@@ -7025,7 +7025,7 @@ async def get_estimate_photos(request: Request, estimate_id: int):
             return {"photos": []}
         try:
             photos = json.loads(e.photos_json)
-        except Exception:
+        except Exception as e:
             photos = []
         return {"photos": photos, "count": len(photos)}
 
@@ -7131,7 +7131,7 @@ async def add_usage_funds(request: Request):
 async def admin_analytics(request: Request):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         today = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
@@ -7188,7 +7188,7 @@ async def admin_analytics(request: Request):
 async def admin_api_costs(request: Request):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
         result = await db.execute(
@@ -7329,7 +7329,7 @@ async def admin_update_site_config(request: Request):
             config = result.scalar_one_or_none()
             if config:
                 config.config_value = str(value)
-                config.updated_at = datetime.utcnow()
+                config.updated_at = datetime.now(timezone.utc)
             else:
                 db.add(SiteConfig(config_key=key, config_value=str(value)))
         await db.commit()
@@ -7419,21 +7419,21 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
         if e.result_json:
             try:
                 result_data = json.loads(e.result_json)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Fallback handled: %s", e)
 
         # Parse lookups
         lookups = []
         if e.lookups_json:
             try:
                 lookups = json.loads(e.lookups_json)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Fallback handled: %s", e)
         adjustments = {}
         if getattr(e, "adjustments_json", ""):
             try:
                 adjustments = json.loads(e.adjustments_json)
-            except Exception:
+            except Exception as e:
                 adjustments = {}
 
         # Build photos array with data URLs
@@ -7443,8 +7443,8 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
                 raw_photos = json.loads(e.photos_json)
                 for idx, b64 in enumerate(raw_photos):
                     photos.append({"index": idx, "data_url": f"data:image/jpeg;base64,{b64}"})
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Fallback handled: %s", e)
 
         return {
             "id": e.id,
@@ -7936,7 +7936,7 @@ async def validate_promo_code(request: Request):
             return {"valid": False, "reason": "Invalid code"}
         if not p.is_active:
             return {"valid": False, "reason": "Code is inactive"}
-        if p.expires_at and p.expires_at < datetime.utcnow():
+        if p.expires_at and p.expires_at < datetime.now(timezone.utc):
             return {"valid": False, "reason": "Code expired"}
         if p.usage_limit > 0 and p.times_used >= p.usage_limit:
             return {"valid": False, "reason": "Code usage limit reached"}
@@ -8037,7 +8037,7 @@ async def admin_accuracy(request: Request, capture_mode: str = ""):
         calibrated_estimates = actuals_result.scalars().all()
 
         # Needs data queue: estimates older than 7 days without actual_price
-        cutoff = datetime.utcnow() - timedelta(days=7)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
         needs_data_query = (
             select(Estimate)
             .where(Estimate.actual_price.is_(None), Estimate.created_at < cutoff)
@@ -8218,7 +8218,7 @@ async def admin_accuracy_export(
             (getattr(e, "geometry_summary", "") or "").replace("\n", " ")[:300],
         ])
 
-    filename = f"wsic-accuracy-export-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.csv"
+    filename = f"wsic-accuracy-export-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.csv"
     return StreamingResponse(
         iter([out.getvalue()]),
         media_type="text/csv",
@@ -8423,7 +8423,7 @@ async def team_auth(request: Request):
             team_member_id=matched_member.id,
             owner_user_id=owner.id,
             token=token,
-            expires_at=datetime.utcnow() + timedelta(hours=12),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=12),
         )
         db.add(sess)
         await db.commit()
@@ -8522,7 +8522,7 @@ async def team_create_estimate(
         await db.commit()
         user = fresh_owner
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if capture_mode == "operator_assist":
         image_content.append({
             "type": "text",

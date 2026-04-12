@@ -1,18 +1,21 @@
 [project]
-name = "repl-nix-workspace"
-version = "0.1.0"
-description = "Add your description here"
+name = "whatshouldicharge"
+version = "1.0.0"
+description = "AI-powered junk removal photo estimator"
 requires-python = ">=3.11"
 dependencies = [
     "aiosqlite>=0.22.1",
     "anthropic>=0.84.0",
+    "asyncpg>=0.30.0",
     "bcrypt>=5.0.0",
+    "cryptography>=44.0.0",
     "fastapi>=0.135.1",
     "httpx>=0.28.1",
     "pillow>=12.1.1",
     "python-multipart>=0.0.22",
     "reportlab>=4.4.10",
     "sendgrid>=6.12.5",
+    "slowapi>=0.1.9",
     "sqlalchemy>=2.0.48",
     "stripe>=14.4.1",
     "uvicorn>=0.41.0",

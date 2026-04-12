@@ -1007,27 +1007,6 @@ async def lifespan(app):
     await engine.dispose()
 
 
-# ── Mount Routers ────────────────────────────────────────────────────────
-app.include_router(router_health)
-app.include_router(router_credits)
-app.include_router(router_pages)
-app.include_router(router_public)
-app.include_router(router_auth)
-app.include_router(router_settings)
-app.include_router(router_library)
-app.include_router(router_estimates)
-app.include_router(router_payments)
-app.include_router(router_admin)
-app.include_router(router_team)
-app.include_router(router_pdf)
-app.include_router(router_promo)
-
-app.router.lifespan_context = lifespan
-
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-
 
 @router_health.get("/api/health")
 async def health_check():
@@ -8330,3 +8309,22 @@ async def send_estimate(request: Request, estimate_id: int):
         f"<p style='color:#999;font-size:11px;'>Powered by WhatShouldICharge.app</p>"
     )
     return {"success": True}
+
+
+app.router.lifespan_context = lifespan
+
+app.include_router(router_health)
+app.include_router(router_credits)
+app.include_router(router_pages)
+app.include_router(router_public)
+app.include_router(router_auth)
+app.include_router(router_settings)
+app.include_router(router_library)
+app.include_router(router_estimates)
+app.include_router(router_payments)
+app.include_router(router_admin)
+app.include_router(router_team)
+app.include_router(router_pdf)
+app.include_router(router_promo)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")

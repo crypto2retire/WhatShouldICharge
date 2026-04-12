@@ -431,7 +431,7 @@ OVERAGE_RATE_CENTS = {"solo": 10, "team": 10, "enterprise": 8, "custom": 10}
 
 def _reset_billing_cycle_if_needed(user):
     """Reset monthly usage if billing cycle has elapsed. Returns True if reset."""
-    today = datetime.now(timezone.utc)
+    today = datetime.now(timezone.utc).replace(tzinfo=None)
     if user.billing_cycle_start is None or (today - user.billing_cycle_start).days >= 30:
         user.monthly_calls_used = 0
         user.overage_charges_cents = 0
@@ -489,7 +489,7 @@ class User(Base):
     company_name = Column(String, default="")
     company_city = Column(String, default="")
     company_state = Column(String, default="")
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     subscription_tier = Column(String, default="free", index=True)
     estimates_used = Column(Integer, default=0)
     estimates_limit = Column(Integer, default=3)
@@ -534,7 +534,7 @@ class TeamMember(Base):
     pin_hash = Column(String, nullable=False)
     role = Column(String, default="estimator")
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 class TeamSession(Base):
@@ -543,7 +543,7 @@ class TeamSession(Base):
     team_member_id = Column(Integer, nullable=False)
     owner_user_id = Column(Integer, nullable=False)
     token = Column(String, unique=True, nullable=False, index=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     expires_at = Column(DateTime)
 
 
@@ -552,7 +552,7 @@ class SiteConfig(Base):
     id = Column(Integer, primary_key=True, index=True)
     config_key = Column(String, unique=True, nullable=False, index=True)
     config_value = Column(Text, default="")
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 class PlanConfig(Base):
@@ -581,8 +581,8 @@ class CreditPack(Base):
     is_active = Column(Boolean, default=True)
     is_featured = Column(Boolean, default=False)
     sort_order = Column(Integer, default=0)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 class CreditTransaction(Base):
@@ -610,7 +610,7 @@ class PromoCode(Base):
     times_used = Column(Integer, default=0)
     expires_at = Column(DateTime, default=None)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 class Session(Base):
@@ -618,7 +618,7 @@ class Session(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False)
     token = Column(String, unique=True, nullable=False, index=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     expires_at = Column(DateTime)
 
 
@@ -627,7 +627,7 @@ class PasswordReset(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False, index=True)
     token_hash = Column(String, nullable=False, index=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     expires_at = Column(DateTime, nullable=False)
     used_at = Column(DateTime, default=None)
 
@@ -641,7 +641,7 @@ class Estimate(Base):
     customer_name = Column(String, default="")
     customer_email = Column(String, default="")
     customer_phone = Column(String, default="")
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
     photos_count = Column(Integer)
     result_json = Column(Text)
     price_low = Column(Float)
@@ -693,8 +693,8 @@ class ItemReferenceLibrary(Base):
     source = Column(String, default="builtin")
     search_query_used = Column(String, default="")
     times_seen = Column(Integer, default=0)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 async def init_db():
@@ -1401,7 +1401,7 @@ async def get_current_user(request: Request) -> Optional[User]:
         return None
     async with AsyncSessionLocal() as db:
         result = await db.execute(
-            select(Session).where(Session.token == token, Session.expires_at > datetime.now(timezone.utc))
+            select(Session).where(Session.token == token, Session.expires_at > datetime.now(timezone.utc).replace(tzinfo=None))
         )
         sess = result.scalar_one_or_none()
         if not sess:
@@ -1430,7 +1430,7 @@ async def get_team_member(request: Request):
         return None, None
     async with AsyncSessionLocal() as db:
         result = await db.execute(
-            select(TeamSession).where(TeamSession.token == token, TeamSession.expires_at > datetime.now(timezone.utc))
+            select(TeamSession).where(TeamSession.token == token, TeamSession.expires_at > datetime.now(timezone.utc).replace(tzinfo=None))
         )
         sess = result.scalar_one_or_none()
         if not sess:
@@ -3488,7 +3488,7 @@ async def _get_lightweight_price_calibration(scene_type: str, capture_mode: str)
     if not st:
         return None
     cm = normalize_capture_mode(capture_mode)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=180)
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=180)
     async with AsyncSessionLocal() as db:
         query = (
             select(Estimate.price_low, Estimate.price_high, Estimate.actual_price)
@@ -3856,7 +3856,7 @@ async def public_create_estimate(
         "customer_email": customer_email,
         "customer_phone": customer_phone,
         "preferred_contact": preferred_contact,
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(timezone.utc).replace(tzinfo=None),
         "stored_photos": stored_photos,
         "company_email": company_user.email,
         "company_name": company_user.company_name or "Junk Removal Company",
@@ -3975,7 +3975,7 @@ async def public_appointment_request(request: Request):
         est.appointment_contact_method = contact_method
         est.appointment_preferred_day = preferred_day
         est.appointment_preferred_time = preferred_time
-        est.appointment_requested_at = datetime.now(timezone.utc)
+        est.appointment_requested_at = datetime.now(timezone.utc).replace(tzinfo=None)
         if additional_items:
             est.additional_items_text = additional_items
 
@@ -4158,7 +4158,7 @@ async def auth_signup(request: Request):
         sess = Session(
             user_id=user.id,
             token=token,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=30),
         )
         db.add(sess)
         await db.commit()
@@ -4210,7 +4210,7 @@ async def auth_login(request: Request):
         sess = Session(
             user_id=user.id,
             token=token,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=30),
         )
         db.add(sess)
         await db.commit()
@@ -4247,7 +4247,7 @@ async def auth_forgot_password(request: Request):
         db.add(PasswordReset(
             user_id=user.id,
             token_hash=token_hash,
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1),
         ))
         await db.commit()
 
@@ -4309,7 +4309,7 @@ async def auth_reset_password(request: Request):
             select(PasswordReset)
             .where(PasswordReset.user_id == user.id)
             .where(PasswordReset.used_at == None)
-            .where(PasswordReset.expires_at > datetime.now(timezone.utc))
+            .where(PasswordReset.expires_at > datetime.now(timezone.utc).replace(tzinfo=None))
             .order_by(PasswordReset.created_at.desc())
         )
         reset_entry = reset_result.scalars().first()
@@ -4326,7 +4326,7 @@ async def auth_reset_password(request: Request):
             lambda: bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         )
         user.password_hash = new_hash
-        reset_entry.used_at = datetime.now(timezone.utc)
+        reset_entry.used_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await db.commit()
 
     return JSONResponse({"success": True, "message": "Password has been reset. You can now log in with your new password."})
@@ -4587,7 +4587,7 @@ async def logout_all_devices(request: Request):
         db.add(Session(
             user_id=user.id,
             token=new_token,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=30),
         ))
         await db.commit()
 
@@ -4715,7 +4715,7 @@ async def update_library_item(request: Request, item_id: int):
             item.item_category = body["item_category"]
         if "dimensions" in body:
             item.dimensions = str(body["dimensions"])
-        item.updated_at = datetime.now(timezone.utc)
+        item.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await db.commit()
         cache_invalidate("library")
         return {"success": True}
@@ -5073,7 +5073,7 @@ def normalize_model_eval_models(raw_models) -> list[str]:
 
 
 def cleanup_expired_model_eval_jobs():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     expired = [
         job_id for job_id, job in model_eval_jobs.items()
         if (now - job.get("created_at", now)).total_seconds() > MODEL_EVAL_TTL_SECONDS
@@ -5516,7 +5516,7 @@ async def update_library_from_estimate(items: list):
         for name, item in item_map.items():
             if name in existing_items:
                 existing_items[name].times_seen = existing_items[name].times_seen + 1
-                existing_items[name].updated_at = datetime.now(timezone.utc)
+                existing_items[name].updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             else:
                 cy = item.get("cubic_yards", 0)
                 if cy and cy > 0:
@@ -5564,7 +5564,7 @@ def check_concurrent_limit():
 
 
 def cleanup_expired_jobs():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     expired = [k for k, v in estimate_jobs.items()
                if (now - v.get("created_at", now)).total_seconds() > JOB_TTL_SECONDS]
     for k in expired:
@@ -5605,7 +5605,7 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
             for model_name in job.get("models", []):
                 job["current_step"] = f"{image.get('filename', 'image')} • {model_name}"
                 job["message"] = f"Running model comparison... {int(job.get('completed_runs', 0) or 0)}/{int(job.get('total_runs', 0) or 0)} model runs completed."
-                job["updated_at"] = datetime.now(timezone.utc)
+                job["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
                 result_row = {
                     "model": model_name,
                     "parse_ok": False,
@@ -5659,9 +5659,9 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
                     result_row["error"] = f"{type(err).__name__}: {err}"
                 image["results"].append(result_row)
                 job["completed_runs"] = int(job.get("completed_runs", 0) or 0) + 1
-                job["updated_at"] = datetime.now(timezone.utc)
+                job["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
             job["completed_images"] = int(job.get("completed_images", 0) or 0) + 1
-            job["updated_at"] = datetime.now(timezone.utc)
+            job["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
 
         job["comparisons"] = _build_model_eval_comparisons(job)
         workspace = Path(job["workspace"])
@@ -5683,7 +5683,7 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
                     errors.append(str(result.get("error")))
         job["status"] = "complete"
         job["current_step"] = ""
-        job["updated_at"] = datetime.now(timezone.utc)
+        job["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
         if success_rows == total_rows:
             job["message"] = "Model eval complete."
         elif success_rows > 0:
@@ -5695,7 +5695,7 @@ async def run_model_eval_job(job_id: str, extraction_prompt: str, anthropic_key:
     except Exception as err:
         job["status"] = "error"
         job["current_step"] = ""
-        job["updated_at"] = datetime.now(timezone.utc)
+        job["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
         job["message"] = f"Model eval failed: {type(err).__name__}: {err}"
 
 
@@ -5725,7 +5725,7 @@ async def admin_create_model_eval(
     job_id = secrets.token_hex(8)
     workspace = MODEL_EVAL_ROOT / job_id
     workspace.mkdir(parents=True, exist_ok=True)
-    created_at = datetime.now(timezone.utc)
+    created_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     images = []
     skipped_files = []
@@ -5824,7 +5824,7 @@ async def admin_list_model_evals(request: Request):
     await require_admin(request)
     cleanup_expired_model_eval_jobs()
     jobs = []
-    for job in sorted(model_eval_jobs.values(), key=lambda j: j.get("created_at") or datetime.now(timezone.utc), reverse=True):
+    for job in sorted(model_eval_jobs.values(), key=lambda j: j.get("created_at") or datetime.now(timezone.utc).replace(tzinfo=None), reverse=True):
         jobs.append({
             "id": job["id"],
             "status": job.get("status", ""),
@@ -6025,7 +6025,7 @@ async def create_estimate(
         "result": None,
         "user_id": user.id,
         "estimate_name": estimate_name.strip(),
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(timezone.utc).replace(tzinfo=None),
         "stored_photos": stored_photos,
         "capture_mode": capture_mode,
         "clarification_answers": parse_clarification_answers(clarification_answers_json),
@@ -6984,7 +6984,7 @@ def _normalize_adjustment_payload(payload: dict) -> dict:
         "adjusted_price_low": _as_float(payload.get("adjusted_price_low")),
         "adjusted_price_high": _as_float(payload.get("adjusted_price_high")),
     }
-    out["updated_at"] = datetime.now(timezone.utc).isoformat()
+    out["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     return out
 
 
@@ -7146,7 +7146,7 @@ async def add_usage_funds(request: Request):
 async def admin_analytics(request: Request):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         today = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
@@ -7203,7 +7203,7 @@ async def admin_analytics(request: Request):
 async def admin_api_costs(request: Request):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
         result = await db.execute(
@@ -7344,7 +7344,7 @@ async def admin_update_site_config(request: Request):
             config = result.scalar_one_or_none()
             if config:
                 config.config_value = str(value)
-                config.updated_at = datetime.now(timezone.utc)
+                config.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             else:
                 db.add(SiteConfig(config_key=key, config_value=str(value)))
         await db.commit()
@@ -7951,7 +7951,7 @@ async def validate_promo_code(request: Request):
             return {"valid": False, "reason": "Invalid code"}
         if not p.is_active:
             return {"valid": False, "reason": "Code is inactive"}
-        if p.expires_at and p.expires_at < datetime.now(timezone.utc):
+        if p.expires_at and p.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
             return {"valid": False, "reason": "Code expired"}
         if p.usage_limit > 0 and p.times_used >= p.usage_limit:
             return {"valid": False, "reason": "Code usage limit reached"}
@@ -8052,7 +8052,7 @@ async def admin_accuracy(request: Request, capture_mode: str = ""):
         calibrated_estimates = actuals_result.scalars().all()
 
         # Needs data queue: estimates older than 7 days without actual_price
-        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)
         needs_data_query = (
             select(Estimate)
             .where(Estimate.actual_price.is_(None), Estimate.created_at < cutoff)
@@ -8233,7 +8233,7 @@ async def admin_accuracy_export(
             (getattr(e, "geometry_summary", "") or "").replace("\n", " ")[:300],
         ])
 
-    filename = f"wsic-accuracy-export-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.csv"
+    filename = f"wsic-accuracy-export-{datetime.now(timezone.utc).replace(tzinfo=None).strftime('%Y%m%d-%H%M%S')}.csv"
     return StreamingResponse(
         iter([out.getvalue()]),
         media_type="text/csv",
@@ -8438,7 +8438,7 @@ async def team_auth(request: Request):
             team_member_id=matched_member.id,
             owner_user_id=owner.id,
             token=token,
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=12),
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=12),
         )
         db.add(sess)
         await db.commit()
@@ -8537,7 +8537,7 @@ async def team_create_estimate(
         await db.commit()
         user = fresh_owner
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     if capture_mode == "operator_assist":
         image_content.append({
             "type": "text",

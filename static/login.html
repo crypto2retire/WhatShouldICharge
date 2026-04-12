@@ -85,7 +85,7 @@
       <label for="forgot-email">Email</label>
       <input type="email" id="forgot-email" required autocomplete="email" placeholder="you@company.com">
     </div>
-    <button type="submit" class="btn-submit" id="forgot-btn">Send New Password</button>
+    <button type="submit" class="btn-submit" id="forgot-btn">Send Reset Link</button>
     <div class="back-link"><a id="back-to-login" role="button" tabindex="0">Back to login</a></div>
   </form>
   <div class="auth-footer">Don't have an account? <a href="/signup">Sign up free</a></div>
@@ -106,8 +106,8 @@ document.getElementById('forgot-link').addEventListener('click', function() {
   forgotForm.classList.add('visible');
   errorMsg.classList.remove('visible');
   successMsg.classList.remove('visible');
-  authTitle.textContent = 'Reset Password';
-  authSub.textContent = 'Enter your email to receive a new password';
+   authTitle.textContent = 'Reset Password';
+   authSub.textContent = 'Enter your email to receive a reset link';
 });
 
 document.getElementById('back-to-login').addEventListener('click', function() {
@@ -169,13 +169,13 @@ forgotForm.addEventListener('submit', async function(e) {
       authTitle.textContent = 'Welcome back';
       authSub.textContent = 'Log in with your new password';
       forgotBtn.disabled = false;
-      forgotBtn.textContent = 'Send New Password';
-    }, 3000);
+       forgotBtn.textContent = 'Send Reset Link';
+     }, 3000);
   } catch (err) {
     errorMsg.textContent = err.message;
     errorMsg.classList.add('visible');
     forgotBtn.disabled = false;
-    forgotBtn.textContent = 'Send New Password';
+     forgotBtn.textContent = 'Send Reset Link';
   }
 });
 </script>

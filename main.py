@@ -596,6 +596,16 @@ class Session(Base):
     expires_at = Column(DateTime)
 
 
+class PasswordReset(Base):
+    __tablename__ = "password_resets"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    token_hash = Column(String, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, default=None)
+
+
 class Estimate(Base):
     __tablename__ = "estimates"
     id = Column(Integer, primary_key=True, index=True)
@@ -864,6 +874,36 @@ async def init_db():
                         pack_type TEXT,
                         amount_cents INTEGER,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+        except Exception:
+            pass
+
+    # Create password_resets table
+    async with engine.begin() as conn:
+        try:
+            if _is_postgres:
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS password_resets (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id),
+                        token_hash VARCHAR NOT NULL,
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        expires_at TIMESTAMP NOT NULL,
+                        used_at TIMESTAMP DEFAULT NULL
+                    )
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_password_resets_token_hash ON password_resets(token_hash)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_password_resets_user_id ON password_resets(user_id)"))
+            else:
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS password_resets (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL REFERENCES users(id),
+                        token_hash TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expires_at TIMESTAMP NOT NULL,
+                        used_at TIMESTAMP DEFAULT NULL
                     )
                 """))
         except Exception:
@@ -1539,6 +1579,11 @@ async def login_page():
 @app.get("/signup", response_class=HTMLResponse)
 async def signup_page():
     return FileResponse("static/signup.html")
+
+
+@app.get("/reset-password", response_class=HTMLResponse)
+async def reset_password_page():
+    return FileResponse("static/reset-password.html")
 
 
 @app.get("/library", response_class=HTMLResponse)
@@ -4169,9 +4214,16 @@ async def auth_forgot_password(request: Request):
             return JSONResponse({"success": True, "message": "If an account with that email exists, a reset link has been sent."})
 
         reset_token = secrets.token_urlsafe(32)
-        new_hash = await asyncio.to_thread(
+        token_hash = await asyncio.to_thread(
             lambda: bcrypt.hashpw(reset_token.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         )
+
+        db.add(PasswordReset(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=datetime.utcnow() + timedelta(hours=1),
+        ))
+        await db.commit()
 
         app_url = os.environ.get("APP_URL", "https://whatshouldicharge.app")
         reset_link = f"{app_url}/reset-password?token={reset_token}&email={email}"
@@ -4206,6 +4258,52 @@ async def auth_logout(request: Request):
     response = JSONResponse({"success": True})
     response.delete_cookie("session_token", path="/")
     return response
+
+
+@app.post("/api/auth/reset-password")
+@limiter.limit("10/15minutes")
+async def auth_reset_password(request: Request):
+    body = await request.json()
+    token = body.get("token", "").strip()
+    email = body.get("email", "").strip().lower()
+    new_password = body.get("new_password", "").strip()
+
+    if not token or not email or not new_password:
+        raise HTTPException(status_code=400, detail="Token, email, and new password are required.")
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
+
+        reset_result = await db.execute(
+            select(PasswordReset)
+            .where(PasswordReset.user_id == user.id)
+            .where(PasswordReset.used_at == None)
+            .where(PasswordReset.expires_at > datetime.utcnow())
+            .order_by(PasswordReset.created_at.desc())
+        )
+        reset_entry = reset_result.scalars().first()
+        if not reset_entry:
+            raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
+
+        token_valid = await asyncio.to_thread(
+            lambda: bcrypt.checkpw(token.encode("utf-8"), reset_entry.token_hash.encode("utf-8"))
+        )
+        if not token_valid:
+            raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
+
+        new_hash = await asyncio.to_thread(
+            lambda: bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        )
+        user.password_hash = new_hash
+        reset_entry.used_at = datetime.utcnow()
+        await db.commit()
+
+    return JSONResponse({"success": True, "message": "Password has been reset. You can now log in with your new password."})
 
 
 @app.get("/api/auth/me")

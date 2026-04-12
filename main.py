@@ -5586,9 +5586,11 @@ async def run_estimate(
                 timeout=160.0,
             )
         except Exception as api_err:
+            import traceback
             logger.error(f"[run_estimate] OpenRouter API error for job {job_id}, user {user.id}: {type(api_err).__name__}: {api_err}")
+            logger.error(f"[run_estimate] Traceback: {traceback.format_exc()}")
             job["status"] = "error"
-            job["message"] = "Our AI service is temporarily unavailable. Please try again in a few minutes."
+            job["message"] = f"AI service error: {type(api_err).__name__}: {api_err}"
             job["result"] = None
             return
 

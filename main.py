@@ -4458,7 +4458,6 @@ OPENROUTER_PRICING_PER_MILLION = {
     "qwen/qwen2.5-vl-72b-instruct": (0.80, 0.80),
     "mistralai/pixtral-large-2411": (2.00, 6.00),
     "openai/gpt-4.1": (2.00, 8.00),
-    "meta-llama/llama-3.2-90b-vision-instruct": (0.90, 0.90),
 }
 
 
@@ -5011,13 +5010,12 @@ MODEL_EVAL_ROOT.mkdir(parents=True, exist_ok=True)
 MODEL_EVAL_DEFAULT_MODELS = ("claude-sonnet-4-20250514", "openai/gpt-4.1")
 MODEL_EVAL_PER_RUN_TIMEOUT_SECONDS = 150
 PROD_PRIMARY_MODEL = "qwen/qwen2.5-vl-72b-instruct"
-PROD_VERIFIER_MODEL = "meta-llama/llama-3.2-90b-vision-instruct"
+PROD_VERIFIER_MODEL = "mistralai/pixtral-large-2411"
 MODEL_EVAL_SUPPORTED_MODELS = (
     "claude-sonnet-4-20250514",
     "openai/gpt-4.1",
     "qwen/qwen2.5-vl-72b-instruct",
     "mistralai/pixtral-large-2411",
-    "meta-llama/llama-3.2-90b-vision-instruct",
 )
 
 

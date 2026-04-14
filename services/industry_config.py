@@ -13,40 +13,50 @@ INDUSTRIES = {
         "unit_abbrev": "CY",
         "description": "AI-powered junk removal volume estimation from photos",
 
-        "spotting_prompt": """You are an expert junk removal item spotter. Your ONLY job is to identify every visible object in the photos that is staged for removal. Return ONLY valid JSON — no markdown, no explanation, no code blocks.
-
-DO NOT estimate sizes or volumes. DO NOT calculate cubic yards. Just identify WHAT you see and WHERE.
+        "combined_prompt": """You are an expert junk removal estimator. Analyze the photos to identify every item staged for removal AND estimate its loaded volume in cubic yards. Return ONLY valid JSON — no markdown, no explanation, no code blocks.
 
 IDENTIFICATION RULES:
 1. List every distinct item or group of same-type items you can see.
-2. Count quantities carefully — if you see 4 trash bags, list quantity: 4, not quantity: 1.
+2. Count quantities carefully — if you see 4 trash bags, list quantity: 4, not 1.
 3. Flag special disposal items (is_special: true): TVs, monitors, mattresses, box springs, tires, propane tanks, refrigerators/freezers, AC units, paint cans, chemicals, e-waste, batteries, fluorescent bulbs.
-4. Check for duplicates across multiple photos — same item from different angles should not be counted twice.
-5. Do NOT count installed or background storage/fixtures (wall shelving, garage shelving, mounted items) unless clearly staged for removal.
-6. If you see a person, doorframe, standard appliance, or other known-size object, note it as a reference_point — this will be used for scale.
+4. Check for duplicates across multiple photos — same item from different angles should be counted once.
+5. Do NOT count installed or background fixtures (wall shelving, garage shelving, mounted items) unless clearly staged for removal.
+6. If you see a person, doorframe, standard appliance, or other known-size object, note it as a reference_point for scale.
+
+SIZING METHOD:
+- USE REFERENCE OBJECTS for scale (standard interior door: 80x36 in, adult: ~66inH, refrigerator: ~70x36x30 in, couch: ~84x36x34 in).
+- ESTIMATE ACTUAL LOADED VOLUME, not ground footprint. Items compress when loaded.
+- COMMON BENCHMARKS: Contractor bag (full): 0.2-0.4 CY, mattress (queen): 0.75 CY, couch: 1.5-2.0 CY, wooden pallet: 0.15 CY.
+- BUILD BOTTOM-UP: Total = sum of individual items, nothing more.
+
+IMPORTANT: Do NOT use the inch symbol (") anywhere. Write "in" for inches.
 
 Return this EXACT JSON structure:
 {
   "reference_points": [
-    {"name": "item or feature used for scale", "known_dimensions": "e.g. standard interior door 80x36 in", "location_in_photo": "where in the frame", "photo_number": 1}
+    {"name": "reference object", "known_dimensions": "actual size", "location_in_photo": "where", "photo_number": 1}
   ],
   "items": [
-    {"name": "item name", "quantity": 1, "is_special": false, "photo_sources": [1]}
+    {"name": "item name", "quantity": 1, "cubic_yards": 0.0, "height_in": 0, "width_in": 0, "depth_in": 0, "is_special": false, "is_uncertain": false}
   ],
-  "potential_duplicates": [
-    {"item_a": "Brown couch (photo 1)", "item_b": "Brown couch (photo 3)", "reason": "Same couch visible from different angles"}
-  ],
-  "conditions": ["stairs", "heavy_items", "outdoor_access"],
-  "scene_description": "Brief description of what the photos show — room type, access conditions, overall scene.",
-  "photo_count": 3
+  "totals": {
+    "cubic_yards_low": 0.0,
+    "cubic_yards_mid": 0.0,
+    "cubic_yards_high": 0.0
+  },
+  "job_type": "standard",
+  "conditions": [],
+  "confidence": 75,
+  "notes": "Brief sizing reasoning."
 }
 
 CRITICAL RULES:
-- ONLY identify objects. Do NOT estimate volume, size, or cubic yards.
 - Be thorough — miss nothing. Every bag, box, piece of furniture, appliance, pile counts.
-- When items are grouped (pile of lumber, stack of boxes), count them individually if possible, or as a group with a descriptive name.
-- Same object appearing in multiple photos = count once, note as potential duplicate.
-- Do NOT label a job as hoarding unless the photos show floor-to-ceiling overflow with blocked pathways.
+- Same object in multiple photos = count once.
+- Do NOT invent phantom "miscellaneous" items to pad the total.
+- When uncertain about size, set is_uncertain: true and give your best estimate.
+- The low/mid/high range should reflect estimation uncertainty (roughly -15% to +15%).
+- Do NOT label as hoarding, whole-house, or construction debris unless clearly supported.
 - Keep your response concise. Omit null fields entirely.""",
 
         "sizing_prompt": """You are an expert at estimating real-world dimensions of objects from photographs. Return ONLY valid JSON — no markdown, no explanation, no code blocks.
@@ -249,7 +259,8 @@ def get_system_prompt(industry_id: str) -> str:
 def get_extraction_prompt(industry_id: str) -> str:
     config = get_industry_config(industry_id)
     return (
-        config.get("spotting_prompt")
+        config.get("combined_prompt")
+        or config.get("spotting_prompt")
         or config.get("extraction_prompt")
         or config.get("system_prompt", "")
     )

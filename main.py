@@ -2897,6 +2897,7 @@ async def public_create_estimate(
         "room_labels": _normalize_room_labels(photo_data),
         "truck_load_pct": None,
         "review_mode": "self_serve_clarify",
+        "used_free_trial": free_remaining > 0 and (cu.credit_balance or 0) <= 0,
     }
 
     asyncio.create_task(run_estimate(
@@ -4596,7 +4597,8 @@ def cleanup_expired_jobs():
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     expired = [k for k, v in estimate_jobs.items()
                if v.get("status") in ("error", "retry_needed")
-               or (now - v.get("created_at", now)).total_seconds() > JOB_TTL_SECONDS]
+               or (v.get("status") not in ("analyzing", "looking_up")
+                   and (now - v.get("created_at", now)).total_seconds() > JOB_TTL_SECONDS)]
     for k in expired:
         del estimate_jobs[k]
 
@@ -5063,6 +5065,7 @@ async def create_estimate(
         "room_labels": _normalize_room_labels(photo_data),
         "truck_load_pct": truck_load_pct,
         "review_mode": "self_serve_clarify",
+        "used_free_trial": free_remaining > 0 and (fresh_user.credit_balance or 0) <= 0,
     }
 
     asyncio.create_task(run_estimate(
@@ -5122,139 +5125,47 @@ async def run_estimate(
         import logging
         logger = logging.getLogger("wsic.estimate")
 
-        max_photos_for_ai = 4
-        if len(image_content) > max_photos_for_ai * 3:
-            image_content_for_spotter = image_content[:max_photos_for_ai * 3]
-        else:
-            image_content_for_spotter = image_content
-
-        text_blocks = [b for b in image_content if isinstance(b, dict) and b.get("type") == "text"]
-        image_blocks = [b for b in image_content if isinstance(b, dict) and b.get("type") == "image"]
-        if len(image_blocks) > max_photos_for_ai:
-            image_blocks = image_blocks[:max_photos_for_ai]
-        image_content_for_sizing = text_blocks[:2] + image_blocks[:2]
-
-        logger.info(
-            f"[run_estimate] Job {job_id}: {len(image_blocks)} photos total, "
-            f"sending {min(len(image_blocks), max_photos_for_ai)} to spotter, "
-            f"{min(len(image_blocks), 2)} to sizer"
-        )
-
         total_input_tokens = 0
         total_output_tokens = 0
         total_api_cost_cents = 0
-        model_name = f"{PROD_PRIMARY_MODEL}|{PROD_SIZING_MODEL}"
+        model_name = "parallel_pipeline"
 
         try:
-            # ── Agent 1: Item Spotter (Qwen) ──
-            job["message"] = "Identifying items..."
-            spotting_result = None
-            spotting_meta = {}
-            last_agent1_err = None
-            for attempt in range(2):
-                try:
-                    spotting_result, spotting_meta = await asyncio.wait_for(
-                        run_openrouter_estimate(
-                            image_content_for_spotter,
-                            extraction_prompt,
-                            api_key,
-                            PROD_PRIMARY_MODEL,
-                            title=f"WSIC Agent 1: Item Spotter{' (retry)' if attempt else ''}",
-                        ),
-                        timeout=180.0,
-                    )
-                    break
-                except (asyncio.TimeoutError, TimeoutError) as te:
-                    last_agent1_err = te
-                    logger.warning(f"[run_estimate] Agent 1 timeout on attempt {attempt+1} for job {job_id}")
-                    if attempt == 0:
-                        job["message"] = "Still identifying items (retrying)..."
-            if spotting_result is None:
-                raise last_agent1_err or TimeoutError("Agent 1 timed out")
+            from services.estimation_pipeline import run_parallel_estimate, VARIANCE_FLAG_THRESHOLD
+            job["message"] = "Identifying items and estimating sizes..."
+            result_data, pipeline_meta = await run_parallel_estimate(image_content, extraction_prompt)
 
-            if not validate_spotting_schema(spotting_result):
-                logger.error(f"[run_estimate] Agent 1 malformed response for job {job_id}: invalid schema")
-                job["status"] = "error"
-                job["message"] = "We received an unexpected response from our AI. Please try again."
-                job["result"] = None
-                return
-
-            spotted_items = spotting_result.get("items", [])
-            spotted_refs = spotting_result.get("reference_points", [])
-            spotted_conditions = spotting_result.get("conditions", [])
-            spotted_duplicates = spotting_result.get("potential_duplicates", [])
-            scene_description = spotting_result.get("scene_description", "")
-            pass1_json_str = json.dumps(spotting_result)
-
-            total_input_tokens += int(spotting_meta.get("input_tokens", 0) or 0)
-            total_output_tokens += int(spotting_meta.get("output_tokens", 0) or 0)
-            total_api_cost_cents += int(spotting_meta.get("api_cost_cents", 0) or 0)
+            total_input_tokens = int(pipeline_meta.get("input_tokens", 0) or 0)
+            total_output_tokens = int(pipeline_meta.get("output_tokens", 0) or 0)
+            total_api_cost_cents = int(pipeline_meta.get("cost_cents", 0) or 0)
+            model_name = "|".join(pipeline_meta.get("provider_models", ["unknown"]))
 
             logger.info(
-                f"[run_estimate] Agent 1 spotted {len(spotted_items)} items, "
-                f"{len(spotted_refs)} reference points for job {job_id}"
+                f"[run_estimate] Pipeline completed for job {job_id}: "
+                f"{len(result_data.get('items', []))} items, "
+                f"providers={pipeline_meta.get('providers_used')}, "
+                f"variance_flagged={pipeline_meta.get('variance_flagged')}"
             )
 
-            # ── Agent 2: Size Estimator (GLM 5V Turbo) ──
-            job["message"] = "Estimating sizes..."
-            sizing_context = (
-                f"The spotter agent identified {len(spotted_items)} items across the photos.\n\n"
-                f"SPOTTED ITEMS:\n{json.dumps(spotted_items, indent=2)}\n\n"
-                f"REFERENCE POINTS FOUND:\n{json.dumps(spotted_refs, indent=2)}\n\n"
-                f"POTENTIAL DUPLICATES:\n{json.dumps(spotted_duplicates, indent=2)}\n\n"
-                f"SCENE: {scene_description}\n\n"
-                f"Your ONLY job is to estimate cubic yardage for each spotted item listed above. "
-                f"Do NOT add items that were not spotted. Do NOT re-identify objects from the photos. "
-                f"If a potential duplicate is flagged, count it only once. "
-                f"Use the photos and reference points to determine realistic dimensions and volume."
-            )
-            sizing_prompt_with_context = verification_prompt + "\n\n" + sizing_context
+            if pipeline_meta.get("variance_flagged"):
+                confidence_reasons.append(
+                    f"Model estimates varied by >{int(VARIANCE_FLAG_THRESHOLD * 100)}% for some items. "
+                    f"Using averaged values."
+                )
+            if pipeline_meta.get("single_provider"):
+                confidence_reasons.append("Only one vision provider was available for this estimate.")
 
-            sizing_result = None
-            sizing_meta = {}
-            last_agent2_err = None
-            for attempt in range(2):
-                try:
-                    sizing_result, sizing_meta = await asyncio.wait_for(
-                        run_openrouter_estimate(
-                            image_content_for_sizing,
-                            sizing_prompt_with_context,
-                            api_key,
-                            PROD_SIZING_MODEL,
-                            title=f"WSIC Agent 2: Size Estimator{' (retry)' if attempt else ''}",
-                        ),
-                        timeout=180.0,
-                    )
-                    break
-                except (asyncio.TimeoutError, TimeoutError) as te:
-                    last_agent2_err = te
-                    logger.warning(f"[run_estimate] Agent 2 timeout on attempt {attempt+1} for job {job_id}")
-                    if attempt == 0:
-                        job["message"] = "Still estimating sizes (retrying)..."
-            if sizing_result is None:
-                raise last_agent2_err or TimeoutError("Agent 2 timed out")
         except Exception as api_err:
             import traceback
-            logger.error(f"[run_estimate] OpenRouter API error for job {job_id}, user {user.id}: {type(api_err).__name__}: {api_err}")
+            logger.error(f"[run_estimate] Pipeline error for job {job_id}, user {user.id}: {type(api_err).__name__}: {api_err}")
             logger.error(f"[run_estimate] Traceback: {traceback.format_exc()}")
             job["status"] = "error"
-            job["message"] = f"AI service error: {type(api_err).__name__}: {api_err}"
+            job["message"] = "We couldn't process your estimate. Please try again."
             job["result"] = None
             return
 
-        total_input_tokens += int(sizing_meta.get("input_tokens", 0) or 0)
-        total_output_tokens += int(sizing_meta.get("output_tokens", 0) or 0)
-        total_api_cost_cents += int(sizing_meta.get("api_cost_cents", 0) or 0)
-
-        if not validate_estimate_schema(sizing_result):
-            logger.error(f"[run_estimate] Agent 2 malformed response for job {job_id}: invalid schema")
-            job["status"] = "error"
-            job["message"] = "We received an unexpected response from our AI. Please try again."
-            job["result"] = None
-            return
-
-        result_data = sizing_result
-        pass2_json_str = json.dumps(sizing_result)
+        pass1_json_str = ""
+        pass2_json_str = json.dumps(result_data)
         verifier_result = None
 
         job["message"] = "Calculating volume..."
@@ -5819,6 +5730,19 @@ async def run_estimate(
         job["status"] = "error"
         job["message"] = "An error occurred while processing your estimate. Please try again."
         job["result"] = None
+        try:
+            async with AsyncSessionLocal() as refund_db:
+                refund_user = await refund_db.get(User, user.id)
+                if refund_user:
+                    if job.get("used_free_trial"):
+                        refund_user.free_trial_used = max(0, (refund_user.free_trial_used or 1) - 1)
+                    else:
+                        refund_user.credit_balance = (refund_user.credit_balance or 0) + 1
+                    refund_user.estimates_used = max(0, (refund_user.estimates_used or 1) - 1)
+                    await refund_db.commit()
+                    logging.getLogger("wsic.estimate").info(f"[run_estimate] Refunded credit for job {job_id}, user {user.id}")
+        except Exception as refund_err:
+            logging.getLogger("wsic.estimate").error(f"[run_estimate] Refund failed for job {job_id}: {refund_err}")
 
 
 @router_estimates.get("/api/estimate/status/{job_id}")
@@ -7347,7 +7271,7 @@ async def admin_accuracy_export(
 @router_admin.get("/api/admin/env-status")
 async def admin_env_status(request: Request) -> dict[str, bool]:
     await require_admin(request)
-    keys = ["ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
+    keys = ["GEMINI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
             "TAVILY_API_KEY", "SENDGRID_API_KEY"]
     out: dict[str, bool] = {}
     for k in keys:
@@ -7666,6 +7590,7 @@ async def team_create_estimate(
         "room_labels": _normalize_room_labels(photo_data),
         "truck_load_pct": truck_load_pct,
         "review_mode": "self_serve_clarify",
+        "used_free_trial": False,
     }
 
     asyncio.create_task(run_estimate(

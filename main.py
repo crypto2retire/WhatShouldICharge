@@ -3783,18 +3783,18 @@ async def library_stats(request: Request):
 
 
 
-def compress_image(image_bytes: bytes, max_size_kb: int = 1000) -> bytes:
+def compress_image(image_bytes: bytes, max_size_kb: int = 500) -> bytes:
     img = Image.open(io.BytesIO(image_bytes))
     try:
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
 
-        max_dim = 1600
+        max_dim = 1280
         if img.width > max_dim or img.height > max_dim:
             img.thumbnail((max_dim, max_dim), Image.LANCZOS)
 
         output = io.BytesIO()
-        quality = 85
+        quality = 80
         img.save(output, format="JPEG", quality=quality)
 
         while output.tell() > max_size_kb * 1024 and quality > 30:
@@ -5122,6 +5122,24 @@ async def run_estimate(
         import logging
         logger = logging.getLogger("wsic.estimate")
 
+        max_photos_for_ai = 4
+        if len(image_content) > max_photos_for_ai * 3:
+            image_content_for_spotter = image_content[:max_photos_for_ai * 3]
+        else:
+            image_content_for_spotter = image_content
+
+        text_blocks = [b for b in image_content if isinstance(b, dict) and b.get("type") == "text"]
+        image_blocks = [b for b in image_content if isinstance(b, dict) and b.get("type") == "image"]
+        if len(image_blocks) > max_photos_for_ai:
+            image_blocks = image_blocks[:max_photos_for_ai]
+        image_content_for_sizing = text_blocks[:2] + image_blocks[:2]
+
+        logger.info(
+            f"[run_estimate] Job {job_id}: {len(image_blocks)} photos total, "
+            f"sending {min(len(image_blocks), max_photos_for_ai)} to spotter, "
+            f"{min(len(image_blocks), 2)} to sizer"
+        )
+
         total_input_tokens = 0
         total_output_tokens = 0
         total_api_cost_cents = 0
@@ -5137,7 +5155,7 @@ async def run_estimate(
                 try:
                     spotting_result, spotting_meta = await asyncio.wait_for(
                         run_openrouter_estimate(
-                            image_content,
+                            image_content_for_spotter,
                             extraction_prompt,
                             api_key,
                             PROD_PRIMARY_MODEL,
@@ -5199,7 +5217,7 @@ async def run_estimate(
                 try:
                     sizing_result, sizing_meta = await asyncio.wait_for(
                         run_openrouter_estimate(
-                            image_content,
+                            image_content_for_sizing,
                             sizing_prompt_with_context,
                             api_key,
                             PROD_SIZING_MODEL,

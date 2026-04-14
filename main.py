@@ -4261,6 +4261,10 @@ async def run_openrouter_estimate(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": content_blocks},
         ],
+        "provider": {
+            "sort": "throughput",
+            "preferred_max_latency": {"p90": 60},
+        },
     }
     headers = {
         "Authorization": f"Bearer {api_key}",

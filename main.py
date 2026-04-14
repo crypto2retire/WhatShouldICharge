@@ -5238,6 +5238,66 @@ async def run_estimate(
             if it.get("cubic_yards", 0) > 16.0:
                 it["cubic_yards"] = min(it["cubic_yards"], 16.0)
 
+        # ── Pile compression/expansion adjustment ──
+        # Rigid items (wood, metal, furniture) nest in piles — sum overestimates truck volume
+        # Compressible items (clothes, bags, bedding) fluff out when loaded — sum underestimates
+        RIGID_KEYWORDS = {
+            "wood", "wooden", "lumber", "board", "plank", "plywood", "drywall",
+            "furniture", "frame", "metal", "iron", "steel", "appliance", "cabinet",
+            "door", "window", "concrete", "brick", "tile", "stone", "glass",
+            "shelf", "shelving", "table", "desk", "dresser", "chest", "drawer",
+            "chair", "couch", "sofa", "mattress", "box spring", "bed frame",
+            "refrigerator", "freezer", "washer", "dryer", "stove", "dishwasher",
+            "tv", "television", "monitor", "lumber", "railroad", "tire",
+        }
+        COMPRESSIBLE_KEYWORDS = {
+            "cloth", "clothes", "clothing", "fabric", "textile", "linen",
+            "bag", "trash", "garbage", "waste", "bedding", "pillow", "blanket",
+            "quilt", "comforter", "carpet", "rug", "pad", "foam", "cushion",
+            "stuffed", "soft", "towel", "curtain", "drape", "sleeping bag",
+            "duffel", "suitcase", "backpack", "diaper",
+        }
+        rigid_total = 0.0
+        compressible_total = 0.0
+        neutral_total = 0.0
+        for it in items:
+            cy = float(it.get("cubic_yards", 0) or 0) * int(it.get("quantity", 1) or 1)
+            if cy <= 0:
+                continue
+            name_lower = (it.get("name") or "").lower()
+            is_rigid = any(kw in name_lower for kw in RIGID_KEYWORDS)
+            is_compressible = any(kw in name_lower for kw in COMPRESSIBLE_KEYWORDS)
+            if is_rigid and not is_compressible:
+                rigid_total += cy
+            elif is_compressible and not is_rigid:
+                compressible_total += cy
+            else:
+                neutral_total += cy
+
+        RIGID_FACTOR = 0.85
+        COMPRESSIBLE_FACTOR = 1.15
+        adjusted_total = round(
+            rigid_total * RIGID_FACTOR
+            + compressible_total * COMPRESSIBLE_FACTOR
+            + neutral_total,
+            1,
+        )
+        raw_item_sum = round(rigid_total + compressible_total + neutral_total, 1)
+        if raw_item_sum > 0 and abs(adjusted_total - raw_item_sum) >= 0.2:
+            logger.info(
+                f"[run_estimate] Job {job_id}: pile adjustment "
+                f"rigid={rigid_total:.1f}×{RIGID_FACTOR} "
+                f"compressible={compressible_total:.1f}×{COMPRESSIBLE_FACTOR} "
+                f"neutral={neutral_total:.1f} => "
+                f"{raw_item_sum:.1f} CY → {adjusted_total:.1f} CY"
+            )
+            totals = result_data.get("totals", {})
+            totals["cubic_yards_mid"] = adjusted_total
+            totals["cubic_yards_low"] = round(adjusted_total * 0.85, 1)
+            totals["cubic_yards_high"] = round(adjusted_total * 1.15, 1)
+            result_data["totals"] = totals
+            result_data["total_cubic_yards"] = adjusted_total
+
         items_needing_lookup = result_data.get("items_needing_lookup", [])
         lookups_done = []
         if items_needing_lookup:

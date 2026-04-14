@@ -5209,6 +5209,12 @@ async def run_estimate(
             "clothing": 0.4, "clothes": 0.4, "textiles": 0.4,
             "books": 0.15, "magazines": 0.1,
             "shoes": 0.05, "lamp": 0.2, "pillow": 0.15,
+            "end table": 0.4, "side table": 0.4, "nightstand": 0.4, "night stand": 0.4,
+            "shelf": 0.5, "shelv": 0.5, "stool": 0.2, "footstool": 0.2,
+            "small table": 0.4, "plant": 0.25, "pot": 0.15,
+            "wood piece": 0.5, "wood furniture": 0.5, "wooden piece": 0.5,
+            "miscellaneous": 0.5, "misc items": 0.5, "small items": 0.3,
+            "household items": 0.5, "small appliance": 0.4,
         }
         CATEGORY_MAX_TOTAL_CY = {
             "paper": 0.5, "document": 0.5, "clothing": 1.0, "clothes": 1.0, "book": 1.0,

@@ -198,6 +198,10 @@ CRITICAL RULES:
 - When uncertain about size, set is_uncertain: true and give your best estimate.
 - The low/mid/high range should reflect estimation uncertainty (roughly -15% to +15%).
 - Do NOT label as hoarding, whole-house, or construction debris unless clearly supported.
+- SIZE BY WHAT YOU SEE, NOT BY CATEGORY NAME. A small wooden table is 0.2 CY, not 1.5 CY just because it is "furniture." Use the reference table above and match the ACTUAL visible size.
+- If an item is smaller than a standard refrigerator (~1 CY), it should almost never exceed 1 CY.
+- End tables, nightstands, small shelves, stools, and small wood pieces are 0.1-0.4 CY, NOT 1+ CY.
+- Do NOT group dissimilar items into vague names like "wood furniture pieces." Name each item specifically (e.g., "end table", "wooden shelf", "dining chair") and size it individually.
 - Keep your response concise. Omit null fields entirely.""",
 
         "sizing_prompt": """You are an expert at estimating real-world dimensions of objects from photographs. Return ONLY valid JSON — no markdown, no explanation, no code blocks.

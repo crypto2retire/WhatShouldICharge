@@ -4020,6 +4020,13 @@ def parse_ai_json(raw_text: str) -> dict:
             return json.loads(candidate)
         except json.JSONDecodeError:
             pass
+        candidate_stripped = candidate.rstrip()
+        if candidate_stripped and candidate_stripped[-1] not in ('}', ']'):
+            for closer in ('}', ']}', '}]}', '}}', '}}]'):
+                try:
+                    return json.loads(candidate_stripped + closer)
+                except json.JSONDecodeError:
+                    continue
     raise ValueError(f"Could not parse AI JSON response: {raw_text[:500]}")
 
 
@@ -4235,7 +4242,7 @@ async def run_openrouter_estimate(
     payload = {
         "model": model_name,
         "temperature": 0,
-        "max_tokens": 4096,
+        "max_tokens": 8192,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": content_blocks},

@@ -20,20 +20,18 @@ DO NOT estimate sizes or volumes. DO NOT calculate cubic yards. Just identify WH
 IDENTIFICATION RULES:
 1. List every distinct item or group of same-type items you can see.
 2. Count quantities carefully — if you see 4 trash bags, list quantity: 4, not quantity: 1.
-3. Categorize each item: furniture, appliance, electronics, debris, outdoor, sports, medical, hazardous, other.
-4. Flag special disposal items (is_special: true): TVs, monitors, mattresses, box springs, tires, propane tanks, refrigerators/freezers, AC units, paint cans, chemicals, e-waste, batteries, fluorescent bulbs.
-5. Check for duplicates across multiple photos — same item from different angles should not be counted twice. Note potential duplicates.
-6. Do NOT count installed or background storage/fixtures (wall shelving, garage shelving, mounted items) unless clearly staged for removal.
-7. If you see a person, doorframe, standard appliance, or other known-size object, note it as a reference_point — this will be used for scale.
-8. Note the condition of items if relevant (broken, disassembled, partial).
+3. Flag special disposal items (is_special: true): TVs, monitors, mattresses, box springs, tires, propane tanks, refrigerators/freezers, AC units, paint cans, chemicals, e-waste, batteries, fluorescent bulbs.
+4. Check for duplicates across multiple photos — same item from different angles should not be counted twice.
+5. Do NOT count installed or background storage/fixtures (wall shelving, garage shelving, mounted items) unless clearly staged for removal.
+6. If you see a person, doorframe, standard appliance, or other known-size object, note it as a reference_point — this will be used for scale.
 
 Return this EXACT JSON structure:
 {
   "reference_points": [
-    {"name": "item or feature used for scale", "known_dimensions": "e.g. standard interior door 80×36 in", "location_in_photo": "where in the frame", "photo_number": 1}
+    {"name": "item or feature used for scale", "known_dimensions": "e.g. standard interior door 80x36 in", "location_in_photo": "where in the frame", "photo_number": 1}
   ],
   "items": [
-    {"name": "item name", "quantity": 1, "category": "furniture", "is_special": false, "photo_sources": [1], "condition": "intact/broken/disassembled/partial", "dedup_note": null}
+    {"name": "item name", "quantity": 1, "is_special": false, "photo_sources": [1]}
   ],
   "potential_duplicates": [
     {"item_a": "Brown couch (photo 1)", "item_b": "Brown couch (photo 3)", "reason": "Same couch visible from different angles"}
@@ -48,7 +46,8 @@ CRITICAL RULES:
 - Be thorough — miss nothing. Every bag, box, piece of furniture, appliance, pile counts.
 - When items are grouped (pile of lumber, stack of boxes), count them individually if possible, or as a group with a descriptive name.
 - Same object appearing in multiple photos = count once, note as potential duplicate.
-- Do NOT label a job as hoarding unless the photos show floor-to-ceiling overflow with blocked pathways.""",
+- Do NOT label a job as hoarding unless the photos show floor-to-ceiling overflow with blocked pathways.
+- Keep your response concise. Omit null fields entirely.""",
 
         "sizing_prompt": """You are an expert at estimating real-world dimensions of objects from photographs. Return ONLY valid JSON — no markdown, no explanation, no code blocks.
 
@@ -108,7 +107,7 @@ Return this EXACT JSON structure:
     {"name": "reference object used", "known_dimensions": "actual size", "estimated_distance_to_item": "description", "photo_number": 1}
   ],
   "items": [
-    {"name": "item name", "quantity": 1, "category": "furniture", "cubic_yards": 0.0, "height_in": 0, "width_in": 0, "depth_in": 0, "is_special": false, "is_uncertain": false, "photo_sources": [1], "dedup_note": null}
+    {"name": "item name", "quantity": 1, "cubic_yards": 0.0, "height_in": 0, "width_in": 0, "depth_in": 0, "is_special": false, "is_uncertain": false}
   ],
   "potential_duplicates": [
     {"item_a": "Couch (photo 1)", "item_b": "Couch (photo 3)", "reason": "Same couch from different angles"}
@@ -133,7 +132,8 @@ CRITICAL RULES:
 - Do NOT label a job as hoarding, whole-house, or construction debris unless clearly supported.
 - The low/mid/high range should reflect estimation uncertainty (roughly -15% to +15%).
 - Confidence should reflect photo quality and how well sizes can be determined.
-- Same item shown from multiple angles = count once only.""",
+- Same item shown from multiple angles = count once only.
+- Keep your response concise. Omit null fields entirely. Do not repeat fields that are not needed.""",
 
         # Calibration: known item volumes that override AI guesses
         "calibration_items": {

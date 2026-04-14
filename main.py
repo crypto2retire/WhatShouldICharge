@@ -4004,29 +4004,43 @@ def parse_ai_json(raw_text: str) -> dict:
     except json.JSONDecodeError:
         pass
     json_match = re.search(r'\{[\s\S]*\}', raw_text)
-    if json_match:
-        candidate = json_match.group(0)
-        candidate = candidate.replace("\u201c", '"').replace("\u201d", '"').replace("\u2018", "'").replace("\u2019", "'")
+    candidate = json_match.group(0) if json_match else (raw_text if raw_text.startswith("{") else "")
+    if not candidate:
+        raise ValueError(f"Could not parse AI JSON response: {raw_text[:500]}")
+    candidate = candidate.replace("\u201c", '"').replace("\u201d", '"').replace("\u2018", "'").replace("\u2019", "'")
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        pass
+    candidate = re.sub(r'(\d)"([A-Za-z(])', r'\1in\2', candidate)
+    candidate = re.sub(r'(\d)"(\s)', r'\1in\2', candidate)
+    candidate = re.sub(r'(\d)"$', r'\1in', candidate, flags=re.MULTILINE)
+    candidate = re.sub(r',\s*([}\]])', r'\1', candidate)
+    candidate = re.sub(r'[\x00-\x1f]', ' ', candidate)
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        pass
+    open_brackets = candidate.count("[") - candidate.count("]")
+    open_braces = candidate.count("{") - candidate.count("}")
+    if open_brackets > 0 or open_braces > 0:
+        patched = candidate + "]" * open_brackets + "}" * open_braces
         try:
-            return json.loads(candidate)
+            return json.loads(patched)
         except json.JSONDecodeError:
             pass
-        candidate = re.sub(r'(\d)"([A-Za-z(])', r'\1in\2', candidate)
-        candidate = re.sub(r'(\d)"(\s)', r'\1in\2', candidate)
-        candidate = re.sub(r'(\d)"$', r'\1in', candidate, flags=re.MULTILINE)
-        candidate = re.sub(r',\s*([}\]])', r'\1', candidate)
-        candidate = re.sub(r'[\x00-\x1f]', ' ', candidate)
+    last_complete_item = candidate.rfind("},")
+    if last_complete_item > 0:
+        truncated = candidate[:last_complete_item + 1]
+        t_brackets = truncated.count("[") - truncated.count("]")
+        t_braces = truncated.count("{") - truncated.count("}")
+        for _ in range(t_brackets):
+            truncated += "]"
+        truncated += "}" * t_braces
         try:
-            return json.loads(candidate)
+            return json.loads(truncated)
         except json.JSONDecodeError:
             pass
-        candidate_stripped = candidate.rstrip()
-        if candidate_stripped and candidate_stripped[-1] not in ('}', ']'):
-            for closer in ('}', ']}', '}]}', '}}', '}}]'):
-                try:
-                    return json.loads(candidate_stripped + closer)
-                except json.JSONDecodeError:
-                    continue
     raise ValueError(f"Could not parse AI JSON response: {raw_text[:500]}")
 
 
@@ -4242,7 +4256,7 @@ async def run_openrouter_estimate(
     payload = {
         "model": model_name,
         "temperature": 0,
-        "max_tokens": 6144,
+        "max_tokens": 8192,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": content_blocks},

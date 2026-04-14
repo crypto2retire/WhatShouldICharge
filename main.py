@@ -724,6 +724,18 @@ body{{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#fffff
 /* --- Layout --- */
 .page-wrap{{max-width:680px;margin:0 auto;padding:20px 16px}}
 
+/* --- Progress Stepper --- */
+.progress-stepper{{display:flex;align-items:center;justify-content:center;gap:0;padding:20px 0 24px}}
+.progress-step{{display:flex;align-items:center;gap:8px;flex-shrink:0}}
+.progress-step-circle{{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:700;border:2px solid #e2e8f0;color:#94a3b8;background:#fff;transition:all .3s}}
+.progress-step.active .progress-step-circle{{border-color:#16a34a;background:#16a34a;color:#fff;box-shadow:0 2px 8px rgba(22,163,74,0.3)}}
+.progress-step.done .progress-step-circle{{border-color:#16a34a;background:#dcfce7;color:#16a34a}}
+.progress-step-label{{font-size:0.75rem;font-weight:600;color:#94a3b8;transition:color .3s}}
+.progress-step.active .progress-step-label{{color:#16a34a}}
+.progress-step.done .progress-step-label{{color:#16a34a}}
+.progress-line{{width:40px;height:2px;background:#e2e8f0;margin:0 8px;transition:background .3s}}
+.progress-line.done{{background:#16a34a}}
+
 /* --- Header --- */
 .site-header{{text-align:center;padding:32px 0 12px}}
 .logo{{max-height:64px;margin-bottom:14px;border-radius:10px}}
@@ -759,11 +771,17 @@ body{{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#fffff
 .card{{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.02)}}
 .card-title{{font-size:0.92rem;font-weight:700;color:#0f172a;margin-bottom:16px}}
 label{{display:block;font-size:0.8rem;color:#64748b;margin-bottom:5px;font-weight:500}}
+label .optional{{font-weight:400;color:#94a3b8;font-size:0.72rem;margin-left:4px}}
 input[type="text"],input[type="email"],input[type="tel"]{{width:100%;padding:12px 16px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;color:#1e293b;font-size:0.95rem;margin-bottom:14px;font-family:inherit;transition:border-color .2s,box-shadow .2s}}
 input:focus{{outline:none;border-color:#16a34a;box-shadow:0 0 0 4px rgba(22,163,74,0.08)}}
 input::placeholder{{color:#94a3b8}}
+.optional-fields{{border-top:1px solid #f1f5f9;padding-top:14px;margin-top:2px}}
 
 /* --- Upload Zone --- */
+.photo-tips{{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}}
+.photo-tip{{flex:1;min-width:140px;display:flex;align-items:flex-start;gap:8px;padding:10px 12px;background:#f8fafc;border:1px solid #f1f5f9;border-radius:10px;font-size:0.76rem;color:#475569;line-height:1.4}}
+.photo-tip svg{{width:18px;height:18px;color:#16a34a;flex-shrink:0;margin-top:1px}}
+.photo-tip strong{{color:#0f172a;display:block;font-weight:600;font-size:0.78rem;margin-bottom:1px}}
 .drop-zone{{border:2px dashed #cbd5e1;border-radius:16px;padding:40px 20px;text-align:center;cursor:pointer;transition:all .25s;background:#fafbfc;position:relative;overflow:hidden}}
 .drop-zone::before{{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(22,163,74,0.04) 0%,transparent 70%);opacity:0;transition:opacity .3s}}
 .drop-zone:hover,.drop-zone.drag-over{{border-color:#16a34a;border-style:solid;background:#f0fdf4}}
@@ -819,10 +837,11 @@ input::placeholder{{color:#94a3b8}}
 .badge-hoarder{{background:#fee2e2;color:#ef4444}}
 .badge-truck_load{{background:#e0f2fe;color:#0369a1}}
 .cy-display{{font-size:0.85rem;color:#64748b;margin-top:8px}}
-.item-row{{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:0.88rem}}
+.item-row{{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:0.88rem;flex-wrap:wrap}}
 .item-row:last-child{{border-bottom:none}}
-.item-name{{flex:1;font-weight:500;color:#1e293b}}
-.item-cy{{color:#94a3b8;font-size:0.78rem;font-weight:500}}
+.item-name{{flex:1;min-width:120px;font-weight:500;color:#1e293b}}
+.item-actions{{display:flex;align-items:center;gap:6px;flex-shrink:0}}
+.item-cy{{color:#94a3b8;font-size:0.78rem;font-weight:500;min-width:36px;text-align:right}}
 .item-qty{{color:#64748b;font-size:0.8rem;min-width:32px;text-align:right;font-weight:600}}
 .special-note{{margin-top:16px;padding:16px;border-radius:14px;background:#fffbeb;border:1px solid #fde68a;font-size:0.82rem;color:#92400e;line-height:1.6}}
 .dupe-note{{margin-top:12px;padding:16px;border-radius:14px;background:#fefce8;border:1px solid #fde68a;font-size:0.82rem;color:#854d0e;line-height:1.6}}
@@ -831,8 +850,8 @@ input::placeholder{{color:#94a3b8}}
 .followup-notice strong{{color:#1e3a8a}}
 
 /* --- CTA / Appointment Form --- */
-.cta-section{{text-align:center;padding:28px 20px;margin-top:8px}}
-.cta-section .subtext{{font-size:0.9rem;color:#475569;margin-bottom:14px;font-weight:500}}
+.cta-section{{text-align:center;padding:28px 20px;margin-top:8px;background:linear-gradient(135deg,#f0fdf4 0%,#ecfdf5 100%);border:1px solid #bbf7d0;border-radius:16px}}
+.cta-section .subtext{{font-size:0.95rem;color:#0f172a;margin-bottom:14px;font-weight:700}}
 .appt-form{{text-align:left;max-width:400px;margin:0 auto}}
 .appt-form .form-label{{font-size:0.82rem;font-weight:600;color:#334155;margin-bottom:8px;display:block}}
 .appt-form .form-group{{margin-bottom:18px}}
@@ -893,12 +912,29 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
 /* --- Error --- */
 .error{{color:#ef4444;font-size:0.88rem;text-align:center;padding:14px;display:none;background:#fef2f2;border-radius:12px;border:1px solid #fecaca;margin-bottom:12px}}
 
+/* --- Step Transitions --- */
+.step-panel{{animation:stepFadeIn .35s ease-out}}
+@keyframes stepFadeIn{{from{{opacity:0;transform:translateY(10px)}}to{{opacity:1;transform:translateY(0)}}}}
+.back-btn{{display:inline-flex;align-items:center;gap:6px;background:none;border:none;color:#64748b;font-size:0.82rem;font-weight:600;cursor:pointer;padding:8px 0;margin-bottom:8px;font-family:inherit;transition:color .2s}}
+.back-btn:hover{{color:#0f172a}}
+.back-btn svg{{width:16px;height:16px}}
+
+/* --- Verify Code Input --- */
+#verify-code{{letter-spacing:8px;font-size:1.4rem}}
+.code-sent-msg{{display:flex;align-items:center;gap:6px;font-size:0.78rem;color:#16a34a;font-weight:600;margin-bottom:14px}}
+.code-sent-msg svg{{width:16px;height:16px;flex-shrink:0}}
+.resend-timer{{font-size:0.75rem;color:#94a3b8;text-align:center;margin-top:-8px;margin-bottom:14px}}
+
 /* --- Responsive --- */
 @media(max-width:480px){{
   .hero h2{{font-size:1.6rem}}
   .steps{{flex-direction:column;gap:10px}}
   .price-range{{font-size:2.2rem}}
   .trust-pills{{gap:6px}}
+  .progress-step-label{{display:none}}
+  .progress-line{{width:24px}}
+  .photo-tips{{flex-direction:column}}
+  .item-actions{{width:100%;justify-content:flex-end;margin-top:4px}}
 }}
 </style>
 </head>
@@ -943,35 +979,61 @@ details div.faq-answer{{padding:4px 20px 18px;font-size:0.86rem;color:#475569;li
     </div>
   </section>
 
+  <!-- Progress Stepper -->
+  <div class="progress-stepper" id="progress-stepper">
+    <div class="progress-step active" id="ps-1">
+      <div class="progress-step-circle">1</div>
+      <span class="progress-step-label">Contact</span>
+    </div>
+    <div class="progress-line" id="pl-1"></div>
+    <div class="progress-step" id="ps-2">
+      <div class="progress-step-circle">2</div>
+      <span class="progress-step-label">Photos</span>
+    </div>
+    <div class="progress-line" id="pl-2"></div>
+    <div class="progress-step" id="ps-3">
+      <div class="progress-step-circle">3</div>
+      <span class="progress-step-label">Estimate</span>
+    </div>
+  </div>
+
   <!-- Step 1: Contact Info + Email Verification -->
-  <div id="verify-section">
+  <div id="verify-section" class="step-panel">
     <div class="card">
       <div class="card-title">Your Contact Info</div>
-      <label for="cust-name">Name</label>
-      <input type="text" id="cust-name" placeholder="Your name" autocomplete="name">
-      <label for="cust-email">Email</label>
+      <label for="cust-email">Email <span style="color:#ef4444">*</span></label>
       <div style="display:flex;gap:8px;margin-bottom:14px">
         <input type="email" id="cust-email" placeholder="your@email.com" autocomplete="email" style="margin-bottom:0;flex:1">
         <button class="btn" id="send-code-btn" onclick="sendVerifyCode()" style="width:auto;padding:12px 20px;font-size:0.85rem;white-space:nowrap;box-shadow:none">Verify</button>
       </div>
       <div id="code-section" style="display:none">
         <label for="verify-code">Enter verification code</label>
-        <input type="text" id="verify-code" placeholder="------" maxlength="6" autocomplete="one-time-code" style="text-align:center;letter-spacing:6px;font-size:1.2rem;font-weight:700">
-        <div style="font-size:0.75rem;color:#94a3b8;text-align:center;margin-top:-10px;margin-bottom:14px">Check your email for a 6-digit code</div>
+        <input type="text" id="verify-code" placeholder="------" maxlength="6" autocomplete="one-time-code" style="text-align:center;letter-spacing:8px;font-size:1.4rem;font-weight:700">
+        <div id="code-sent-msg" class="code-sent-msg" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Code sent!</div>
+        <div id="resend-timer" class="resend-timer" style="display:none"></div>
       </div>
-      <label for="cust-phone">Phone</label>
-      <input type="tel" id="cust-phone" placeholder="(555) 123-4567" autocomplete="tel">
+      <div class="optional-fields">
+        <label for="cust-name">Name <span class="optional">(optional)</span></label>
+        <input type="text" id="cust-name" placeholder="Your name" autocomplete="name">
+        <label for="cust-phone">Phone <span class="optional">(optional)</span></label>
+        <input type="tel" id="cust-phone" placeholder="(555) 123-4567" autocomplete="tel">
+      </div>
       <div class="error" id="verify-error"></div>
-      <button class="btn" id="continue-btn" onclick="verifyAndContinue()">Continue to Estimate</button>
+      <button class="btn" id="continue-btn" onclick="verifyAndContinue()">Continue to Photos</button>
       <div style="font-size:0.72rem;color:#94a3b8;text-align:center;margin-top:14px;line-height:1.6">By continuing, you agree to the <a href="/terms" target="_blank" style="color:#94a3b8;text-decoration:underline">Terms of Service</a> and <a href="/privacy" target="_blank" style="color:#94a3b8;text-decoration:underline">Privacy Policy</a>.<br>Estimates are AI-generated approximations and not binding quotes.</div>
     </div>
     <div style="text-align:center;padding:12px;font-size:0.72rem;color:#cbd5e1;line-height:1.5;margin-top:4px">This tool is currently in <strong>beta</strong>. Estimates may contain errors. {name} is not liable for differences between estimated and actual pricing. This estimate covers items shown in your photos only — additional items will be priced at standard rates. Recycling fees apply to freon-containing appliances, tires, TVs, and some electronics. Final pricing is confirmed on-site.</div>
   </div>
 
   <!-- Step 2: Upload Section (hidden until verified) -->
-  <div id="upload-section" style="display:none">
+  <div id="upload-section" style="display:none" class="step-panel">
+    <button class="back-btn" onclick="goBackToContact()"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Back to contact info</button>
     <div class="card">
       <div class="card-title">Upload Photos of Items for Removal</div>
+      <div class="photo-tips">
+        <div class="photo-tip"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg><div><strong>Wide shots</strong>Stand back to capture the whole area</div></div>
+        <div class="photo-tip"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg><div><strong>Multiple angles</strong>2-4 photos from different sides</div></div>
+      </div>
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:0.82rem;color:#166534;line-height:1.5;">
         <strong>Tip:</strong> Take photos of the area — our AI will identify all items. After the estimate, you can uncheck anything you're keeping and add items that weren't in the photos.
       </div>
@@ -1158,6 +1220,49 @@ var verificationToken=null;
 
 function esc(s){{var d=document.createElement('div');d.textContent=s;return d.innerHTML}}
 
+var currentStep=1;
+function updateStepper(step){{
+  currentStep=step;
+  for(var i=1;i<=3;i++){{
+    var ps=document.getElementById('ps-'+i);
+    ps.classList.remove('active','done');
+    if(i<step) ps.classList.add('done');
+    if(i===step) ps.classList.add('active');
+  }}
+  for(var i=1;i<=2;i++){{
+    var pl=document.getElementById('pl-'+i);
+    pl.classList.toggle('done',i<step);
+  }}
+}}
+
+function goBackToContact(){{
+  document.getElementById('upload-section').style.display='none';
+  document.getElementById('verify-section').style.display='block';
+  document.getElementById('verify-section').classList.remove('step-panel');
+  void document.getElementById('verify-section').offsetWidth;
+  document.getElementById('verify-section').classList.add('step-panel');
+  updateStepper(1);
+}}
+
+var resendTimer=null;
+function startResendTimer(){{
+  var btn=document.getElementById('send-code-btn');
+  var timerEl=document.getElementById('resend-timer');
+  var seconds=45;
+  btn.disabled=true;btn.style.opacity='0.5';btn.style.cursor='not-allowed';
+  timerEl.style.display='block';
+  clearInterval(resendTimer);
+  resendTimer=setInterval(function(){{
+    seconds--;
+    timerEl.textContent='Resend available in '+seconds+'s';
+    if(seconds<=0){{
+      clearInterval(resendTimer);
+      btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';
+      timerEl.style.display='none';
+    }}
+  }},1000);
+}}
+
 // --- Email verification ---
 async function sendVerifyCode(){{
   var email=document.getElementById('cust-email').value.trim();
@@ -1172,20 +1277,19 @@ async function sendVerifyCode(){{
     if(!resp.ok) throw new Error(data.detail||'Failed to send code');
     if(data.ok===false){{errEl.textContent=data.message||'Could not send verification code. Please try again.';errEl.style.display='block';btn.textContent='Verify';btn.disabled=false;return}}
     document.getElementById('code-section').style.display='block';
+    document.getElementById('code-sent-msg').style.display='flex';
+    document.getElementById('verify-code').focus();
     btn.textContent='Resend';btn.disabled=false;
+    startResendTimer();
   }}catch(e){{errEl.textContent=e.message;errEl.style.display='block';btn.textContent='Verify';btn.disabled=false}}
 }}
 
 async function verifyAndContinue(){{
-  var name=document.getElementById('cust-name').value.trim();
   var email=document.getElementById('cust-email').value.trim();
-  var phone=document.getElementById('cust-phone').value.trim();
   var code=document.getElementById('verify-code').value.trim();
   var errEl=document.getElementById('verify-error');
   errEl.style.display='none';
-  if(!name){{errEl.textContent='Please enter your name.';errEl.style.display='block';return}}
   if(!email){{errEl.textContent='Please enter your email.';errEl.style.display='block';return}}
-  if(!phone){{errEl.textContent='Please enter your phone number.';errEl.style.display='block';return}}
   if(!code||code.length<6){{errEl.textContent='Please enter the 6-digit verification code from your email.';errEl.style.display='block';return}}
   var btn=document.getElementById('continue-btn');
   btn.disabled=true;btn.textContent='Verifying...';
@@ -1194,9 +1298,14 @@ async function verifyAndContinue(){{
     var data=await resp.json();
     if(!resp.ok) throw new Error(data.detail||'Verification failed');
     verificationToken=data.token;
+    clearInterval(resendTimer);
     document.getElementById('verify-section').style.display='none';
     document.getElementById('upload-section').style.display='block';
-  }}catch(e){{errEl.textContent=e.message;errEl.style.display='block';btn.disabled=false;btn.textContent='Continue to Estimate'}}
+    document.getElementById('upload-section').classList.remove('step-panel');
+    void document.getElementById('upload-section').offsetWidth;
+    document.getElementById('upload-section').classList.add('step-panel');
+    updateStepper(2);
+  }}catch(e){{errEl.textContent=e.message;errEl.style.display='block';btn.disabled=false;btn.textContent='Continue to Photos'}}
 }}
 
 var dropZone=document.getElementById('drop-zone');
@@ -1280,7 +1389,7 @@ async function pollStatus(jobId){{
     try{{
       var resp=await fetch('/api/public/estimate/status/'+jobId);
       var data=await resp.json();
-      if(data.status==='complete'&&data.result){{clearInterval(iv);document.getElementById('loading').style.display='none';showResults(data.result)}}
+      if(data.status==='complete'&&data.result){{clearInterval(iv);document.getElementById('loading').style.display='none';showResults(data.result);updateStepper(3)}}
       else if(data.status==='needs_review'){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent=data.message||'This estimate needs manual review before we can show pricing.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Get Your Estimate'}}
       else if(data.status==='retry_needed'){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent=data.message||'Please upload one clearer, wider photo and try again.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Get Your Estimate'}}
       else if(data.status==='error'){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent=data.message||'An error occurred. Please try again.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Schedule an Appointment'}}
@@ -1338,7 +1447,7 @@ function showResults(r){{
   (r.items||[]).forEach(function(item,idx){{
     var row=document.createElement('div');row.className='item-row';
     var originalQty=Math.max(1,parseInt(item.quantity)||1);
-    row.innerHTML='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;margin:0"><input type="checkbox" id="item-cb-'+idx+'" checked onchange="recalcPrice()" style="width:18px;height:18px;accent-color:#16a34a;flex-shrink:0"><span class="item-name">'+esc(item.name||'Item')+'</span></label><div class="item-cy">'+(item.cubic_yards||0)+' CY</div><input type="number" id="item-qty-'+idx+'" min="1" max="'+originalQty+'" value="'+originalQty+'" onchange="(function(el,orig,i){{var v=parseInt(el.value)||orig;v=Math.max(1,Math.min(orig,v));el.value=v;if(v===orig){{delete adjustedQtys[i]}}else{{adjustedQtys[i]=v}}recalcPrice();}})(this,'+originalQty+','+idx+')" style="width:58px;padding:3px 6px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;color:#0f172a;font-size:0.78rem;"><button type="button" onclick="var cb=document.getElementById(\\'item-cb-'+idx+'\\');if(cb){{cb.checked=false;recalcPrice();}}" style="padding:3px 7px;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#334155;font-size:0.74rem;cursor:pointer;">Remove</button>';
+    row.innerHTML='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;min-width:120px;margin:0"><input type="checkbox" id="item-cb-'+idx+'" checked onchange="recalcPrice()" style="width:18px;height:18px;accent-color:#16a34a;flex-shrink:0"><span class="item-name">'+esc(item.name||'Item')+'</span></label><div class="item-actions"><span class="item-cy">'+(item.cubic_yards||0)+' CY</span><input type="number" id="item-qty-'+idx+'" min="1" max="'+originalQty+'" value="'+originalQty+'" onchange="(function(el,orig,i){{var v=parseInt(el.value)||orig;v=Math.max(1,Math.min(orig,v));el.value=v;if(v===orig){{delete adjustedQtys[i]}}else{{adjustedQtys[i]=v}}recalcPrice();}})(this,'+originalQty+','+idx+')" style="width:52px;padding:4px 6px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;color:#0f172a;font-size:0.78rem"><button type="button" onclick="var cb=document.getElementById(\\'item-cb-'+idx+'\\');if(cb){{cb.checked=false;recalcPrice();}}" style="padding:4px 10px;border-radius:8px;border:1px solid #fecaca;background:#fef2f2;color:#ef4444;font-size:0.74rem;cursor:pointer;font-weight:600">Remove</button></div>';
     items.appendChild(row);
   }});
   var sp=r.special_items||[];

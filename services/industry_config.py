@@ -153,6 +153,17 @@ CONSTRUCTION / OUTDOOR:
 - Propane tank (20lb): 0.15 CY
 - Paint can (1 gallon): 0.03 CY
 - Paint can (5 gallon): 0.1 CY
+- Single wooden board / plank: 0.05-0.1 CY
+- Wooden boards and lumber pieces (per piece): 0.08-0.15 CY
+- Scrap wood pieces (per piece): 0.05-0.1 CY
+
+BROKEN / DAMAGED ITEMS — these take LESS space than intact items:
+- Broken chair frame: 0.15-0.25 CY (less than intact chair)
+- Broken wooden furniture piece: 0.15-0.3 CY (less than intact)
+- Broken table leg / furniture fragment: 0.05-0.1 CY
+- Broken appliance parts: 0.15-0.25 CY
+- Metal framework pieces: 0.15-0.3 CY
+- Miscellaneous small debris (loose): 0.2-0.4 CY total, NOT per piece
 
 MAXIMUM PER-ITEM CAPS (loaded volume, never exceed):
 - Single trash bag: NEVER more than 0.4 CY

@@ -5213,8 +5213,16 @@ async def run_estimate(
             "shelf": 0.5, "shelv": 0.5, "stool": 0.2, "footstool": 0.2,
             "small table": 0.4, "plant": 0.25, "pot": 0.15,
             "wood piece": 0.5, "wood furniture": 0.5, "wooden piece": 0.5,
+            "wooden furniture": 0.35, "broken furniture": 0.35, "furniture pieces": 0.35,
+            "wooden boards": 0.15, "lumber pieces": 0.15, "wood scraps": 0.15,
+            "scrap wood": 0.15, "boards and lumber": 0.15, "wood pieces": 0.2,
+            "broken wood": 0.2, "wood debris": 0.2,
             "miscellaneous": 0.5, "misc items": 0.5, "small items": 0.3,
             "household items": 0.5, "small appliance": 0.4,
+            "small debris": 0.3, "debris": 0.4,
+            "plastic bags": 0.35, "black bags": 0.35, "garbage bags": 0.35,
+            "chair frame": 0.25, "metal framework": 0.3, "metal pieces": 0.3,
+            "appliance parts": 0.25, "frame": 0.3,
         }
         CATEGORY_MAX_TOTAL_CY = {
             "paper": 0.5, "document": 0.5, "clothing": 1.0, "clothes": 1.0, "book": 1.0,

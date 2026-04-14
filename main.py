@@ -4242,7 +4242,7 @@ async def run_openrouter_estimate(
     payload = {
         "model": model_name,
         "temperature": 0,
-        "max_tokens": 8192,
+        "max_tokens": 6144,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": content_blocks},
@@ -4254,7 +4254,7 @@ async def run_openrouter_estimate(
         "HTTP-Referer": "https://whatshouldicharge.app",
         "X-Title": title,
     }
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=180.0) as client:
         response = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
         if response.status_code >= 400:
             raw_text = (response.text or "").strip()
@@ -5120,7 +5120,7 @@ async def run_estimate(
                     PROD_PRIMARY_MODEL,
                     title="WSIC Agent 1: Item Spotter",
                 ),
-                timeout=160.0,
+                timeout=200.0,
             )
 
             if not validate_spotting_schema(spotting_result):
@@ -5169,7 +5169,7 @@ async def run_estimate(
                     PROD_SIZING_MODEL,
                     title="WSIC Agent 2: Size Estimator",
                 ),
-                timeout=160.0,
+                timeout=200.0,
             )
         except Exception as api_err:
             import traceback

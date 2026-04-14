@@ -1601,7 +1601,7 @@ async function submitEstimate() {
     if (!jobId) throw new Error('No job ID returned');
 
     let pollCount = 0;
-    const MAX_POLLS = 120;
+    const MAX_POLLS = 240;
 
     while (pollCount < MAX_POLLS) {
       pollCount++;

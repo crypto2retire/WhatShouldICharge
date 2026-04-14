@@ -3998,6 +3998,7 @@ def parse_ai_json(raw_text: str) -> dict:
         lines = raw_text.split("\n")
         raw_text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
     raw_text = raw_text.strip()
+    raw_text = raw_text.replace("\u201c", '"').replace("\u201d", '"').replace("\u2018", "'").replace("\u2019", "'")
     try:
         return json.loads(raw_text)
     except json.JSONDecodeError:
@@ -4005,6 +4006,7 @@ def parse_ai_json(raw_text: str) -> dict:
     json_match = re.search(r'\{[\s\S]*\}', raw_text)
     if json_match:
         candidate = json_match.group(0)
+        candidate = candidate.replace("\u201c", '"').replace("\u201d", '"').replace("\u2018", "'").replace("\u2019", "'")
         try:
             return json.loads(candidate)
         except json.JSONDecodeError:

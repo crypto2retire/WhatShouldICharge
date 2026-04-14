@@ -5200,10 +5200,27 @@ async def run_estimate(
             result_data["totals"]["cubic_yards_low"] = round(item_sum * 0.85, 1)
             result_data["totals"]["cubic_yards_high"] = round(item_sum * 1.15, 1)
 
-        # Sanity check: cap single items at truck capacity (16 CY)
-        # Was 5.0 CY which was too aggressive — bulk items like railroad ties,
-        # lumber piles, and debris often exceed 5 CY legitimately
+        # Sanity check: cap single items and enforce per-category maximums
+        PER_ITEM_MAX_CY = {
+            "trash bag": 0.4, "garbage bag": 0.4, "yard bag": 0.4, "leaf bag": 0.4,
+            "contractor bag": 0.5, "duffel": 0.25, "suitcase": 0.35,
+            "box": 0.25, "cardboard box": 0.25,
+            "papers": 0.5, "documents": 0.5, "loose paper": 0.5,
+            "clothing": 0.4, "clothes": 0.4, "textiles": 0.4,
+            "books": 0.15, "magazines": 0.1,
+            "shoes": 0.05, "lamp": 0.2, "pillow": 0.15,
+        }
+        CATEGORY_MAX_TOTAL_CY = {
+            "paper": 0.5, "document": 0.5, "clothing": 1.0, "clothes": 1.0, "book": 1.0,
+        }
         for it in items:
+            name_lower = (it.get("name") or "").lower()
+            cy = it.get("cubic_yards", 0)
+            for keyword, max_cy in PER_ITEM_MAX_CY.items():
+                if keyword in name_lower and cy > max_cy:
+                    logger.info(f"[run_estimate] Capping '{name_lower}' from {cy} to {max_cy} CY")
+                    it["cubic_yards"] = max_cy
+                    break
             if it.get("cubic_yards", 0) > 16.0:
                 it["cubic_yards"] = min(it["cubic_yards"], 16.0)
 

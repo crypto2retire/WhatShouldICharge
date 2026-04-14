@@ -15,6 +15,8 @@ INDUSTRIES = {
 
         "combined_prompt": """You are an expert junk removal estimator. Analyze the photos to identify every item staged for removal AND estimate its loaded volume in cubic yards. Return ONLY valid JSON — no markdown, no explanation, no code blocks.
 
+1 CUBIC YARD = 3ft x 3ft x 3ft = 27 cubic feet. A standard washing machine is ~1 CY. A pickup truck bed is ~2 CY.
+
 IDENTIFICATION RULES:
 1. List every distinct item or group of same-type items you can see.
 2. Count quantities carefully — if you see 4 trash bags, list quantity: 4, not 1.
@@ -23,11 +25,150 @@ IDENTIFICATION RULES:
 5. Do NOT count installed or background fixtures (wall shelving, garage shelving, mounted items) unless clearly staged for removal.
 6. If you see a person, doorframe, standard appliance, or other known-size object, note it as a reference_point for scale.
 
+VOLUME REFERENCE TABLE — USE THESE VALUES. DO NOT EXCEED THESE FOR SIMILAR ITEMS:
+
+BAGS & SOFT GOODS:
+- Kitchen/trash bag (13 gal): 0.1 CY
+- Large trash bag (30-40 gal, yard/leaf bag): 0.2-0.33 CY
+- Contractor bag (full, heavy): 0.3-0.4 CY
+- Duffel bag / gym bag: 0.2 CY
+- Suitcase (carry-on): 0.15 CY
+- Suitcase (large/checked): 0.3 CY
+- Pillow: 0.1 CY
+- Sleeping bag: 0.15 CY
+
+BOXES & CONTAINERS:
+- Small box (book box, ~1.5 cu ft): 0.06 CY
+- Medium box (~3 cu ft): 0.11 CY
+- Large box (~4.5 cu ft): 0.17 CY
+- Wardrobe box: 0.5 CY
+- Plastic storage tote (small): 0.1 CY
+- Plastic storage tote (large): 0.2 CY
+- Cardboard box (small): 0.05-0.08 CY
+- Cardboard box (medium): 0.1-0.15 CY
+- Cardboard box (large): 0.15-0.2 CY
+
+FURNITURE — SEATING:
+- Office chair: 0.4 CY
+- Dining chair (wood): 0.15 CY
+- Folding chair: 0.1 CY
+- Armchair / recliner: 1.0-1.5 CY
+- Loveseat: 1.0-1.5 CY
+- Sofa / couch (3-seat): 1.5-2.0 CY
+- Sectional (per piece): 1.0 CY
+- Ottoman / footstool: 0.2-0.4 CY
+
+FURNITURE — TABLES & SURFACES:
+- Side table / end table: 0.2-0.3 CY
+- Coffee table: 0.4-0.6 CY
+- Dining table: 1.0-1.5 CY
+- Desk (small): 0.6-0.8 CY
+- Desk (large / L-shaped): 1.0-1.5 CY
+- TV stand / media console: 0.5-0.8 CY
+- Dresser (small, 3-drawer): 0.6 CY
+- Dresser (large, 6-drawer): 1.0 CY
+- Nightstand: 0.2-0.3 CY
+- Bookshelf (small): 0.4-0.6 CY
+- Bookshelf (large): 0.8-1.0 CY
+- Filing cabinet (2-drawer): 0.4 CY
+- Filing cabinet (4-drawer): 0.6 CY
+
+FURNITURE — BEDS & BEDDING:
+- Twin mattress: 0.5 CY
+- Full/double mattress: 0.65 CY
+- Queen mattress: 0.75 CY
+- King mattress: 0.9 CY
+- Box spring (any size): same as matching mattress
+- Bed frame (twin/full): 0.3-0.5 CY
+- Bed frame (queen/king): 0.5-0.8 CY
+- Headboard: 0.3-0.5 CY
+- Bunk bed (set): 1.5 CY
+
+APPLIANCES:
+- Microwave (small): 0.2 CY
+- Microwave (large): 0.4 CY
+- Toaster oven: 0.15 CY
+- Mini fridge: 0.5 CY
+- Refrigerator (full): 1.0 CY
+- Washing machine: 0.8-1.0 CY
+- Dryer: 0.8-1.0 CY
+- Dishwasher: 0.5 CY
+- Stove / range: 0.8-1.0 CY
+- Window AC unit (small): 0.3 CY
+- Window AC unit (large): 0.5 CY
+- Dehumidifier: 0.3 CY
+- Water heater: 0.8 CY
+
+ELECTRONICS:
+- TV (32in): 0.2 CY
+- TV (50in): 0.3 CY
+- TV (65in+): 0.5 CY
+- Computer monitor: 0.15 CY
+- Desktop computer (tower): 0.2 CY
+- Laptop: 0.03 CY
+- Printer (small): 0.15 CY
+- Printer (large/office): 0.3 CY
+- Stereo / speaker (small): 0.1 CY
+- Stereo / speaker (large): 0.3 CY
+
+MISC HOUSEHOLD:
+- Bicycle: 0.5 CY
+- Exercise equipment (small, weights): 0.2-0.4 CY
+- Treadmill: 1.0 CY
+- Lawn mower (push): 0.5 CY
+- Lawn mower (riding): 2.0 CY
+- Grill (charcoal): 0.5 CY
+- Grill (gas, full-size): 0.8 CY
+- Patio chair: 0.3 CY
+- Patio table: 0.6 CY
+- Stroller: 0.3 CY
+- Car seat: 0.2 CY
+- High chair: 0.3 CY
+- Playpen: 0.4 CY
+- Christmas tree (artificial): 0.4 CY
+- Vacuum cleaner: 0.15 CY
+- Floor lamp: 0.15 CY
+- Table lamp: 0.05 CY
+- Area rug (rolled): 0.3-0.5 CY
+- Mirror (wall, large): 0.1 CY
+- Picture/frame (large): 0.05 CY
+
+PAPER / CLOTHING / BOOKS:
+- Stack of papers / documents (1 box worth): 0.06 CY
+- Bag of clothing: 0.2-0.3 CY
+- Box of books (small): 0.06 CY
+- Box of books (large): 0.11 CY
+- Shelf of books: 0.2-0.3 CY
+- Shoes (pair): 0.02 CY
+
+CONSTRUCTION / OUTDOOR:
+- Lumber (2x4, 8ft bundle ~10 boards): 0.3 CY
+- Plywood sheet: 0.1 CY
+- Drywall sheet: 0.1 CY
+- Bag of concrete (60lb): 0.05 CY
+- Potted plant (small): 0.05 CY
+- Potted plant (large): 0.2 CY
+- Tire (car): 0.2 CY
+- Tire (truck): 0.3 CY
+- Propane tank (20lb): 0.15 CY
+- Paint can (1 gallon): 0.03 CY
+- Paint can (5 gallon): 0.1 CY
+
+MAXIMUM PER-ITEM CAPS (loaded volume, never exceed):
+- Single trash bag: NEVER more than 0.4 CY
+- Single box: NEVER more than 0.25 CY
+- Single chair: NEVER more than 2.0 CY
+- Single mattress: NEVER more than 1.0 CY
+- Single appliance: NEVER more than 1.5 CY
+- Single piece of furniture: NEVER more than 2.5 CY
+- Loose papers/documents pile: NEVER more than 0.5 CY total
+- Clothing pile: NEVER more than 1.0 CY total
+
 SIZING METHOD:
 - USE REFERENCE OBJECTS for scale (standard interior door: 80x36 in, adult: ~66inH, refrigerator: ~70x36x30 in, couch: ~84x36x34 in).
-- ESTIMATE ACTUAL LOADED VOLUME, not ground footprint. Items compress when loaded.
-- COMMON BENCHMARKS: Contractor bag (full): 0.2-0.4 CY, mattress (queen): 0.75 CY, couch: 1.5-2.0 CY, wooden pallet: 0.15 CY.
+- ESTIMATE ACTUAL LOADED VOLUME, not ground footprint. Items compress when loaded into a truck.
 - BUILD BOTTOM-UP: Total = sum of individual items, nothing more.
+- When in doubt, use the LOWER end of the range. Overestimating is worse than underestimating.
 
 IMPORTANT: Do NOT use the inch symbol (") anywhere. Write "in" for inches.
 

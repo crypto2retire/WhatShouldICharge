@@ -1393,8 +1393,9 @@ async function pollStatus(jobId){{
       else if(data.status==='needs_review'){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent=data.message||'This estimate needs manual review before we can show pricing.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Get Your Estimate'}}
       else if(data.status==='retry_needed'){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent=data.message||'Please upload one clearer, wider photo and try again.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Get Your Estimate'}}
       else if(data.status==='error'){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent=data.message||'An error occurred. Please try again.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Schedule an Appointment'}}
-    }}catch(e){{}}
-    if(attempts>90){{clearInterval(iv);lt.textContent='Taking longer than expected...'}}
+    }}catch(e){{
+      if(e.message&&e.message.includes('404')){{clearInterval(iv);document.getElementById('loading').style.display='none';document.getElementById('upload-section').style.display='block';document.getElementById('error-msg').textContent='Your estimate session expired. Please try submitting again.';document.getElementById('error-msg').style.display='block';document.getElementById('submit-btn').disabled=false;document.getElementById('submit-btn').textContent='Get Your Estimate'}}
+    }}    if(attempts>90){{clearInterval(iv);lt.textContent='Taking longer than expected...'}}
   }},2000);
 }}
 
@@ -2895,7 +2896,7 @@ async def public_create_estimate(
         "photo_quality": photo_quality,
         "room_labels": _normalize_room_labels(photo_data),
         "truck_load_pct": None,
-        "review_mode": "company_manual_review",
+        "review_mode": "self_serve_clarify",
     }
 
     asyncio.create_task(run_estimate(
@@ -4534,7 +4535,7 @@ async def update_library_from_estimate(items: list):
 
 
 estimate_jobs = {}
-JOB_TTL_SECONDS = 300
+JOB_TTL_SECONDS = 600
 MAX_CONCURRENT_JOBS = 10
 
 model_eval_jobs = {}
@@ -4567,7 +4568,8 @@ def check_concurrent_limit():
 def cleanup_expired_jobs():
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     expired = [k for k, v in estimate_jobs.items()
-               if (now - v.get("created_at", now)).total_seconds() > JOB_TTL_SECONDS]
+               if v.get("status") in ("error", "retry_needed")
+               or (now - v.get("created_at", now)).total_seconds() > JOB_TTL_SECONDS]
     for k in expired:
         del estimate_jobs[k]
 

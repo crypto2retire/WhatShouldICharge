@@ -434,7 +434,7 @@ async def get_credit_balance(request: Request):
         "credit_balance": user.credit_balance or 0,
         "credits_purchased_total": user.credits_purchased_total or 0,
         "credits_used_total": user.credits_used_total or 0,
-        "free_trial_remaining": max(0, 2 - (user.free_trial_used or 0)),
+        "free_trial_remaining": max(0, 5 - (user.free_trial_used or 0)),
         "transactions": [
             {
                 "id": t.id,
@@ -2818,7 +2818,7 @@ async def public_create_estimate(
         result = await db.execute(select(User).where(User.id == company_user.id))
         cu = result.scalar_one_or_none()
         if cu:
-            free_remaining = max(0, 2 - (cu.free_trial_used or 0))
+            free_remaining = max(0, 5 - (cu.free_trial_used or 0))
             if (cu.credit_balance or 0) <= 0 and free_remaining <= 0:
                 raise HTTPException(status_code=403, detail="This estimator is temporarily unavailable. Please contact the company directly.")
             company_user = cu
@@ -2847,7 +2847,7 @@ async def public_create_estimate(
         cu = result.scalar_one_or_none()
         if not cu:
             raise HTTPException(status_code=404, detail="Company not found")
-        free_remaining = max(0, 2 - (cu.free_trial_used or 0))
+        free_remaining = max(0, 5 - (cu.free_trial_used or 0))
         if (cu.credit_balance or 0) <= 0 and free_remaining <= 0:
             raise HTTPException(status_code=403, detail="This estimator is temporarily unavailable. Please contact the company directly.")
         if free_remaining > 0 and (cu.credit_balance or 0) <= 0:
@@ -3391,7 +3391,7 @@ async def auth_me(request: Request):
         "overage_mode": getattr(user, 'overage_mode', 'warn_and_charge') or 'warn_and_charge',
         "role": getattr(user, 'role', 'owner') or 'owner',
         "credit_balance": getattr(user, 'credit_balance', 0) or 0,
-        "free_trial_remaining": max(0, 2 - (getattr(user, 'free_trial_used', 0) or 0)),
+        "free_trial_remaining": max(0, 5 - (getattr(user, 'free_trial_used', 0) or 0)),
     }
 
 
@@ -3428,7 +3428,7 @@ async def get_settings(request: Request):
         "google_tag_id": row["google_tag_id"] or "",
         "fb_pixel_id": row["fb_pixel_id"] or "",
         "credit_balance": getattr(user, 'credit_balance', 0) or 0,
-        "free_trial_remaining": max(0, 2 - (getattr(user, 'free_trial_used', 0) or 0)),
+        "free_trial_remaining": max(0, 5 - (getattr(user, 'free_trial_used', 0) or 0)),
     }
     cache_set(cache_key, data, ttl=60)
     return data
@@ -4934,7 +4934,7 @@ async def create_estimate(
         fresh_user = result.scalar_one_or_none()
         if not fresh_user:
             raise HTTPException(status_code=403, detail="estimate_limit_reached")
-        free_remaining = max(0, 2 - (fresh_user.free_trial_used or 0))
+        free_remaining = max(0, 5 - (fresh_user.free_trial_used or 0))
         if (fresh_user.credit_balance or 0) <= 0 and free_remaining <= 0:
             return JSONResponse(status_code=402, content={
                 "detail": "no_credits",
@@ -4969,7 +4969,7 @@ async def create_estimate(
         fresh_user = result.scalar_one_or_none()
         if not fresh_user:
             raise HTTPException(status_code=403, detail="estimate_limit_reached")
-        free_remaining = max(0, 2 - (fresh_user.free_trial_used or 0))
+        free_remaining = max(0, 5 - (fresh_user.free_trial_used or 0))
         if (fresh_user.credit_balance or 0) <= 0 and free_remaining <= 0:
             return JSONResponse(status_code=402, content={
                 "detail": "no_credits",
@@ -5687,7 +5687,7 @@ async def run_estimate(
             pass  # Don't fail the estimate if email fails
 
         credit_bal = getattr(user, 'credit_balance', 0) or 0
-        free_left = max(0, 2 - (getattr(user, 'free_trial_used', 0) or 0))
+        free_left = max(0, 5 - (getattr(user, 'free_trial_used', 0) or 0))
         remaining = credit_bal + free_left
 
         resp = {
@@ -7490,7 +7490,7 @@ async def team_me(request: Request):
     if not member:
         return JSONResponse({"authenticated": False})
     credit_bal = getattr(owner, 'credit_balance', 0) or 0
-    free_left = max(0, 2 - (getattr(owner, 'free_trial_used', 0) or 0))
+    free_left = max(0, 5 - (getattr(owner, 'free_trial_used', 0) or 0))
     remaining = credit_bal + free_left
     return {
         "authenticated": True,

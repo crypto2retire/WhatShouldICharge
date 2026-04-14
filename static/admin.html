@@ -271,7 +271,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
   <div class="page-title">Plans &amp; Pricing</div>
   <p style="font-size:0.88rem;color:var(--muted);margin-bottom:14px;max-width:720px;line-height:1.6;">
     Credit packs are stored in the database. Creating or changing prices here can create Stripe Products/Prices automatically when <code>STRIPE_SECRET_KEY</code> is set.
-    Each estimate uses one credit. New users get 2 free trials; credits never expire.
+    Each estimate uses one credit. New users get 5 free trials; credits never expire.
   </p>
   <div style="margin-bottom:14px"><button class="btn btn-primary" onclick="showPackForm()">+ Add Credit Pack</button></div>
   <div class="card" id="pack-form-card" style="display:none">
@@ -586,7 +586,7 @@ async function loadClientDetail(userId) {
     html += `<div class="card"><div class="card-title">Client Info</div>
       <div class="form-row"><div><span class="form-label">Email</span><div>${esc(u.email)}</div></div><div><span class="form-label">Phone</span><div>${esc(u.company_phone||'--')}</div></div></div>
       <div class="form-row" style="margin-top:10px"><div><span class="form-label">Location</span><div>${esc(u.company_city||'')}${u.company_state?', '+esc(u.company_state):''}</div></div><div><span class="form-label">Slug</span><div>${esc(u.company_slug||'--')}</div></div></div>
-      <div class="form-row" style="margin-top:10px"><div><span class="form-label">Credits</span><div><span class="badge badge-green">${u.credit_balance||0}</span> (${u.credits_purchased_total||0} bought, ${u.credits_used_total||0} used, ${u.free_trial_used||0}/2 free trial)</div></div><div><span class="form-label">Joined</span><div>${fmtShortDate(u.created_at)}</div></div></div>
+      <div class="form-row" style="margin-top:10px"><div><span class="form-label">Credits</span><div><span class="badge badge-green">${u.credit_balance||0}</span> (${u.credits_purchased_total||0} bought, ${u.credits_used_total||0} used, ${u.free_trial_used||0}/5 free trial)</div></div><div><span class="form-label">Joined</span><div>${fmtShortDate(u.created_at)}</div></div></div>
       <div class="form-row" style="margin-top:10px"><div><span class="form-label">Timezone</span><div>${esc(u.timezone||'America/Chicago')}</div></div><div></div></div>
     </div>`;
 

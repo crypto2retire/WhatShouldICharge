@@ -5126,16 +5126,29 @@ async def run_estimate(
         try:
             # ── Agent 1: Item Spotter (Qwen) ──
             job["message"] = "Identifying items..."
-            spotting_result, spotting_meta = await asyncio.wait_for(
-                run_openrouter_estimate(
-                    image_content,
-                    extraction_prompt,
-                    api_key,
-                    PROD_PRIMARY_MODEL,
-                    title="WSIC Agent 1: Item Spotter",
-                ),
-                timeout=200.0,
-            )
+            spotting_result = None
+            spotting_meta = {}
+            last_agent1_err = None
+            for attempt in range(2):
+                try:
+                    spotting_result, spotting_meta = await asyncio.wait_for(
+                        run_openrouter_estimate(
+                            image_content,
+                            extraction_prompt,
+                            api_key,
+                            PROD_PRIMARY_MODEL,
+                            title=f"WSIC Agent 1: Item Spotter{' (retry)' if attempt else ''}",
+                        ),
+                        timeout=180.0,
+                    )
+                    break
+                except (asyncio.TimeoutError, TimeoutError) as te:
+                    last_agent1_err = te
+                    logger.warning(f"[run_estimate] Agent 1 timeout on attempt {attempt+1} for job {job_id}")
+                    if attempt == 0:
+                        job["message"] = "Still identifying items (retrying)..."
+            if spotting_result is None:
+                raise last_agent1_err or TimeoutError("Agent 1 timed out")
 
             if not validate_spotting_schema(spotting_result):
                 logger.error(f"[run_estimate] Agent 1 malformed response for job {job_id}: invalid schema")
@@ -5175,16 +5188,29 @@ async def run_estimate(
             )
             sizing_prompt_with_context = verification_prompt + "\n\n" + sizing_context
 
-            sizing_result, sizing_meta = await asyncio.wait_for(
-                run_openrouter_estimate(
-                    image_content,
-                    sizing_prompt_with_context,
-                    api_key,
-                    PROD_SIZING_MODEL,
-                    title="WSIC Agent 2: Size Estimator",
-                ),
-                timeout=200.0,
-            )
+            sizing_result = None
+            sizing_meta = {}
+            last_agent2_err = None
+            for attempt in range(2):
+                try:
+                    sizing_result, sizing_meta = await asyncio.wait_for(
+                        run_openrouter_estimate(
+                            image_content,
+                            sizing_prompt_with_context,
+                            api_key,
+                            PROD_SIZING_MODEL,
+                            title=f"WSIC Agent 2: Size Estimator{' (retry)' if attempt else ''}",
+                        ),
+                        timeout=180.0,
+                    )
+                    break
+                except (asyncio.TimeoutError, TimeoutError) as te:
+                    last_agent2_err = te
+                    logger.warning(f"[run_estimate] Agent 2 timeout on attempt {attempt+1} for job {job_id}")
+                    if attempt == 0:
+                        job["message"] = "Still estimating sizes (retrying)..."
+            if sizing_result is None:
+                raise last_agent2_err or TimeoutError("Agent 2 timed out")
         except Exception as api_err:
             import traceback
             logger.error(f"[run_estimate] OpenRouter API error for job {job_id}, user {user.id}: {type(api_err).__name__}: {api_err}")

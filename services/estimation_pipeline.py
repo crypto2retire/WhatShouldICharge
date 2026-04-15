@@ -9,7 +9,7 @@ import logging
 import os
 from typing import Optional
 
-from services.vision_providers import VisionProvider, VisionResult, GeminiProvider, ClaudeProvider, OpenRouterProvider
+from services.vision_providers import VisionProvider, VisionResult, VisionProviderError, GeminiProvider, ClaudeProvider, OpenRouterProvider
 
 logger = logging.getLogger("wsic.pipeline")
 
@@ -36,6 +36,9 @@ async def _run_single(provider: VisionProvider, images: list, prompt: str) -> Op
         logger.info(f"[pipeline] {provider.name} succeeded: {len(result.data.get('items', []))} items, "
                      f"{result.input_tokens}+{result.output_tokens} tokens")
         return result
+    except VisionProviderError as e:
+        logger.warning(f"[pipeline] {e.provider_name} failed: {e.message}")
+        return None
     except Exception as e:
         logger.warning(f"[pipeline] {provider.name} failed: {type(e).__name__}: {e}")
         return None

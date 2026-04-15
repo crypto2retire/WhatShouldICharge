@@ -27,6 +27,13 @@ class VisionResult:
         self.raw_text = raw_text
 
 
+class VisionProviderError(Exception):
+    def __init__(self, provider_name: str, message: str):
+        self.provider_name = provider_name
+        self.message = message
+        super().__init__(f"{provider_name}: {message}")
+
+
 class VisionProvider(ABC):
     @abstractmethod
     async def estimate(self, images: list, prompt: str) -> VisionResult:
@@ -110,10 +117,13 @@ class GeminiProvider(VisionProvider):
 
     async def estimate(self, images: list, prompt: str) -> VisionResult:
         import asyncio
-        client = self._get_client()
-        contents = self._build_contents(images, prompt)
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._sync_call, client, contents)
+        try:
+            client = self._get_client()
+            contents = self._build_contents(images, prompt)
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, self._sync_call, client, contents)
+        except Exception as e:
+            raise VisionProviderError(self.name, str(e)) from e
 
     def _sync_call(self, client, contents):
         from google.genai import types
@@ -186,10 +196,13 @@ class ClaudeProvider(VisionProvider):
 
     async def estimate(self, images: list, prompt: str) -> VisionResult:
         import asyncio
-        client = self._get_client()
-        content = self._build_content(images)
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._sync_call, client, prompt, content)
+        try:
+            client = self._get_client()
+            content = self._build_content(images)
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, self._sync_call, client, prompt, content)
+        except Exception as e:
+            raise VisionProviderError(self.name, str(e)) from e
 
     def _sync_call(self, client, prompt, content):
         response = client.messages.create(
@@ -247,54 +260,57 @@ class OpenRouterProvider(VisionProvider):
 
     async def estimate(self, images: list, prompt: str) -> VisionResult:
         import httpx
-        api_key = os.environ.get("OPENROUTER_API_KEY")
-        if not api_key:
-            raise ValueError("OPENROUTER_API_KEY not configured")
-        content_blocks = []
-        for block in images:
-            if not isinstance(block, dict):
-                continue
-            btype = str(block.get("type") or "").strip().lower()
-            if btype == "text":
-                text = str(block.get("text") or "").strip()
-                if text:
-                    content_blocks.append({"type": "text", "text": text})
-            elif btype == "image":
-                source = block.get("source") or {}
-                data = str(source.get("data") or "").strip()
-                media_type = str(source.get("media_type") or "image/jpeg").strip() or "image/jpeg"
-                if data:
-                    content_blocks.append({"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{data}"}})
-        content_blocks.append({"type": "text", "text": "Analyze these photos and provide your estimate as JSON."})
-        payload = {
-            "model": self._model, "temperature": 0, "max_tokens": 8192,
-            "messages": [
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": content_blocks},
-            ],
-            "provider": {"sort": "throughput", "preferred_max_latency": {"p90": 60}},
-        }
-        headers = {
-            "Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-            "HTTP-Referer": "https://whatshouldicharge.app", "X-Title": "WSIC Estimate",
-        }
-        async with httpx.AsyncClient(timeout=180.0) as client:
-            response = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
-            if response.status_code >= 400:
-                raise RuntimeError(f"OpenRouter {response.status_code}: {response.text[:300]}")
-            data = response.json()
-        choice = (((data.get("choices") or [{}])[0]).get("message") or {})
-        raw_text = choice.get("content") or ""
-        parsed = parse_ai_json(raw_text)
-        usage = data.get("usage") or {}
-        input_tokens = int(usage.get("prompt_tokens", 0) or 0)
-        output_tokens = int(usage.get("completion_tokens", 0) or 0)
-        cost_cents = int((input_tokens * 0.08 + output_tokens * 0.08) / 1_000)
-        return VisionResult(
-            data=parsed, provider_name="openrouter", model_used=str(data.get("model") or self._model),
-            input_tokens=input_tokens, output_tokens=output_tokens,
-            cost_cents=cost_cents, raw_text=raw_text,
-        )
+        try:
+            api_key = os.environ.get("OPENROUTER_API_KEY")
+            if not api_key:
+                raise ValueError("OPENROUTER_API_KEY not configured")
+            content_blocks = []
+            for block in images:
+                if not isinstance(block, dict):
+                    continue
+                btype = str(block.get("type") or "").strip().lower()
+                if btype == "text":
+                    text = str(block.get("text") or "").strip()
+                    if text:
+                        content_blocks.append({"type": "text", "text": text})
+                elif btype == "image":
+                    source = block.get("source") or {}
+                    data = str(source.get("data") or "").strip()
+                    media_type = str(source.get("media_type") or "image/jpeg").strip() or "image/jpeg"
+                    if data:
+                        content_blocks.append({"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{data}"}})
+            content_blocks.append({"type": "text", "text": "Analyze these photos and provide your estimate as JSON."})
+            payload = {
+                "model": self._model, "temperature": 0, "max_tokens": 8192,
+                "messages": [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": content_blocks},
+                ],
+                "provider": {"sort": "throughput", "preferred_max_latency": {"p90": 60}},
+            }
+            headers = {
+                "Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                "HTTP-Referer": "https://whatshouldicharge.app", "X-Title": "WSIC Estimate",
+            }
+            async with httpx.AsyncClient(timeout=180.0) as client:
+                response = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
+                if response.status_code >= 400:
+                    raise RuntimeError(f"OpenRouter {response.status_code}: {response.text[:300]}")
+                data = response.json()
+            choice = (((data.get("choices") or [{}])[0]).get("message") or {})
+            raw_text = choice.get("content") or ""
+            parsed = parse_ai_json(raw_text)
+            usage = data.get("usage") or {}
+            input_tokens = int(usage.get("prompt_tokens", 0) or 0)
+            output_tokens = int(usage.get("completion_tokens", 0) or 0)
+            cost_cents = int((input_tokens * 0.08 + output_tokens * 0.08) / 1_000)
+            return VisionResult(
+                data=parsed, provider_name="openrouter", model_used=str(data.get("model") or self._model),
+                input_tokens=input_tokens, output_tokens=output_tokens,
+                cost_cents=cost_cents, raw_text=raw_text,
+            )
+        except Exception as e:
+            raise VisionProviderError(self.name, str(e)) from e
 
 
 def get_provider(provider_name: str = "gemini") -> VisionProvider:

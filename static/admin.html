@@ -185,6 +185,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
     <button class="nav-item" data-section="plans"><span class="nav-icon">&#x1f4b3;</span> Plans &amp; Pricing</button>
     <button class="nav-item" data-section="promos"><span class="nav-icon">&#x1f3ab;</span> Promo Codes</button>
     <button class="nav-item" data-section="accuracy"><span class="nav-icon">&#x1f3af;</span> Accuracy</button>
+    <button class="nav-item" data-section="providers"><span class="nav-icon">&#x1f50c;</span> Provider Health</button>
     <button class="nav-item" data-section="modeleval"><span class="nav-icon">&#x1f52c;</span> Model Eval</button>
     <button class="nav-item" data-section="settings"><span class="nav-icon">&#x2699;&#xfe0f;</span> Site Settings</button>
   </nav>
@@ -227,6 +228,22 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
   <div class="card">
     <div class="card-title">Recent Users</div>
     <table><thead><tr><th>Email</th><th>Company</th><th>Credits</th><th>Joined</th></tr></thead><tbody id="recent-users-body"></tbody></table>
+  </div>
+</div>
+
+<!-- ============ PROVIDER HEALTH ============ -->
+<div class="section" id="sec-providers">
+  <div class="page-title">Provider Health</div>
+  <div class="card">
+    <div class="card-title">7-Day Provider Summary</div>
+    <div class="stats-grid" id="provider-summary-grid"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Recent Provider Events</div>
+    <table>
+      <thead><tr><th>Time</th><th>Provider</th><th>Model</th><th>Status</th><th>Photos</th><th>Latency</th><th>Error</th></tr></thead>
+      <tbody id="provider-events-body"></tbody>
+    </table>
   </div>
 </div>
 
@@ -475,6 +492,7 @@ $$('.nav-item').forEach(item => {
     if (sec === 'dashboard' && !loaded.dashboard) loadDashboard();
     if (sec === 'clients' && !loaded.clients) loadClients(1);
     if (sec === 'estimates' && !loaded.estimates) loadEstimates(1);
+    if (sec === 'providers' && !loaded.providers) loadProviderHealth();
     if (sec === 'plans') loadPacks();
     if (sec === 'promos' && !loaded.promos) loadPromos();
     if (sec === 'accuracy' && !loaded.accuracy) loadAccuracy();
@@ -483,7 +501,7 @@ $$('.nav-item').forEach(item => {
   });
 });
 
-const loaded = { dashboard: false, clients: false, estimates: false, promos: false, accuracy: false, modeleval: false, settings: false };
+const loaded = { dashboard: false, clients: false, estimates: false, providers: false, promos: false, accuracy: false, modeleval: false, settings: false };
 let _adminPacksCache = [];
 
 function getCsrfToken() {
@@ -544,6 +562,44 @@ async function loadDashboard() {
     try { await loadApiCosts(); } catch (e) { console.error('API costs error:', e); }
     loaded.dashboard = true;
   } catch(e) { console.error(e); }
+}
+
+async function loadProviderHealth() {
+  try {
+    const data = await apiFetch('/api/admin/provider-health');
+    const providers = data.providers || [];
+    const events = data.recent_events || [];
+
+    $('#provider-summary-grid').innerHTML = providers.length ? providers.map(p => {
+      const total = (p.success_count || 0) + (p.failure_count || 0);
+      const successRate = total ? Math.round((p.success_count || 0) * 100 / total) : 0;
+      const color = successRate >= 95 ? 'var(--green)' : successRate >= 80 ? 'var(--orange)' : 'var(--red)';
+      return `<div class="stat-card">
+        <div class="stat-label">${esc(p.provider_name)}</div>
+        <div class="stat-value" style="font-size:1.2rem;color:${color}">${successRate}%</div>
+        <div style="font-size:0.82rem;color:var(--muted);margin-top:6px">${esc(p.model_name || '')}</div>
+        <div style="font-size:0.82rem;color:var(--muted);margin-top:8px">${p.success_count || 0} success / ${p.failure_count || 0} failure</div>
+        <div style="font-size:0.82rem;color:var(--muted)">Avg latency: ${p.avg_latency_ms || 0} ms</div>
+        ${p.last_error_message ? `<div style="font-size:0.75rem;color:var(--red);margin-top:8px">${esc((p.last_error_type || 'Error') + ': ' + p.last_error_message.slice(0, 120))}</div>` : ''}
+      </div>`;
+    }).join('') : '<div class="empty">No provider events yet</div>';
+
+    $('#provider-events-body').innerHTML = events.length ? events.map(e => `<tr>
+      <td>${fmtShortDate(e.created_at)}</td>
+      <td>${esc(e.provider_name || '')}</td>
+      <td>${esc(e.model_name || '')}</td>
+      <td>${e.status === 'success' ? '<span class="badge badge-green">Success</span>' : '<span class="badge badge-red">Failure</span>'}</td>
+      <td>${e.photos_count || 0}</td>
+      <td>${e.latency_ms || 0} ms</td>
+      <td style="max-width:320px;white-space:normal;color:${e.status === 'failure' ? 'var(--red)' : 'var(--muted)'}">${esc((e.error_type ? e.error_type + ': ' : '') + (e.error_message || ''))}</td>
+    </tr>`).join('') : '<tr><td colspan="7" class="empty">No provider events yet</td></tr>';
+
+    loaded.providers = true;
+  } catch (e) {
+    console.error(e);
+    $('#provider-summary-grid').innerHTML = '<div class="empty">Failed to load provider health</div>';
+    $('#provider-events-body').innerHTML = '<tr><td colspan="7" class="empty">Failed to load provider events</td></tr>';
+  }
 }
 
 // ── Clients ──

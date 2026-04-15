@@ -202,6 +202,21 @@ class Estimate(Base):
     adjustments_json = Column(Text, default="")
 
 
+class ProviderHealthEvent(Base):
+    __tablename__ = "provider_health_events"
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
+    provider_name = Column(String(30), default="", index=True)
+    model_name = Column(String(80), default="")
+    status = Column(String(20), default="", index=True)
+    error_type = Column(String(60), default="")
+    error_message = Column(Text, default="")
+    estimate_job_id = Column(String(64), default="", index=True)
+    estimate_id = Column(Integer, default=0, index=True)
+    photos_count = Column(Integer, default=0)
+    latency_ms = Column(Integer, default=0)
+
+
 class ItemReferenceLibrary(Base):
     __tablename__ = "item_reference_library"
     id = Column(Integer, primary_key=True, index=True)

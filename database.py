@@ -257,6 +257,7 @@ async def init_db():
             "ALTER TABLE estimates ADD COLUMN IF NOT EXISTS adjustments_json TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_tag_id VARCHAR DEFAULT ''",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS fb_pixel_id VARCHAR DEFAULT ''",
+            "CREATE TABLE IF NOT EXISTS provider_health_events (id SERIAL PRIMARY KEY, created_at TIMESTAMP DEFAULT NOW(), provider_name VARCHAR(30) DEFAULT '', model_name VARCHAR(80) DEFAULT '', status VARCHAR(20) DEFAULT '', error_type VARCHAR(60) DEFAULT '', error_message TEXT DEFAULT '', estimate_job_id VARCHAR(64) DEFAULT '', estimate_id INTEGER DEFAULT 0, photos_count INTEGER DEFAULT 0, latency_ms INTEGER DEFAULT 0)",
         ]
     else:
         alter_statements = [

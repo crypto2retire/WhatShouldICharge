@@ -10,6 +10,8 @@ import os
 from typing import Optional
 
 from services.vision_providers import VisionProvider, VisionResult, VisionProviderError, GeminiProvider, ClaudeProvider, OpenRouterProvider
+from database import AsyncSessionLocal
+from models import ProviderHealthEvent
 
 logger = logging.getLogger("wsic.pipeline")
 
@@ -35,13 +37,57 @@ async def _run_single(provider: VisionProvider, images: list, prompt: str) -> Op
         result = await asyncio.wait_for(provider.estimate(images, prompt), timeout=120.0)
         logger.info(f"[pipeline] {provider.name} succeeded: {len(result.data.get('items', []))} items, "
                      f"{result.input_tokens}+{result.output_tokens} tokens")
+        await _record_provider_event(
+            provider_name=provider.name,
+            model_name=result.model_used or provider.model_name,
+            status="success",
+            error_type="",
+            error_message="",
+            photos_count=len([b for b in images if isinstance(b, dict) and b.get('type') == 'image']),
+            latency_ms=getattr(result, 'latency_ms', 0),
+        )
         return result
     except VisionProviderError as e:
         logger.warning(f"[pipeline] {e.provider_name} failed: {e.message}")
+        await _record_provider_event(
+            provider_name=e.provider_name,
+            model_name=getattr(e, 'model_name', '') or provider.model_name,
+            status="failure",
+            error_type=type(e.__cause__).__name__ if e.__cause__ else type(e).__name__,
+            error_message=e.message[:1000],
+            photos_count=len([b for b in images if isinstance(b, dict) and b.get('type') == 'image']),
+            latency_ms=getattr(e, 'latency_ms', 0),
+        )
         return None
     except Exception as e:
         logger.warning(f"[pipeline] {provider.name} failed: {type(e).__name__}: {e}")
+        await _record_provider_event(
+            provider_name=provider.name,
+            model_name=provider.model_name,
+            status="failure",
+            error_type=type(e).__name__,
+            error_message=str(e)[:1000],
+            photos_count=len([b for b in images if isinstance(b, dict) and b.get('type') == 'image']),
+            latency_ms=0,
+        )
         return None
+
+
+async def _record_provider_event(provider_name: str, model_name: str, status: str, error_type: str, error_message: str, photos_count: int, latency_ms: int):
+    try:
+        async with AsyncSessionLocal() as db:
+            db.add(ProviderHealthEvent(
+                provider_name=provider_name,
+                model_name=model_name,
+                status=status,
+                error_type=error_type,
+                error_message=error_message,
+                photos_count=photos_count,
+                latency_ms=latency_ms,
+            ))
+            await db.commit()
+    except Exception as e:
+        logger.warning(f"[pipeline] Failed to record provider health event: {e}")
 
 
 def merge_results(results: list[VisionResult]) -> dict:

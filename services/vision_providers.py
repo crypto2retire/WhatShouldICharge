@@ -8,6 +8,7 @@ import json
 import os
 import re
 import logging
+import time
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger("wsic.vision")
@@ -25,12 +26,15 @@ class VisionResult:
         self.output_tokens = output_tokens
         self.cost_cents = cost_cents
         self.raw_text = raw_text
+        self.latency_ms = 0
 
 
 class VisionProviderError(Exception):
     def __init__(self, provider_name: str, message: str):
         self.provider_name = provider_name
         self.message = message
+        self.model_name = ""
+        self.latency_ms = 0
         super().__init__(f"{provider_name}: {message}")
 
 
@@ -42,6 +46,11 @@ class VisionProvider(ABC):
     @property
     @abstractmethod
     def name(self) -> str:
+        ...
+
+    @property
+    @abstractmethod
+    def model_name(self) -> str:
         ...
 
 
@@ -106,6 +115,10 @@ class GeminiProvider(VisionProvider):
     def name(self) -> str:
         return "gemini"
 
+    @property
+    def model_name(self) -> str:
+        return self._model
+
     def _get_client(self):
         if self._client is None:
             from google import genai
@@ -118,12 +131,17 @@ class GeminiProvider(VisionProvider):
     async def estimate(self, images: list, prompt: str) -> VisionResult:
         import asyncio
         try:
+            started = time.perf_counter()
             client = self._get_client()
             contents = self._build_contents(images, prompt)
             loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(None, self._sync_call, client, contents)
+            result = await loop.run_in_executor(None, self._sync_call, client, contents)
+            result.latency_ms = int((time.perf_counter() - started) * 1000)
+            return result
         except Exception as e:
-            raise VisionProviderError(self.name, str(e)) from e
+            err = VisionProviderError(self.name, str(e))
+            err.model_name = self._model
+            raise err from e
 
     def _sync_call(self, client, contents):
         from google.genai import types
@@ -187,6 +205,10 @@ class ClaudeProvider(VisionProvider):
     def name(self) -> str:
         return "claude"
 
+    @property
+    def model_name(self) -> str:
+        return self._model
+
     def _get_client(self):
         if self._client is None:
             import anthropic
@@ -199,12 +221,17 @@ class ClaudeProvider(VisionProvider):
     async def estimate(self, images: list, prompt: str) -> VisionResult:
         import asyncio
         try:
+            started = time.perf_counter()
             client = self._get_client()
             content = self._build_content(images)
             loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(None, self._sync_call, client, prompt, content)
+            result = await loop.run_in_executor(None, self._sync_call, client, prompt, content)
+            result.latency_ms = int((time.perf_counter() - started) * 1000)
+            return result
         except Exception as e:
-            raise VisionProviderError(self.name, str(e)) from e
+            err = VisionProviderError(self.name, str(e))
+            err.model_name = self._model
+            raise err from e
 
     def _sync_call(self, client, prompt, content):
         response = client.messages.create(
@@ -260,9 +287,14 @@ class OpenRouterProvider(VisionProvider):
     def name(self) -> str:
         return "openrouter"
 
+    @property
+    def model_name(self) -> str:
+        return self._model
+
     async def estimate(self, images: list, prompt: str) -> VisionResult:
         import httpx
         try:
+            started = time.perf_counter()
             api_key = os.environ.get("OPENROUTER_API_KEY")
             if not api_key:
                 raise ValueError("OPENROUTER_API_KEY not configured")
@@ -306,13 +338,17 @@ class OpenRouterProvider(VisionProvider):
             input_tokens = int(usage.get("prompt_tokens", 0) or 0)
             output_tokens = int(usage.get("completion_tokens", 0) or 0)
             cost_cents = int((input_tokens * 0.08 + output_tokens * 0.08) / 1_000)
-            return VisionResult(
+            result = VisionResult(
                 data=parsed, provider_name="openrouter", model_used=str(data.get("model") or self._model),
                 input_tokens=input_tokens, output_tokens=output_tokens,
                 cost_cents=cost_cents, raw_text=raw_text,
             )
+            result.latency_ms = int((time.perf_counter() - started) * 1000)
+            return result
         except Exception as e:
-            raise VisionProviderError(self.name, str(e)) from e
+            err = VisionProviderError(self.name, str(e))
+            err.model_name = self._model
+            raise err from e
 
 
 def get_provider(provider_name: str = "gemini") -> VisionProvider:

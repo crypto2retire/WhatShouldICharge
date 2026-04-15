@@ -42,7 +42,7 @@ from database import (
 from models import (
     User, TeamMember, TeamSession, SiteConfig, PlanConfig,
     CreditPack, CreditTransaction, PromoCode, Session, PasswordReset,
-    Estimate, ItemReferenceLibrary,
+    Estimate, ItemReferenceLibrary, ProviderHealthEvent,
 )
 from cache import cache_get, cache_set, cache_invalidate
 from auth import get_current_user, require_user, require_admin, get_team_member, require_team_member
@@ -6359,6 +6359,68 @@ async def admin_api_costs(request: Request):
             "today_estimates": int(today_row.estimate_count or 0),
             "today_cost_cents": int(today_row.total_cost_cents or 0),
             "today_cost_display": f"${int(today_row.total_cost_cents or 0) / 100:.2f}",
+        }
+
+
+@router_admin.get("/api/admin/provider-health")
+async def admin_provider_health(request: Request):
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        since = now - timedelta(days=7)
+
+        rows = (await db.execute(
+            select(ProviderHealthEvent)
+            .where(ProviderHealthEvent.created_at >= since)
+            .order_by(ProviderHealthEvent.created_at.desc())
+            .limit(500)
+        )).scalars().all()
+
+        summary = {}
+        for row in rows:
+            key = row.provider_name or "unknown"
+            if key not in summary:
+                summary[key] = {
+                    "provider_name": key,
+                    "model_name": row.model_name or "",
+                    "success_count": 0,
+                    "failure_count": 0,
+                    "avg_latency_ms": 0,
+                    "last_error_type": "",
+                    "last_error_message": "",
+                    "last_seen_at": row.created_at.isoformat() if row.created_at else None,
+                }
+            item = summary[key]
+            if row.status == "success":
+                item["success_count"] += 1
+                if row.latency_ms:
+                    prev = item["avg_latency_ms"]
+                    n = item["success_count"]
+                    item["avg_latency_ms"] = int(((prev * (n - 1)) + row.latency_ms) / n)
+            else:
+                item["failure_count"] += 1
+                if not item["last_error_message"]:
+                    item["last_error_type"] = row.error_type or ""
+                    item["last_error_message"] = row.error_message or ""
+
+        recent_events = [
+            {
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+                "provider_name": row.provider_name,
+                "model_name": row.model_name,
+                "status": row.status,
+                "error_type": row.error_type,
+                "error_message": row.error_message,
+                "photos_count": row.photos_count,
+                "latency_ms": row.latency_ms,
+            }
+            for row in rows[:100]
+        ]
+
+        return {
+            "window": "7d",
+            "providers": list(summary.values()),
+            "recent_events": recent_events,
         }
 
 

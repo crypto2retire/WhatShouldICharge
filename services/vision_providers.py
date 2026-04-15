@@ -131,6 +131,7 @@ class GeminiProvider(VisionProvider):
             temperature=0,
             max_output_tokens=8192,
             response_mime_type="application/json",
+            system_instruction="You are an expert junk removal estimator. Return only valid JSON.",
         )
         response = client.models.generate_content(
             model=self._model,
@@ -155,7 +156,7 @@ class GeminiProvider(VisionProvider):
     def _build_contents(self, images: list, prompt: str) -> list:
         from google.genai import types
 
-        parts = [types.Part.from_text(text=prompt)]
+        parts = []
         for block in images:
             if not isinstance(block, dict):
                 continue
@@ -172,6 +173,7 @@ class GeminiProvider(VisionProvider):
                     mime = media_type.split(";")[0].strip() or "image/jpeg"
                     image_bytes = base64.b64decode(data)
                     parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime))
+        parts.append(types.Part.from_text(text=prompt))
         parts.append(types.Part.from_text(text="Analyze these photos and provide your estimate as JSON."))
         return [types.UserContent(parts=parts)]
 

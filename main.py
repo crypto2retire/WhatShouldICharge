@@ -5160,7 +5160,7 @@ async def run_estimate(
             logger.error(f"[run_estimate] Pipeline error for job {job_id}, user {user.id}: {type(api_err).__name__}: {api_err}")
             logger.error(f"[run_estimate] Traceback: {traceback.format_exc()}")
             job["status"] = "error"
-            job["message"] = f"We couldn't process your estimate. {type(api_err).__name__}: {api_err}"
+            job["message"] = f"We couldn't process your estimate. {type(api_err).__name__}: {api_err}. Check logs for provider failures."
             job["result"] = None
             return
 

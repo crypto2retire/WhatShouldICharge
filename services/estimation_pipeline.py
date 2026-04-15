@@ -25,7 +25,7 @@ def _build_providers() -> list[VisionProvider]:
         providers.append(GeminiProvider())
     if claude_key:
         providers.append(ClaudeProvider())
-    if not providers and openrouter_key:
+    if openrouter_key:
         providers.append(OpenRouterProvider())
     return providers
 

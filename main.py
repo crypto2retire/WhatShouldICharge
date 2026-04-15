@@ -718,7 +718,7 @@ async def customer_estimate_page(slug: str):
 {tracking_head}
 <style>
 *{{margin:0;padding:0;box-sizing:border-box}}
-body{{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#ffffff;color:#1e293b;min-height:100vh;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}}
+body{{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}}
 @media (prefers-reduced-motion:reduce){{*{{animation:none!important;transition:none!important}}}}
 
 /* --- Layout --- */
@@ -739,72 +739,72 @@ body{{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#fffff
 /* --- Header --- */
 .site-header{{text-align:center;padding:32px 0 12px}}
 .logo{{max-height:64px;margin-bottom:14px;border-radius:10px}}
-.site-header h1{{font-size:1.5rem;font-weight:800;color:#0f172a;line-height:1.2;letter-spacing:-0.02em}}
-.location-badge{{display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:5px 14px;background:#ecfdf5;color:#059669;border-radius:24px;font-size:0.78rem;font-weight:600}}
+.site-header h1{{font-size:1.5rem;font-weight:800;color:#e6edf3;line-height:1.2;letter-spacing:-0.02em}}
+.location-badge{{display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:5px 14px;background:rgba(22,163,74,0.12);color:#22c55e;border:1px solid rgba(22,163,74,0.25);border-radius:24px;font-size:0.78rem;font-weight:600}}
 .location-badge svg{{width:14px;height:14px;flex-shrink:0}}
 .header-phone{{margin-top:10px}}
 .header-phone a{{display:inline-flex;align-items:center;gap:6px;color:#16a34a;text-decoration:none;font-weight:600;font-size:0.9rem;padding:6px 16px;border-radius:24px;transition:background .2s}}
-.header-phone a:hover{{background:#f0fdf4}}
+.header-phone a:hover{{background:rgba(22,163,74,0.1)}}
 .header-phone svg{{width:16px;height:16px}}
 
 /* --- Hero --- */
-.hero{{text-align:center;padding:28px 0 20px}}
-.hero h2{{font-size:2rem;font-weight:800;color:#0f172a;line-height:1.15;letter-spacing:-0.03em;margin-bottom:12px}}
-.hero h2 span{{color:#16a34a}}
-.hero p{{font-size:1rem;color:#64748b;max-width:460px;margin:0 auto;line-height:1.65}}
+.hero{{text-align:center;padding:28px 0 20px;position:relative}}
+.hero::before{{content:'';position:absolute;top:-100px;left:50%;transform:translateX(-50%);width:600px;height:350px;background:radial-gradient(ellipse,rgba(22,163,74,0.08) 0%,transparent 70%);pointer-events:none}}
+.hero h2{{font-size:2rem;font-weight:800;color:#e6edf3;line-height:1.15;letter-spacing:-0.03em;margin-bottom:12px}}
+.hero p{{font-size:1rem;color:#8b949e;max-width:460px;margin:0 auto;line-height:1.65}}
 .trust-pills{{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:18px}}
-.trust-pill{{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:24px;font-size:0.78rem;font-weight:600;color:#475569}}
-.trust-pill svg{{width:14px;height:14px;color:#16a34a}}
+.trust-pill{{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;background:#161b22;border:1px solid #21262d;border-radius:24px;font-size:0.78rem;font-weight:600;color:#8b949e}}
+.trust-pill svg{{width:14px;height:14px;color:#22c55e}}
 
 /* --- Steps --- */
 .steps-section{{padding:8px 0 24px}}
 .steps-section h3{{text-align:center;font-size:0.82rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px}}
 .steps{{display:flex;gap:12px}}
-.step{{flex:1;text-align:center;padding:20px 12px 18px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.02);transition:transform .2s,box-shadow .2s;cursor:default}}
-.step:hover{{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,0.08)}}
-.step-icon{{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;background:#ecfdf5;border-radius:12px;margin-bottom:10px;color:#16a34a}}
+.step{{flex:1;text-align:center;padding:20px 12px 18px;background:#161b22;border:1px solid #21262d;border-radius:16px;transition:transform .2s,border-color .2s;cursor:default}}
+.step:hover{{transform:translateY(-2px);border-color:rgba(22,163,74,0.3)}}
+.step-icon{{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;background:rgba(22,163,74,0.12);border-radius:12px;margin-bottom:10px;color:#22c55e}}
 .step-icon svg{{width:22px;height:22px}}
-.step-title{{font-size:0.85rem;font-weight:700;color:#0f172a;margin-bottom:2px}}
-.step-sub{{font-size:0.75rem;color:#94a3b8;line-height:1.4}}
+.step-title{{font-size:0.85rem;font-weight:700;color:#e6edf3;margin-bottom:2px}}
+.step-sub{{font-size:0.75rem;color:#6e7681;line-height:1.4}}
 
 /* --- Cards --- */
-.card{{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.02)}}
-.card-title{{font-size:0.92rem;font-weight:700;color:#0f172a;margin-bottom:16px}}
-label{{display:block;font-size:0.8rem;color:#64748b;margin-bottom:5px;font-weight:500}}
-label .optional{{font-weight:400;color:#94a3b8;font-size:0.72rem;margin-left:4px}}
-input[type="text"],input[type="email"],input[type="tel"]{{width:100%;padding:12px 16px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;color:#1e293b;font-size:0.95rem;margin-bottom:14px;font-family:inherit;transition:border-color .2s,box-shadow .2s}}
-input:focus{{outline:none;border-color:#16a34a;box-shadow:0 0 0 4px rgba(22,163,74,0.08)}}
-input::placeholder{{color:#94a3b8}}
-.optional-fields{{border-top:1px solid #f1f5f9;padding-top:14px;margin-top:2px}}
+.card{{background:#161b22;border:1px solid #21262d;border-radius:16px;padding:24px;margin-bottom:16px}}
+.card-title{{font-size:0.92rem;font-weight:700;color:#e6edf3;margin-bottom:16px}}
+label{{display:block;font-size:0.8rem;color:#8b949e;margin-bottom:5px;font-weight:500}}
+label .optional{{font-weight:400;color:#6e7681;font-size:0.72rem;margin-left:4px}}
+input[type="text"],input[type="email"],input[type="tel"]{{width:100%;padding:12px 16px;background:#0d1117;border:1.5px solid #21262d;border-radius:12px;color:#e6edf3;font-size:0.95rem;margin-bottom:14px;font-family:inherit;transition:border-color .2s,box-shadow .2s}}
+input:focus{{outline:none;border-color:#16a34a;box-shadow:0 0 0 4px rgba(22,163,74,0.12)}}
+input::placeholder{{color:#6e7681}}
+.optional-fields{{border-top:1px solid #21262d;padding-top:14px;margin-top:2px}}
 
 /* --- Upload Zone --- */
 .photo-tips{{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}}
-.photo-tip{{flex:1;min-width:140px;display:flex;align-items:flex-start;gap:8px;padding:10px 12px;background:#f8fafc;border:1px solid #f1f5f9;border-radius:10px;font-size:0.76rem;color:#475569;line-height:1.4}}
-.photo-tip svg{{width:18px;height:18px;color:#16a34a;flex-shrink:0;margin-top:1px}}
-.photo-tip strong{{color:#0f172a;display:block;font-weight:600;font-size:0.78rem;margin-bottom:1px}}
-.drop-zone{{border:2px dashed #cbd5e1;border-radius:16px;padding:40px 20px;text-align:center;cursor:pointer;transition:all .25s;background:#fafbfc;position:relative;overflow:hidden}}
-.drop-zone::before{{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(22,163,74,0.04) 0%,transparent 70%);opacity:0;transition:opacity .3s}}
-.drop-zone:hover,.drop-zone.drag-over{{border-color:#16a34a;border-style:solid;background:#f0fdf4}}
+.photo-tip{{flex:1;min-width:140px;display:flex;align-items:flex-start;gap:8px;padding:10px 12px;background:#161b22;border:1px solid #21262d;border-radius:10px;font-size:0.76rem;color:#8b949e;line-height:1.4}}
+.photo-tip svg{{width:18px;height:18px;color:#22c55e;flex-shrink:0;margin-top:1px}}
+.photo-tip strong{{color:#e6edf3;display:block;font-weight:600;font-size:0.78rem;margin-bottom:1px}}
+.drop-zone{{border:2px dashed #30363d;border-radius:16px;padding:40px 20px;text-align:center;cursor:pointer;transition:all .25s;background:#161b22;position:relative;overflow:hidden}}
+.drop-zone::before{{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(22,163,74,0.06) 0%,transparent 70%);opacity:0;transition:opacity .3s}}
+.drop-zone:hover,.drop-zone.drag-over{{border-color:#16a34a;border-style:solid;background:rgba(22,163,74,0.05)}}
 .drop-zone:hover::before,.drop-zone.drag-over::before{{opacity:1}}
-.drop-zone-icon{{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;background:#ecfdf5;border-radius:16px;margin-bottom:12px;color:#16a34a}}
+.drop-zone-icon{{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;background:rgba(22,163,74,0.12);border-radius:16px;margin-bottom:12px;color:#22c55e}}
 .drop-zone-icon svg{{width:28px;height:28px}}
-.drop-label{{font-size:1rem;font-weight:700;color:#0f172a}}
-.drop-sub{{font-size:0.8rem;color:#94a3b8;margin-top:5px}}
+.drop-label{{font-size:1rem;font-weight:700;color:#e6edf3}}
+.drop-sub{{font-size:0.8rem;color:#6e7681;margin-top:5px}}
 .previews{{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}}
 .preview-wrap{{position:relative;width:80px;height:80px}}
-.preview-thumb{{width:80px;height:80px;border-radius:12px;object-fit:cover;border:2px solid #e2e8f0;transition:border-color .2s}}
+.preview-thumb{{width:80px;height:80px;border-radius:12px;object-fit:cover;border:2px solid #21262d;transition:border-color .2s}}
 .preview-wrap:hover .preview-thumb{{border-color:#16a34a}}
 .preview-remove{{position:absolute;top:-6px;right:-6px;width:22px;height:22px;background:#ef4444;color:#fff;border:2px solid #fff;border-radius:50%;font-size:0.7rem;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1;font-weight:700;box-shadow:0 2px 4px rgba(0,0,0,0.15);opacity:0;transition:opacity .15s}}
 .preview-wrap:hover .preview-remove{{opacity:1}}
 .photo-count{{font-size:0.78rem;color:#64748b;margin-top:8px;text-align:center}}
 
 /* --- Buttons --- */
-.btn{{display:block;width:100%;padding:16px;background:#16a34a;color:#fff;border:none;border-radius:14px;font-size:1.05rem;font-weight:700;cursor:pointer;font-family:inherit;transition:background .2s,transform .1s;text-align:center;text-decoration:none;box-shadow:0 2px 8px rgba(22,163,74,0.25)}}
-.btn:hover{{background:#15803d;transform:translateY(-1px)}}
+.btn{{display:block;width:100%;padding:16px;background:#16a34a;color:#fff;border:none;border-radius:14px;font-size:1.05rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;text-decoration:none;box-shadow:0 4px 20px rgba(22,163,74,0.35)}}
+.btn:hover{{background:#22c55e;transform:translateY(-1px);box-shadow:0 6px 28px rgba(22,163,74,0.4)}}
 .btn:active{{transform:translateY(0)}}
 .btn:disabled{{opacity:0.4;cursor:not-allowed;transform:none;box-shadow:none}}
-.btn-outline{{background:transparent;border:2px solid #16a34a;color:#16a34a;margin-top:12px;box-shadow:none}}
-.btn-outline:hover{{background:#f0fdf4;transform:translateY(-1px)}}
+.btn-outline{{background:transparent;border:2px solid #16a34a;color:#22c55e;margin-top:12px;box-shadow:none}}
+.btn-outline:hover{{background:rgba(22,163,74,0.1);transform:translateY(-1px)}}
 .btn-call{{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:16px 32px;width:auto;font-size:1.1rem}}
 .btn-call svg{{width:20px;height:20px}}
 
@@ -815,10 +815,10 @@ input::placeholder{{color:#94a3b8}}
 .loading-dots span:nth-child(2){{animation-delay:0.15s}}
 .loading-dots span:nth-child(3){{animation-delay:0.3s}}
 @keyframes dotPulse{{0%,80%,100%{{opacity:0.3;transform:scale(0.8)}}40%{{opacity:1;transform:scale(1.1)}}}}
-.loading-text{{font-size:0.95rem;color:#475569;font-weight:500}}
-.loading-sub{{font-size:0.8rem;color:#94a3b8;margin-top:6px}}
+.loading-text{{font-size:0.95rem;color:#8b949e;font-weight:500}}
+.loading-sub{{font-size:0.8rem;color:#6e7681;margin-top:6px}}
 .loading-steps{{display:flex;justify-content:center;gap:20px;margin-top:20px}}
-.loading-step{{display:flex;align-items:center;gap:6px;font-size:0.78rem;color:#94a3b8;font-weight:500}}
+.loading-step{{display:flex;align-items:center;gap:6px;font-size:0.78rem;color:#6e7681;font-weight:500}}
 .loading-step.active{{color:#16a34a}}
 .loading-step svg{{width:16px;height:16px}}
 
@@ -826,23 +826,23 @@ input::placeholder{{color:#94a3b8}}
 .results{{display:none}}
 .results.show{{display:block;animation:fadeUp .4s ease-out}}
 @keyframes fadeUp{{from{{opacity:0;transform:translateY(12px)}}to{{opacity:1;transform:translateY(0)}}}}
-.price-card{{text-align:center;padding:32px 20px;background:linear-gradient(135deg,#f0fdf4 0%,#ecfdf5 100%);border:1px solid #bbf7d0}}
-.price-label{{font-size:0.82rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px}}
-.price-range{{font-size:2.6rem;font-weight:800;color:#16a34a;letter-spacing:-0.03em;line-height:1.1}}
-.price-note{{font-size:0.8rem;color:#94a3b8;margin-top:8px}}
+.price-card{{text-align:center;padding:32px 20px;background:linear-gradient(135deg,rgba(22,163,74,0.1) 0%,rgba(22,163,74,0.06) 100%);border:1px solid rgba(22,163,74,0.25)}}
+.price-label{{font-size:0.82rem;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px}}
+.price-range{{font-size:2.6rem;font-weight:800;color:#22c55e;letter-spacing:-0.03em;line-height:1.1}}
+.price-note{{font-size:0.8rem;color:#6e7681;margin-top:8px}}
 .min-charge-note{{display:none;font-size:0.82rem;color:#d97706;font-weight:600;margin-top:8px;padding:6px 14px;background:#fffbeb;border-radius:8px;border:1px solid #fde68a}}
 .badge{{display:inline-block;padding:4px 14px;border-radius:24px;font-size:0.75rem;font-weight:700;margin-bottom:10px;letter-spacing:0.02em}}
 .badge-standard{{background:#dcfce7;color:#16a34a}}
 .badge-premium{{background:#fef3c7;color:#d97706}}
 .badge-hoarder{{background:#fee2e2;color:#ef4444}}
 .badge-truck_load{{background:#e0f2fe;color:#0369a1}}
-.cy-display{{font-size:0.85rem;color:#64748b;margin-top:8px}}
-.item-row{{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:0.88rem;flex-wrap:wrap}}
+.cy-display{{font-size:0.85rem;color:#8b949e;margin-top:8px}}
+.item-row{{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #21262d;font-size:0.88rem;flex-wrap:wrap}}
 .item-row:last-child{{border-bottom:none}}
-.item-name{{flex:1;min-width:120px;font-weight:500;color:#1e293b}}
+.item-name{{flex:1;min-width:120px;font-weight:500;color:#e6edf3}}
 .item-actions{{display:flex;align-items:center;gap:6px;flex-shrink:0}}
-.item-cy{{color:#94a3b8;font-size:0.78rem;font-weight:500;min-width:36px;text-align:right}}
-.item-qty{{color:#64748b;font-size:0.8rem;min-width:32px;text-align:right;font-weight:600}}
+.item-cy{{color:#6e7681;font-size:0.78rem;font-weight:500;min-width:36px;text-align:right}}
+.item-qty{{color:#8b949e;font-size:0.8rem;min-width:32px;text-align:right;font-weight:600}}
 .special-note{{margin-top:16px;padding:16px;border-radius:14px;background:#fffbeb;border:1px solid #fde68a;font-size:0.82rem;color:#92400e;line-height:1.6}}
 .dupe-note{{margin-top:12px;padding:16px;border-radius:14px;background:#fefce8;border:1px solid #fde68a;font-size:0.82rem;color:#854d0e;line-height:1.6}}
 .followup-notice{{display:none;margin-top:16px;padding:18px 20px;border-radius:14px;background:linear-gradient(135deg,#eff6ff 0%,#f0f9ff 100%);border:1px solid #bfdbfe;font-size:0.85rem;color:#1e40af;line-height:1.6;text-align:center}}

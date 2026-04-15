@@ -1,6 +1,6 @@
 """
 Vision provider abstraction for WSIC estimation pipeline.
-Supports Gemini (primary), Claude (fallback), and OpenRouter (last resort).
+Supports Gemini (primary), Venice (fallback), and OpenRouter (last resort).
 """
 
 import base64
@@ -9,6 +9,7 @@ import os
 import re
 import logging
 import time
+import httpx
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger("wsic.vision")
@@ -279,6 +280,104 @@ class ClaudeProvider(VisionProvider):
         return content
 
 
+class VeniceProvider(VisionProvider):
+    def __init__(self, model: str = "qwen3-vl-235b-a22b"):
+        self._model = os.environ.get("VENICE_MODEL", model)
+
+    @property
+    def name(self) -> str:
+        return "venice"
+
+    @property
+    def model_name(self) -> str:
+        return self._model
+
+    async def estimate(self, images: list, prompt: str) -> VisionResult:
+        try:
+            started = time.perf_counter()
+            api_key = os.environ.get("VENICE_API_KEY")
+            if not api_key:
+                raise ValueError("VENICE_API_KEY not configured")
+
+            content_blocks = []
+            for block in images:
+                if not isinstance(block, dict):
+                    continue
+                btype = str(block.get("type") or "").strip().lower()
+                if btype == "text":
+                    text = str(block.get("text") or "").strip()
+                    if text:
+                        content_blocks.append({"type": "text", "text": text})
+                elif btype == "image":
+                    source = block.get("source") or {}
+                    data = str(source.get("data") or "").strip()
+                    media_type = str(source.get("media_type") or "image/jpeg").strip() or "image/jpeg"
+                    if data:
+                        content_blocks.append({
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{media_type};base64,{data}"}
+                        })
+
+            content_blocks.append({"type": "text", "text": "Analyze these photos and provide your estimate as JSON."})
+
+            payload = {
+                "model": self._model,
+                "temperature": 0,
+                "max_tokens": 8192,
+                "messages": [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": content_blocks},
+                ],
+            }
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+
+            async with httpx.AsyncClient(timeout=180.0) as client:
+                response = await client.post(
+                    "https://api.venice.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                )
+                if response.status_code >= 400:
+                    raise RuntimeError(f"Venice {response.status_code}: {response.text[:400]}")
+                data = response.json()
+
+            choice = (((data.get("choices") or [{}])[0]).get("message") or {})
+            raw_content = choice.get("content") or ""
+            if isinstance(raw_content, list):
+                raw_text = " ".join(
+                    str(part.get("text") or "")
+                    for part in raw_content
+                    if isinstance(part, dict)
+                )
+            else:
+                raw_text = str(raw_content)
+
+            parsed = parse_ai_json(raw_text)
+            usage = data.get("usage") or {}
+            input_tokens = int(usage.get("prompt_tokens", 0) or 0)
+            output_tokens = int(usage.get("completion_tokens", 0) or 0)
+            cost_cents = int((input_tokens * 0.08 + output_tokens * 0.08) / 1_000)
+
+            result = VisionResult(
+                data=parsed,
+                provider_name="venice",
+                model_used=str(data.get("model") or self._model),
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_cents=cost_cents,
+                raw_text=raw_text,
+            )
+            result.latency_ms = int((time.perf_counter() - started) * 1000)
+            return result
+        except Exception as e:
+            err = VisionProviderError(self.name, str(e))
+            err.model_name = self._model
+            raise err from e
+
+
 class OpenRouterProvider(VisionProvider):
     def __init__(self, model: str = "qwen/qwen2.5-vl-72b-instruct"):
         self._model = model
@@ -354,6 +453,8 @@ class OpenRouterProvider(VisionProvider):
 def get_provider(provider_name: str = "gemini") -> VisionProvider:
     if provider_name == "gemini":
         return GeminiProvider()
+    elif provider_name == "venice":
+        return VeniceProvider()
     elif provider_name == "claude":
         return ClaudeProvider()
     elif provider_name == "openrouter":

@@ -7424,7 +7424,7 @@ async def admin_accuracy_export(
 @router_admin.get("/api/admin/env-status")
 async def admin_env_status(request: Request) -> dict[str, bool]:
     await require_admin(request)
-    keys = ["GEMINI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
+    keys = ["GEMINI_API_KEY", "VENICE_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
             "TAVILY_API_KEY", "SENDGRID_API_KEY"]
     out: dict[str, bool] = {}
     for k in keys:

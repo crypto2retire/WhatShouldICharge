@@ -9,7 +9,7 @@ import logging
 import os
 from typing import Optional
 
-from services.vision_providers import VisionProvider, VisionResult, VisionProviderError, GeminiProvider, ClaudeProvider, OpenRouterProvider
+from services.vision_providers import VisionProvider, VisionResult, VisionProviderError, GeminiProvider, VeniceProvider, OpenRouterProvider
 from database import AsyncSessionLocal
 from models import ProviderHealthEvent
 
@@ -21,12 +21,12 @@ VARIANCE_FLAG_THRESHOLD = 0.20
 def _build_providers() -> list[VisionProvider]:
     providers = []
     gemini_key = os.environ.get("GEMINI_API_KEY")
-    claude_key = os.environ.get("ANTHROPIC_API_KEY")
+    venice_key = os.environ.get("VENICE_API_KEY")
     openrouter_key = os.environ.get("OPENROUTER_API_KEY")
     if gemini_key:
         providers.append(GeminiProvider())
-    if claude_key:
-        providers.append(ClaudeProvider())
+    if venice_key:
+        providers.append(VeniceProvider())
     if openrouter_key:
         providers.append(OpenRouterProvider())
     return providers

@@ -15,7 +15,7 @@ logger = logging.getLogger("wsic.vision")
 
 
 class VisionResult:
-    __slots__ = ("data", "provider_name", "model_used", "input_tokens", "output_tokens", "cost_cents", "raw_text")
+    __slots__ = ("data", "provider_name", "model_used", "input_tokens", "output_tokens", "cost_cents", "raw_text", "latency_ms")
 
     def __init__(self, data: dict, provider_name: str, model_used: str,
                  input_tokens: int = 0, output_tokens: int = 0, cost_cents: int = 0, raw_text: str = ""):
@@ -107,8 +107,8 @@ def parse_ai_json(raw_text: str) -> dict:
 
 
 class GeminiProvider(VisionProvider):
-    def __init__(self, model: str = "gemini-2.5-flash-preview-05-20"):
-        self._model = model
+    def __init__(self, model: str = "gemini-2.5-flash"):
+        self._model = os.environ.get("GEMINI_MODEL", model)
         self._client = None
 
     @property

@@ -235,6 +235,10 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
 <div class="section" id="sec-providers">
   <div class="page-title">Provider Health</div>
   <div class="card">
+    <div class="card-title">Runtime Provider Order</div>
+    <div id="provider-routing-runtime" class="empty">Loading runtime order...</div>
+  </div>
+  <div class="card">
     <div class="card-title">7-Day Provider Summary</div>
     <div class="stats-grid" id="provider-summary-grid"></div>
   </div>
@@ -625,6 +629,27 @@ async function loadProviderHealth() {
     const data = await apiFetch('/api/admin/provider-health');
     const providers = data.providers || [];
     const events = data.recent_events || [];
+    const routing = data.routing || {};
+
+    const runtimeOrder = (routing.runtime_order || []).length ? routing.runtime_order.join(' → ') : 'No active providers (missing API keys)';
+    const requestedOrder = (routing.requested_order || []).length ? routing.requested_order.join(' → ') : 'Auto default';
+    const configuredOrder = (routing.configured_order || []).filter(Boolean).length ? (routing.configured_order || []).filter(Boolean).join(' → ') : 'Not explicitly configured';
+    const keyStatus = routing.api_key_status || {};
+    const models = routing.models || {};
+    $('#provider-routing-runtime').innerHTML = `
+      <div style="font-size:0.9rem;line-height:1.7">
+        <div><strong>Runtime order:</strong> ${esc(runtimeOrder)}</div>
+        <div style="color:var(--muted)"><strong>Requested order:</strong> ${esc(requestedOrder)}</div>
+        <div style="color:var(--muted)"><strong>Configured order:</strong> ${esc(configuredOrder)}</div>
+      </div>
+      <div class="stats-grid" style="margin-top:12px;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+        ${['gemini','venice','openrouter'].map(p => `<div class="stat-card" style="padding:12px">
+          <div class="stat-label">${p}</div>
+          <div style="font-size:0.82rem;color:var(--muted);margin-top:4px">${esc(models[p] || '--')}</div>
+          <div style="margin-top:8px">${keyStatus[p] ? '<span class="badge badge-green">API key set</span>' : '<span class="badge badge-red">API key missing</span>'}</div>
+        </div>`).join('')}
+      </div>
+    `;
 
     $('#provider-summary-grid').innerHTML = providers.length ? providers.map(p => {
       const total = (p.success_count || 0) + (p.failure_count || 0);
@@ -653,6 +678,7 @@ async function loadProviderHealth() {
     loaded.providers = true;
   } catch (e) {
     console.error(e);
+    $('#provider-routing-runtime').innerHTML = '<div class="empty">Failed to load runtime order</div>';
     $('#provider-summary-grid').innerHTML = '<div class="empty">Failed to load provider health</div>';
     $('#provider-events-body').innerHTML = '<tr><td colspan="7" class="empty">Failed to load provider events</td></tr>';
   }

@@ -6417,10 +6417,45 @@ async def admin_provider_health(request: Request):
             for row in rows[:100]
         ]
 
+        cfg_rows = (await db.execute(select(SiteConfig))).scalars().all()
+        cfg = {str(r.config_key or ""): str(r.config_value or "") for r in cfg_rows}
+
+        configured_order = [
+            (cfg.get("estimate_provider_primary", "") or "").strip().lower(),
+            (cfg.get("estimate_provider_fallback_1", "") or "").strip().lower(),
+            (cfg.get("estimate_provider_fallback_2", "") or "").strip().lower(),
+        ]
+        allowed = {"gemini", "venice", "openrouter"}
+        requested_order = []
+        for p in configured_order:
+            if p in allowed and p not in requested_order:
+                requested_order.append(p)
+        for default_p in ["gemini", "venice", "openrouter"]:
+            if default_p not in requested_order:
+                requested_order.append(default_p)
+
+        key_status = {
+            "gemini": bool((os.environ.get("GEMINI_API_KEY") or "").strip()),
+            "venice": bool((os.environ.get("VENICE_API_KEY") or "").strip()),
+            "openrouter": bool((os.environ.get("OPENROUTER_API_KEY") or "").strip()),
+        }
+        runtime_order = [p for p in requested_order if key_status.get(p)]
+
         return {
             "window": "7d",
             "providers": list(summary.values()),
             "recent_events": recent_events,
+            "routing": {
+                "configured_order": configured_order,
+                "requested_order": requested_order,
+                "runtime_order": runtime_order,
+                "api_key_status": key_status,
+                "models": {
+                    "gemini": (cfg.get("estimate_model_gemini", "") or "").strip() or (os.environ.get("GEMINI_MODEL") or "gemini-2.5-flash"),
+                    "venice": (cfg.get("estimate_model_venice", "") or "").strip() or (os.environ.get("VENICE_MODEL") or "qwen3-vl-235b-a22b"),
+                    "openrouter": (cfg.get("estimate_model_openrouter", "") or "").strip() or (os.environ.get("OPENROUTER_MODEL") or "qwen/qwen2.5-vl-72b-instruct"),
+                },
+            },
         }
 
 

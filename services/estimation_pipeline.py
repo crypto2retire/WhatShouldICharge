@@ -159,9 +159,29 @@ _MATCH_STOP_WORDS = frozenset({
 })
 
 
-def _has_parenthetical(name: str) -> bool:
-    """True when name contains a parenthetical qualifier like (drawer kits)."""
-    return bool(re.search(r"\(.*?\)", str(name or "")))
+def _has_substantive_parenthetical(name: str) -> bool:
+    """True when the parenthetical is a substantive qualifier (product type,
+    contents, brand) rather than just a color or material.
+
+    (drawer kits) → True  — differentiates item type
+    (wire/cable) → True
+    (Heater) → True
+    (black) → False — just a color, same item
+    (white) → False
+    (wooden) → False
+    """
+    m = re.search(r"\((.*?)\)", str(name or ""))
+    if not m:
+        return False
+    content = m.group(1).strip().lower()
+    # Colors and materials — not substantive enough to differentiate items
+    non_substantive = {
+        "black", "white", "brown", "gray", "grey", "blue", "red", "green",
+        "beige", "tan", "navy", "silver", "gold", "orange", "yellow",
+        "wooden", "metal", "plastic", "fabric", "cloth", "leather",
+        "full", "empty", "large", "small", "medium", "big", "old", "new",
+    }
+    return content not in non_substantive
 
 
 def _normalize_for_match(name: str) -> set[str]:
@@ -212,11 +232,22 @@ def _is_fuzzy_duplicate(item_a: dict, item_b: dict) -> bool:
     if not words_a or not words_b:
         return False
 
-    # If core words are identical but one has a parenthetical qualifier
+    # If core words are identical but one has a substantive parenthetical qualifier
     # (e.g. "cardboard boxes (drawer kits)" vs "large cardboard boxes"),
-    # the parenthetical makes it a different item.
-    if words_a == words_b and _has_parenthetical(name_a) != _has_parenthetical(name_b):
-        return False
+    # the qualifier makes it a different item. Color/material tags don't count.
+    # Also block when both have different substantive qualifiers
+    # (e.g. "bed frame (headboard)" vs "bed frame (side rails)").
+    if words_a == words_b:
+        sub_a = _has_substantive_parenthetical(name_a)
+        sub_b = _has_substantive_parenthetical(name_b)
+        if sub_a != sub_b:
+            return False
+        if sub_a and sub_b:
+            # Both substantive — merge only if same qualifier
+            qual_a = re.search(r"\((.*?)\)", name_a)
+            qual_b = re.search(r"\((.*?)\)", name_b)
+            if qual_a and qual_b and qual_a.group(1).strip().lower() != qual_b.group(1).strip().lower():
+                return False
 
     intersection = words_a & words_b
     union = words_a | words_b

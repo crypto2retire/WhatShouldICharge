@@ -1,4 +1,4 @@
-from services.volume_lookup import validate_estimate, apply_pile_adjustment
+from services.volume_lookup import validate_estimate, apply_pile_adjustment, detect_heavy_materials
 
 
 class TestValidateEstimate:
@@ -187,3 +187,55 @@ class TestApplyPileAdjustment:
         result, notes = apply_pile_adjustment(data)
         assert abs(result["totals"]["cubic_yards_mid"] - 4.0) < 0.01
         assert len(notes) == 1
+
+
+class TestDetectHeavyMaterials:
+    def test_shingles_triggers_premium(self):
+        data = {
+            "items": [{"name": "roof shingles and debris", "cubic_yards": 0.4}],
+            "job_type": "standard",
+            "conditions": [],
+        }
+        found = detect_heavy_materials(data)
+        assert found == ["shingle"]
+        assert data["job_type"] == "premium"
+        assert "heavy_items" in data["conditions"]
+
+    def test_no_heavy_items(self):
+        data = {
+            "items": [{"name": "Couch", "cubic_yards": 2.0}],
+            "job_type": "standard",
+            "conditions": [],
+        }
+        found = detect_heavy_materials(data)
+        assert found == []
+        assert data["job_type"] == "standard"
+
+    def test_concrete_triggers_premium(self):
+        data = {
+            "items": [{"name": "concrete chunks", "cubic_yards": 3.0}],
+            "job_type": "standard",
+            "conditions": [],
+        }
+        found = detect_heavy_materials(data)
+        assert data["job_type"] == "premium"
+        assert "heavy_items" in data["conditions"]
+
+    def test_does_not_downgrade_existing_premium(self):
+        data = {
+            "items": [{"name": "shingles", "cubic_yards": 5.0}],
+            "job_type": "hoarder",
+            "conditions": ["stairs"],
+        }
+        detect_heavy_materials(data)
+        assert data["job_type"] == "hoarder"
+
+    def test_preserves_existing_conditions(self):
+        data = {
+            "items": [{"name": "brick and shingle debris", "cubic_yards": 2.0}],
+            "job_type": "standard",
+            "conditions": ["stairs"],
+        }
+        detect_heavy_materials(data)
+        assert "stairs" in data["conditions"]
+        assert "heavy_items" in data["conditions"]

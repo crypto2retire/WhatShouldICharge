@@ -183,12 +183,23 @@ SIZING METHOD:
 
 PILE / MOUND DEPTH ESTIMATION:
 When items form a pile, mound, or stacked heap (NOT neatly lined up), you cannot see everything from the front. Items hide behind and beneath other items.
-1. Estimate the pile's total dimensions using reference objects (door = 80x36in, cinder block = 16x8x8in, standard step = ~7in tall).
+1. Estimate the pile's total dimensions using reference objects:
+   - Standard interior door: 80x36in
+   - Cinder block: 16x8x8in
+   - Standard step: ~7in tall
+   - Chain-link fence (residential): 48in (4ft) or 72in (6ft) tall — posts typically 8ft apart center-to-center
+   - Car/pickup truck bed: ~8ft long, ~4.5ft wide
 2. Calculate pile volume: width_in × depth_in × height_in / 46656 (converts cubic inches to cubic yards).
-3. Apply a packing factor of 0.65 (real piles have ~35% air gaps between items).
+3. Apply a material-specific packing factor:
+   - General mixed junk: 0.65 (35% air gaps between irregular items)
+   - Shingles / roofing materials: 0.85 (flat, dense, stack tightly)
+   - Cardboard / paper / soft goods: 0.55 (lots of air, compressible)
+   - Lumber / wood / construction: 0.70 (some air between pieces)
+   - Dirt / soil / gravel / concrete chunks: 0.90 (nearly solid)
 4. Include this as a "pile_estimate" field in your response (see JSON structure below).
 5. ONLY include pile_estimate when items are clearly piled/stacked — not when items are neatly arranged side by side.
 6. Do NOT add items you cannot see just because the pile is big. Let the pile estimate speak for hidden depth.
+7. When you see a fence, USE IT FOR SCALE. Fences have known standard heights and the pile's height relative to the fence is one of the most reliable scale references.
 
 IMPORTANT: Do NOT use the inch symbol (") anywhere. Write "in" for inches.
 

@@ -418,3 +418,60 @@ def apply_pile_adjustment(result_data: dict) -> tuple[dict, list[str]]:
     )
 
     return result_data, notes
+
+
+# ---------------------------------------------------------------------------
+# Heavy material detection
+# ---------------------------------------------------------------------------
+
+_HEAVY_MATERIAL_KEYWORDS = (
+    "shingle", "shingles", "roofing", "asphalt shingle",
+    "concrete", "concrete chunks", "masonry", "brick", "bricks",
+    "stone", "stones", "gravel", "dirt", "soil", "sand",
+    "tile", "tiles", "ceramic tile",
+)
+
+
+def detect_heavy_materials(result_data: dict) -> list[str]:
+    """Scan items for heavy materials that should trigger premium pricing.
+
+    Returns list of conditions to append (e.g. ["heavy_items"]).
+    Also promotes job_type to "premium" when heavy materials are found.
+    """
+    items = result_data.get("items") or []
+    if not isinstance(items, list):
+        return []
+
+    item_text = " ".join(
+        str(it.get("name", "")).lower()
+        for it in items
+        if isinstance(it, dict)
+    )
+    if not item_text:
+        return []
+
+    found: list[str] = []
+    for kw in _HEAVY_MATERIAL_KEYWORDS:
+        if kw in item_text:
+            found.append(kw)
+            break  # one hit is enough
+
+    if not found:
+        return []
+
+    conditions = result_data.get("conditions") or []
+    if not isinstance(conditions, list):
+        conditions = []
+    if "heavy_items" not in conditions:
+        conditions.append("heavy_items")
+        result_data["conditions"] = conditions
+
+    job_type = str(result_data.get("job_type", "standard") or "standard").lower()
+    if job_type not in ("premium", "hoarder", "truck_load"):
+        result_data["job_type"] = "premium"
+        logger.info(
+            "[detect_heavy_materials] Promoted job_type to premium — "
+            "heavy materials detected: %s", found
+        )
+
+    return found

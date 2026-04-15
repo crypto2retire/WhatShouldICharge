@@ -3,6 +3,7 @@ Vision provider abstraction for WSIC estimation pipeline.
 Supports Gemini (primary), Claude (fallback), and OpenRouter (last resort).
 """
 
+import base64
 import json
 import os
 import re
@@ -142,7 +143,9 @@ class GeminiProvider(VisionProvider):
         )
 
     def _build_contents(self, images: list, prompt: str) -> list:
-        parts = [{"text": prompt}]
+        from google.genai import types
+
+        parts = [types.Part.from_text(text=prompt)]
         for block in images:
             if not isinstance(block, dict):
                 continue
@@ -150,16 +153,17 @@ class GeminiProvider(VisionProvider):
             if btype == "text":
                 text = str(block.get("text") or "").strip()
                 if text:
-                    parts.append({"text": text})
+                    parts.append(types.Part.from_text(text=text))
             elif btype == "image":
                 source = block.get("source") or {}
-                data = source.get("data", "")
+                data = str(source.get("data") or "").strip()
                 media_type = str(source.get("media_type") or "image/jpeg")
                 if data:
                     mime = media_type.split(";")[0].strip() or "image/jpeg"
-                    parts.append({"inline_data": {"mime_type": mime, "data": data}})
-        parts.append({"text": "Analyze these photos and provide your estimate as JSON."})
-        return parts
+                    image_bytes = base64.b64decode(data)
+                    parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime))
+        parts.append(types.Part.from_text(text="Analyze these photos and provide your estimate as JSON."))
+        return [types.UserContent(parts=parts)]
 
 
 class ClaudeProvider(VisionProvider):

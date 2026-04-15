@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from typing import Optional
 from sqlalchemy import select
 
@@ -129,6 +130,189 @@ async def _record_provider_event(provider_name: str, model_name: str, status: st
             await db.commit()
     except Exception as e:
         logger.warning(f"[pipeline] Failed to record provider health event: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Fuzzy item deduplication
+# ---------------------------------------------------------------------------
+
+# Synonym groups — canonical word chosen (first alphabetically) for matching.
+_SYNONYM_GROUPS: list[set[str]] = [
+    {"pile", "stack", "group", "collection", "bunch", "bundle"},
+    {"debris", "junk", "rubbish", "trash", "garbage", "waste", "scrap", "refuse"},
+    {"pieces", "parts", "fragments", "bits", "scraps", "chunks"},
+    {"boxes", "cartons", "crates"},
+    {"miscellaneous", "misc", "assorted", "mixed", "various"},
+    {"items", "things", "stuff", "goods", "materials", "contents"},
+    {"bucket", "buckets", "pail"},
+    {"wood", "wooden", "lumber", "boards", "board", "plywood"},
+    {"paint", "paints", "stain", "stains"},
+    {"plastic", "plastics", "vinyl"},
+]
+
+# Words to strip before comparison (noise, not signal).
+_MATCH_STOP_WORDS = frozenset({
+    "and", "or", "the", "a", "an", "with", "of", "in", "from", "to",
+    "for", "by", "on", "at", "some", "few", "several", "multiple",
+    "other", "etc", "including", "small", "large", "medium", "big",
+    "little", "tiny", "detected", "noted",
+})
+
+
+def _has_parenthetical(name: str) -> bool:
+    """True when name contains a parenthetical qualifier like (drawer kits)."""
+    return bool(re.search(r"\(.*?\)", str(name or "")))
+
+
+def _normalize_for_match(name: str) -> set[str]:
+    """Lowercase, strip parentheticals for core matching, split compound tokens
+    (lumber/wood), apply synonyms, drop stop words."""
+    name = re.sub(r"\(.*?\)", "", str(name or ""), flags=re.IGNORECASE).strip()
+    # Split compound tokens on / and - (e.g. "lumber/wood" → "lumber" "wood")
+    expanded: list[str] = []
+    for tok in name.lower().split():
+        expanded.extend(re.findall(r"[a-zA-Z0-9]+", tok))
+
+    canonical: list[str] = []
+    for word in expanded:
+        cw = word
+        for group in _SYNONYM_GROUPS:
+            if word in group:
+                cw = min(group)
+                break
+        if cw not in _MATCH_STOP_WORDS:
+            canonical.append(cw)
+    return set(canonical)
+
+
+def _extract_size_marker(name: str) -> Optional[str]:
+    """Return a size token like '5-gallon', '1-gallon' or None."""
+    m = re.search(
+        r"(\d+(?:\.\d+)?)\s*[- ]?(?:gallon|gal|in|inch|ft|foot|cy|yard|lb|pound|oz|quart)",
+        str(name).lower(),
+    )
+    return m.group(0) if m else None
+
+
+def _is_fuzzy_duplicate(item_a: dict, item_b: dict) -> bool:
+    """True when two items are likely the same physical object, differently named."""
+    name_a = str(item_a.get("name", ""))
+    name_b = str(item_b.get("name", ""))
+    if not name_a or not name_b:
+        return False
+
+    # Conflicting specific sizes → different items (5-gallon vs 1-gallon).
+    sz_a = _extract_size_marker(name_a)
+    sz_b = _extract_size_marker(name_b)
+    if sz_a and sz_b and sz_a != sz_b:
+        return False
+
+    words_a = _normalize_for_match(name_a)
+    words_b = _normalize_for_match(name_b)
+    if not words_a or not words_b:
+        return False
+
+    # If core words are identical but one has a parenthetical qualifier
+    # (e.g. "cardboard boxes (drawer kits)" vs "large cardboard boxes"),
+    # the parenthetical makes it a different item.
+    if words_a == words_b and _has_parenthetical(name_a) != _has_parenthetical(name_b):
+        return False
+
+    intersection = words_a & words_b
+    union = words_a | words_b
+    jaccard = len(intersection) / len(union) if union else 0.0
+
+    # 1. High Jaccard overlap → duplicate.
+    if jaccard >= 0.5:
+        return True
+
+    # 2. One name's normalized words are a subset of the other + share ≥2 words.
+    shorter = words_a if len(words_a) <= len(words_b) else words_b
+    longer = words_b if len(words_a) <= len(words_b) else words_a
+    if shorter.issubset(longer) and len(intersection) >= 2:
+        return True
+
+    # 3. Containment in raw text + material overlap.
+    norm_a = " ".join(sorted(words_a))
+    norm_b = " ".join(sorted(words_b))
+    if (norm_a in norm_b or norm_b in norm_a) and len(intersection) >= 2:
+        return True
+
+    return False
+
+
+def _merge_two_items(item_a: dict, item_b: dict) -> dict:
+    """Average CY, keep the more descriptive name, union flags."""
+    merged = dict(item_a)
+
+    cy_a = float(item_a.get("cubic_yards", 0) or 0)
+    cy_b = float(item_b.get("cubic_yards", 0) or 0)
+    merged["cubic_yards"] = round((cy_a + cy_b) / 2.0, 3)
+
+    # Keep longer / more descriptive name.
+    if len(str(item_b.get("name", ""))) > len(str(item_a.get("name", ""))):
+        merged["name"] = item_b["name"]
+
+    # Union of boolean flags.
+    for flag in ("is_special", "is_uncertain"):
+        if item_b.get(flag):
+            merged[flag] = True
+
+    merged["quantity"] = 1
+    merged["fuzzy_deduped"] = True
+    return merged
+
+
+def deduplicate_merged_items(result_data: dict) -> tuple[dict, int]:
+    """Fuzzy-deduplicate items after model merge.
+
+    Uses first-match-wins: each item merges with at most one partner.
+    This prevents cascade merging where A+B merged result accidentally
+    matches C (which the original A would not have matched).
+
+    Returns (updated_result, dedup_count).
+    """
+    items = result_data.get("items", [])
+    if not isinstance(items, list) or len(items) <= 1:
+        return result_data, 0
+
+    consumed: set[int] = set()
+    final_items: list[dict] = []
+    dedup_count = 0
+
+    for i in range(len(items)):
+        if i in consumed:
+            continue
+
+        merged_partner: Optional[int] = None
+        for j in range(i + 1, len(items)):
+            if j in consumed:
+                continue
+            if _is_fuzzy_duplicate(items[i], items[j]):
+                merged_partner = j
+                break  # first-match-wins
+
+        if merged_partner is not None:
+            final_items.append(_merge_two_items(items[i], items[merged_partner]))
+            consumed.add(merged_partner)
+            dedup_count += 1
+        else:
+            final_items.append(items[i])
+
+    if dedup_count > 0:
+        result_data = dict(result_data)
+        result_data["items"] = final_items
+        logger.info(
+            f"[pipeline] Fuzzy dedup: {len(items)} → {len(final_items)} items "
+            f"({dedup_count} merged)"
+        )
+
+    return result_data, dedup_count
+
+
+# ---------------------------------------------------------------------------
+# Model merge
+# ---------------------------------------------------------------------------
 
 
 def merge_results(results: list[VisionResult]) -> dict:
@@ -256,5 +440,8 @@ async def run_parallel_estimate(images: list, prompt: str) -> tuple[dict, dict]:
     provider_results = await asyncio.gather(*tasks)
 
     merged = merge_results(list(provider_results))
+    merged, fuzzy_dedup_count = deduplicate_merged_items(merged)
     meta = merged.pop("_meta", {})
+    if fuzzy_dedup_count > 0:
+        meta["fuzzy_dedup_count"] = fuzzy_dedup_count
     return merged, meta

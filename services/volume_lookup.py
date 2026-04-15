@@ -315,3 +315,106 @@ def _sync_totals_from_target(out: dict, target: float) -> None:
     totals["cubic_yards_high"] = round(target * ratio_hi, 2)
     out["totals"] = totals
     out["total_cubic_yards"] = round(target, 2)
+
+
+# ---------------------------------------------------------------------------
+# Pile / mound depth adjustment
+# ---------------------------------------------------------------------------
+
+# Minimum ratio of pile_volume to item_sum before we boost.
+# If pile is 30%+ bigger than what items sum to, hidden items are likely.
+_PILE_BOOST_THRESHOLD = 1.30
+
+# Hard cap: never boost by more than this factor (prevents wild AI pile guesses).
+_PILE_BOOST_MAX_FACTOR = 2.5
+
+# Confidence penalty per 10% gap between pile and items.
+_PILE_CONFIDENCE_PENALTY_PER_10PCT = 3  # points
+
+
+def apply_pile_adjustment(result_data: dict) -> tuple[dict, list[str]]:
+    """Compare pile geometry estimate against item sum.
+
+    When the AI reports a pile_estimate with estimated_cy significantly larger
+    than the bottom-up item sum, hidden items likely exist behind/beneath the
+    front-facing layer.  Boost the total upward and return explanatory notes.
+
+    Does NOT invent phantom items — only adjusts volume totals.
+
+    Returns (updated_result_data, notes_list).
+    """
+    pile = result_data.get("pile_estimate")
+    if not isinstance(pile, dict):
+        return result_data, []
+    if not pile.get("is_pile", False):
+        return result_data, []
+
+    pile_cy = float(pile.get("estimated_cy", 0) or 0)
+    if pile_cy <= 0:
+        return result_data, []
+
+    totals = result_data.get("totals") or {}
+    item_sum = 0.0
+    for it in (result_data.get("items") or []):
+        if not isinstance(it, dict):
+            continue
+        try:
+            item_sum += max(0.0, float(it.get("cubic_yards") or 0)) * max(1, int(it.get("quantity") or 1))
+        except (TypeError, ValueError):
+            continue
+
+    if item_sum <= 0:
+        # No items parsed — use pile estimate directly.
+        _sync_totals_from_target(result_data, pile_cy)
+        return result_data, [
+            "Pile geometry estimate used as total — no individual items identified."
+        ]
+
+    ratio = pile_cy / item_sum
+    if ratio < _PILE_BOOST_THRESHOLD:
+        return result_data, []
+
+    # Items undercount the pile.  Blend: use 60% pile + 40% item sum.
+    # This preserves the item-level detail while accounting for hidden depth.
+    blended = pile_cy * 0.6 + item_sum * 0.4
+
+    # Cap the boost.
+    boost_factor = blended / item_sum
+    if boost_factor > _PILE_BOOST_MAX_FACTOR:
+        blended = item_sum * _PILE_BOOST_MAX_FACTOR
+        boost_factor = _PILE_BOOST_MAX_FACTOR
+
+    _sync_totals_from_target(result_data, round(blended, 2))
+
+    notes: list[str] = []
+    pile_dims = pile.get("width_in", 0), pile.get("depth_in", 0), pile.get("height_in", 0)
+    pf = float(pile.get("packing_factor", 0.65) or 0.65)
+    notes.append(
+        f"Pile geometry ({int(pile_dims[0])}x{int(pile_dims[1])}x{int(pile_dims[2])} in, "
+        f"packing {int(pf * 100)}%) suggests ~{pile_cy:.1f} CY, but only {item_sum:.1f} CY "
+        f"of items are visible. Volume adjusted to {blended:.1f} CY to account for hidden "
+        f"items behind the front layer."
+    )
+
+    # Confidence penalty.
+    current_conf = int(result_data.get("confidence", 75) or 75)
+    gap_pct = (ratio - 1.0) * 100  # e.g. ratio 1.8 → gap 80%
+    penalty = int(gap_pct / 10) * _PILE_CONFIDENCE_PENALTY_PER_10PCT
+    penalty = min(penalty, 20)  # hard cap at -20
+    if penalty > 0:
+        result_data["confidence"] = max(50, current_conf - penalty)
+        notes.append(
+            f"Confidence reduced by {penalty} points due to hidden-depth uncertainty."
+        )
+
+    result_data["pile_adjustment_applied"] = True
+    result_data["pile_adjustment_original_item_sum"] = round(item_sum, 2)
+    result_data["pile_adjustment_pile_estimate"] = round(pile_cy, 2)
+
+    logger.info(
+        "[apply_pile_adjustment] pile=%.2f CY, items=%.2f CY, ratio=%.2f, "
+        "blended=%.2f CY, conf_penalty=%d",
+        pile_cy, item_sum, ratio, blended, penalty,
+    )
+
+    return result_data, notes

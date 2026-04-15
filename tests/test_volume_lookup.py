@@ -1,4 +1,4 @@
-from services.volume_lookup import validate_estimate
+from services.volume_lookup import validate_estimate, apply_pile_adjustment
 
 
 class TestValidateEstimate:
@@ -101,3 +101,89 @@ class TestValidateEstimate:
         result = validate_estimate(data)
         expected_sum = 0.025 * 10 + 1.5 * 1
         assert abs(result["totals"]["cubic_yards_mid"] - expected_sum) < 0.1
+
+
+class TestApplyPileAdjustment:
+    def test_no_pile_field(self):
+        data = {"items": [{"name": "Couch", "cubic_yards": 2.0, "quantity": 1}],
+                "totals": {"cubic_yards_mid": 2.0}, "total_cubic_yards": 2.0}
+        result, notes = apply_pile_adjustment(data)
+        assert result["total_cubic_yards"] == 2.0
+        assert notes == []
+
+    def test_is_pile_false(self):
+        data = {"items": [{"name": "Couch", "cubic_yards": 2.0, "quantity": 1}],
+                "totals": {"cubic_yards_mid": 2.0}, "total_cubic_yards": 2.0,
+                "pile_estimate": {"is_pile": False, "estimated_cy": 0}}
+        result, notes = apply_pile_adjustment(data)
+        assert result["total_cubic_yards"] == 2.0
+        assert notes == []
+
+    def test_pile_within_threshold_no_change(self):
+        """Pile only 10% bigger than items — no boost."""
+        data = {
+            "items": [{"name": "Bag", "cubic_yards": 2.0, "quantity": 1}],
+            "totals": {"cubic_yards_mid": 2.0, "cubic_yards_low": 1.7, "cubic_yards_high": 2.3},
+            "pile_estimate": {"is_pile": True, "width_in": 36, "depth_in": 36,
+                              "height_in": 36, "packing_factor": 0.65, "estimated_cy": 2.2},
+        }
+        result, notes = apply_pile_adjustment(data)
+        assert abs(result["totals"]["cubic_yards_mid"] - 2.0) < 0.01
+        assert notes == []
+
+    def test_pile_boosts_undercount(self):
+        """Pile 2.5x bigger than items — volume adjusted upward."""
+        data = {
+            "items": [{"name": "Bag", "cubic_yards": 2.0, "quantity": 1}],
+            "totals": {"cubic_yards_mid": 2.0, "cubic_yards_low": 1.7, "cubic_yards_high": 2.3},
+            "pile_estimate": {"is_pile": True, "width_in": 96, "depth_in": 72,
+                              "height_in": 48, "packing_factor": 0.65, "estimated_cy": 5.0},
+        }
+        result, notes = apply_pile_adjustment(data)
+        assert result["totals"]["cubic_yards_mid"] > 2.0
+        assert result.get("pile_adjustment_applied") is True
+        assert len(notes) > 0
+
+    def test_confidence_penalty_applied(self):
+        """Big gap between pile and items reduces confidence."""
+        data = {
+            "items": [{"name": "Bag", "cubic_yards": 1.0, "quantity": 1}],
+            "totals": {"cubic_yards_mid": 1.0},
+            "confidence": 80,
+            "pile_estimate": {"is_pile": True, "width_in": 96, "depth_in": 72,
+                              "height_in": 48, "packing_factor": 0.65, "estimated_cy": 5.0},
+        }
+        result, notes = apply_pile_adjustment(data)
+        assert result["confidence"] < 80
+
+    def test_confidence_never_below_50(self):
+        """Confidence penalty hard-capped at 50."""
+        data = {
+            "items": [{"name": "Bag", "cubic_yards": 0.5, "quantity": 1}],
+            "totals": {"cubic_yards_mid": 0.5},
+            "confidence": 75,
+            "pile_estimate": {"is_pile": True, "estimated_cy": 10.0},
+        }
+        result, notes = apply_pile_adjustment(data)
+        assert result["confidence"] >= 50
+
+    def test_boost_capped_at_max_factor(self):
+        """Boost never exceeds 2.5x original item sum."""
+        data = {
+            "items": [{"name": "Bag", "cubic_yards": 1.0, "quantity": 1}],
+            "totals": {"cubic_yards_mid": 1.0},
+            "pile_estimate": {"is_pile": True, "estimated_cy": 50.0},
+        }
+        result, notes = apply_pile_adjustment(data)
+        assert result["totals"]["cubic_yards_mid"] <= 1.0 * 2.5
+
+    def test_no_items_uses_pile_directly(self):
+        """When items are empty, pile estimate becomes the total."""
+        data = {
+            "items": [],
+            "totals": {"cubic_yards_mid": 0},
+            "pile_estimate": {"is_pile": True, "estimated_cy": 4.0},
+        }
+        result, notes = apply_pile_adjustment(data)
+        assert abs(result["totals"]["cubic_yards_mid"] - 4.0) < 0.01
+        assert len(notes) == 1

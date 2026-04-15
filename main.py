@@ -49,7 +49,7 @@ from auth import get_current_user, require_user, require_admin, get_team_member,
 from sendgrid_email import send_email
 from billing import check_usage_limit, record_usage, PLAN_CALL_LIMITS, OVERAGE_RATE_CENTS
 from pricing import calculate_price
-from services.volume_lookup import validate_estimate
+from services.volume_lookup import validate_estimate, apply_pile_adjustment
 from services.industry_config import (
     get_industry_config,
     get_system_prompt,
@@ -5352,6 +5352,9 @@ async def run_estimate(
                     result_data["totals"] = totals
 
         result_data = validate_estimate(result_data)
+        result_data, pile_notes = apply_pile_adjustment(result_data)
+        if pile_notes:
+            confidence_reasons.extend(pile_notes)
         _sync_result_totals_to_items(result_data)
         result_data, _curbside_label_notes = normalize_curbside_mixed_item_labels(result_data, room_labels)
         result_data, _special_fee_notes = normalize_special_fee_items(result_data)
@@ -5495,6 +5498,7 @@ async def run_estimate(
 
         if verifier_result:
             verifier_data = validate_estimate(verifier_result)
+            verifier_data, _verifier_pile_notes = apply_pile_adjustment(verifier_data)
             _sync_result_totals_to_items(verifier_data)
             verifier_data, _ = normalize_curbside_mixed_item_labels(verifier_data, room_labels)
             verifier_data, _ = normalize_special_fee_items(verifier_data)

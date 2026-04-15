@@ -181,6 +181,15 @@ SIZING METHOD:
 - BUILD BOTTOM-UP: Total = sum of individual items, nothing more.
 - When in doubt, use the LOWER end of the range. Overestimating is worse than underestimating.
 
+PILE / MOUND DEPTH ESTIMATION:
+When items form a pile, mound, or stacked heap (NOT neatly lined up), you cannot see everything from the front. Items hide behind and beneath other items.
+1. Estimate the pile's total dimensions using reference objects (door = 80x36in, cinder block = 16x8x8in, standard step = ~7in tall).
+2. Calculate pile volume: width_in × depth_in × height_in / 46656 (converts cubic inches to cubic yards).
+3. Apply a packing factor of 0.65 (real piles have ~35% air gaps between items).
+4. Include this as a "pile_estimate" field in your response (see JSON structure below).
+5. ONLY include pile_estimate when items are clearly piled/stacked — not when items are neatly arranged side by side.
+6. Do NOT add items you cannot see just because the pile is big. Let the pile estimate speak for hidden depth.
+
 IMPORTANT: Do NOT use the inch symbol (") anywhere. Write "in" for inches.
 
 Return this EXACT JSON structure:
@@ -195,6 +204,14 @@ Return this EXACT JSON structure:
     "cubic_yards_low": 0.0,
     "cubic_yards_mid": 0.0,
     "cubic_yards_high": 0.0
+  },
+  "pile_estimate": {
+    "is_pile": false,
+    "width_in": 0,
+    "depth_in": 0,
+    "height_in": 0,
+    "packing_factor": 0.65,
+    "estimated_cy": 0.0
   },
   "job_type": "standard",
   "conditions": [],
@@ -282,6 +299,14 @@ Return this EXACT JSON structure:
     "cubic_yards_low": 0.0,
     "cubic_yards_mid": 0.0,
     "cubic_yards_high": 0.0
+  },
+  "pile_estimate": {
+    "is_pile": false,
+    "width_in": 0,
+    "depth_in": 0,
+    "height_in": 0,
+    "packing_factor": 0.65,
+    "estimated_cy": 0.0
   },
   "job_type": "standard",
   "conditions": [],

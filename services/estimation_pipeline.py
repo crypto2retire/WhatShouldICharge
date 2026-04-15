@@ -8,27 +8,68 @@ import json
 import logging
 import os
 from typing import Optional
+from sqlalchemy import select
 
 from services.vision_providers import VisionProvider, VisionResult, VisionProviderError, GeminiProvider, VeniceProvider, OpenRouterProvider
 from database import AsyncSessionLocal
-from models import ProviderHealthEvent
+from models import ProviderHealthEvent, SiteConfig
 
 logger = logging.getLogger("wsic.pipeline")
 
 VARIANCE_FLAG_THRESHOLD = 0.20
 
 
-def _build_providers() -> list[VisionProvider]:
+async def _load_provider_runtime_config() -> tuple[list[str], dict[str, str]]:
+    cfg = {}
+    try:
+        async with AsyncSessionLocal() as db:
+            rows = (await db.execute(select(SiteConfig))).scalars().all()
+            cfg = {str(r.config_key or ""): str(r.config_value or "") for r in rows}
+    except Exception as e:
+        logger.warning(f"[pipeline] Could not load site config for provider routing: {e}")
+
+    allowed = {"gemini", "venice", "openrouter", "none"}
+    configured_order = [
+        (cfg.get("estimate_provider_primary", "") or "").strip().lower(),
+        (cfg.get("estimate_provider_fallback_1", "") or "").strip().lower(),
+        (cfg.get("estimate_provider_fallback_2", "") or "").strip().lower(),
+    ]
+    order = []
+    for p in configured_order:
+        if p in allowed and p not in {"", "none"} and p not in order:
+            order.append(p)
+    for default_p in ["gemini", "venice", "openrouter"]:
+        if default_p not in order:
+            order.append(default_p)
+
+    model_overrides = {
+        "gemini": (cfg.get("estimate_model_gemini", "") or "").strip(),
+        "venice": (cfg.get("estimate_model_venice", "") or "").strip(),
+        "openrouter": (cfg.get("estimate_model_openrouter", "") or "").strip(),
+    }
+    return order, model_overrides
+
+
+async def _build_providers() -> list[VisionProvider]:
     providers = []
-    gemini_key = os.environ.get("GEMINI_API_KEY")
-    venice_key = os.environ.get("VENICE_API_KEY")
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
-    if gemini_key:
-        providers.append(GeminiProvider())
-    if venice_key:
-        providers.append(VeniceProvider())
-    if openrouter_key:
-        providers.append(OpenRouterProvider())
+    provider_order, model_overrides = await _load_provider_runtime_config()
+
+    key_present = {
+        "gemini": bool((os.environ.get("GEMINI_API_KEY") or "").strip()),
+        "venice": bool((os.environ.get("VENICE_API_KEY") or "").strip()),
+        "openrouter": bool((os.environ.get("OPENROUTER_API_KEY") or "").strip()),
+    }
+
+    for provider_name in provider_order:
+        if not key_present.get(provider_name):
+            continue
+        model = model_overrides.get(provider_name) or None
+        if provider_name == "gemini":
+            providers.append(GeminiProvider(model=model))
+        elif provider_name == "venice":
+            providers.append(VeniceProvider(model=model))
+        elif provider_name == "openrouter":
+            providers.append(OpenRouterProvider(model=model))
     return providers
 
 
@@ -201,9 +242,9 @@ def _finalize_merged(result: dict, results: list[VisionResult]) -> dict:
 
 
 async def run_parallel_estimate(images: list, prompt: str) -> tuple[dict, dict]:
-    providers = _build_providers()
+    providers = await _build_providers()
     if not providers:
-        raise RuntimeError("No vision providers configured. Set GEMINI_API_KEY, ANTHROPIC_API_KEY, or OPENROUTER_API_KEY.")
+        raise RuntimeError("No vision providers configured. Set GEMINI_API_KEY, VENICE_API_KEY, or OPENROUTER_API_KEY.")
 
     max_photos = 4
     img_blocks = [b for b in images if isinstance(b, dict) and b.get("type") == "image"]

@@ -108,8 +108,8 @@ def parse_ai_json(raw_text: str) -> dict:
 
 
 class GeminiProvider(VisionProvider):
-    def __init__(self, model: str = "gemini-2.5-flash"):
-        self._model = os.environ.get("GEMINI_MODEL", model)
+    def __init__(self, model: str | None = None):
+        self._model = model or os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
         self._client = None
 
     @property
@@ -281,8 +281,8 @@ class ClaudeProvider(VisionProvider):
 
 
 class VeniceProvider(VisionProvider):
-    def __init__(self, model: str = "qwen3-vl-235b-a22b"):
-        self._model = os.environ.get("VENICE_MODEL", model)
+    def __init__(self, model: str | None = None):
+        self._model = model or os.environ.get("VENICE_MODEL", "qwen3-vl-235b-a22b")
 
     @property
     def name(self) -> str:
@@ -379,8 +379,8 @@ class VeniceProvider(VisionProvider):
 
 
 class OpenRouterProvider(VisionProvider):
-    def __init__(self, model: str = "qwen/qwen2.5-vl-72b-instruct"):
-        self._model = model
+    def __init__(self, model: str | None = None):
+        self._model = model or os.environ.get("OPENROUTER_MODEL", "qwen/qwen2.5-vl-72b-instruct")
 
     @property
     def name(self) -> str:

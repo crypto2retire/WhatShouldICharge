@@ -441,6 +441,62 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
     <div id="env-status"></div>
   </div>
   <div class="card">
+    <div class="card-title">Estimator Provider Routing</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Primary Provider</label>
+        <select class="form-select" id="provider-primary">
+          <option value="">Auto</option>
+          <option value="gemini">Gemini</option>
+          <option value="venice">Venice</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fallback #1</label>
+        <select class="form-select" id="provider-fallback-1">
+          <option value="">Auto</option>
+          <option value="gemini">Gemini</option>
+          <option value="venice">Venice</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Fallback #2</label>
+        <select class="form-select" id="provider-fallback-2">
+          <option value="">Auto</option>
+          <option value="gemini">Gemini</option>
+          <option value="venice">Venice</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Gemini model</label>
+        <input class="form-input" id="model-gemini" placeholder="gemini-2.5-flash">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Venice model</label>
+        <input class="form-input" id="model-venice" placeholder="qwen3-vl-235b-a22b">
+      </div>
+      <div class="form-group">
+        <label class="form-label">OpenRouter model</label>
+        <input class="form-input" id="model-openrouter" placeholder="qwen/qwen2.5-vl-72b-instruct">
+      </div>
+    </div>
+    <p style="font-size:0.82rem;color:var(--muted);margin-top:6px;line-height:1.5">
+      Changes apply to new estimate runs. Empty provider fields use automatic order based on available API keys.
+      Model fields are optional overrides.
+    </p>
+    <button class="btn btn-primary" style="margin-top:12px" onclick="saveProviderRouting()">Save Provider Routing</button>
+  </div>
+  <div class="card">
     <div class="card-title">Site Configuration</div>
     <div id="site-config-form"></div>
     <button class="btn btn-primary" style="margin-top:12px" onclick="saveSiteConfig()">Save Site Config</button>
@@ -1393,10 +1449,36 @@ async function loadSettings() {
   try {
     const [config, env] = await Promise.all([apiFetch('/api/admin/site-config'), apiFetch('/api/admin/env-status')]);
     // Env status
-    const envKeys = {'ANTHROPIC_API_KEY':'Anthropic API Key','OPENROUTER_API_KEY':'OpenRouter API Key','STRIPE_SECRET_KEY':'Stripe Secret Key','STRIPE_WEBHOOK_SECRET':'Stripe Webhook Secret','TAVILY_API_KEY':'Tavily API Key (optional)','SENDGRID_API_KEY':'SendGrid API Key (optional)'};
+    const envKeys = {
+      'GEMINI_API_KEY':'Gemini API Key',
+      'VENICE_API_KEY':'Venice API Key',
+      'OPENROUTER_API_KEY':'OpenRouter API Key',
+      'ANTHROPIC_API_KEY':'Anthropic API Key (non-pipeline)',
+      'STRIPE_SECRET_KEY':'Stripe Secret Key',
+      'STRIPE_WEBHOOK_SECRET':'Stripe Webhook Secret',
+      'TAVILY_API_KEY':'Tavily API Key (optional)',
+      'SENDGRID_API_KEY':'SendGrid API Key (optional)'
+    };
     $('#env-status').innerHTML = Object.entries(envKeys).map(([k,label]) => `<div class="env-row"><span>${label}</span><span>${env[k]?'<span class="badge badge-green">Configured</span>':'<span class="badge badge-red">Not Set</span>'}</span></div>`).join('');
+
+    // Provider routing controls
+    $('#provider-primary').value = (config.estimate_provider_primary || '').toLowerCase();
+    $('#provider-fallback-1').value = (config.estimate_provider_fallback_1 || '').toLowerCase();
+    $('#provider-fallback-2').value = (config.estimate_provider_fallback_2 || '').toLowerCase();
+    $('#model-gemini').value = config.estimate_model_gemini || '';
+    $('#model-venice').value = config.estimate_model_venice || '';
+    $('#model-openrouter').value = config.estimate_model_openrouter || '';
+
     // Site config
-    const entries = Object.entries(config);
+    const reserved = new Set([
+      'estimate_provider_primary',
+      'estimate_provider_fallback_1',
+      'estimate_provider_fallback_2',
+      'estimate_model_gemini',
+      'estimate_model_venice',
+      'estimate_model_openrouter',
+    ]);
+    const entries = Object.entries(config).filter(([k]) => !reserved.has(k));
     if (entries.length) {
       $('#site-config-form').innerHTML = entries.map(([k,v]) => `<div class="form-group"><label class="form-label">${esc(k)}</label><input class="form-input site-cfg" data-key="${esc(k)}" value="${esc(v)}"></div>`).join('');
     } else {
@@ -1413,6 +1495,24 @@ async function saveSiteConfig() {
     await apiFetch('/api/admin/site-config', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     toast('Site config saved');
   } catch(e) { toast(e.message, 'error'); }
+}
+
+async function saveProviderRouting() {
+  const body = {
+    estimate_provider_primary: ($('#provider-primary').value || '').trim().toLowerCase(),
+    estimate_provider_fallback_1: ($('#provider-fallback-1').value || '').trim().toLowerCase(),
+    estimate_provider_fallback_2: ($('#provider-fallback-2').value || '').trim().toLowerCase(),
+    estimate_model_gemini: ($('#model-gemini').value || '').trim(),
+    estimate_model_venice: ($('#model-venice').value || '').trim(),
+    estimate_model_openrouter: ($('#model-openrouter').value || '').trim(),
+  };
+  try {
+    await apiFetch('/api/admin/site-config', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    toast('Provider routing saved');
+    await loadSettings();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
 }
 
 // ── Pagination helper ──

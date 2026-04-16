@@ -390,12 +390,44 @@ def _stripe_product_id_from_price_sync(price_id: str) -> str:
 @asynccontextmanager
 async def lifespan(app):
     await init_db()
-    # Run any pending Alembic migrations automatically on startup
+    # Run any pending Alembic migrations automatically on startup (async-safe)
     try:
         from alembic.config import Config
-        from alembic import command
+        from alembic import context
+        from sqlalchemy import pool
+        from sqlalchemy.ext.asyncio import async_engine_from_config
+        from database import Base
+        import models  # noqa: F401
+
         alembic_cfg = Config("alembic.ini")
-        command.upgrade(alembic_cfg, "head")
+        # Set the database URL from env vars (same logic as alembic/env.py)
+        import os
+        db_url = os.environ.get("DATABASE_PRIVATE_URL") or os.environ.get("DATABASE_PUBLIC_URL") or os.environ.get("DATABASE_URL") or ""
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif db_url.startswith("postgresql://"):
+            db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if not db_url:
+            db_url = "sqlite+aiosqlite:///./estimates.db"
+        alembic_cfg.set_main_option("sqlalchemy.url", db_url)
+        target_metadata = Base.metadata
+
+        connectable = async_engine_from_config(
+            alembic_cfg.get_section(alembic_cfg.config_ini_section, {}),
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
+        )
+        async with connectable.connect() as connection:
+            def do_run_migrations(connection_context):
+                context.configure(
+                    connection=connection_context,
+                    target_metadata=target_metadata,
+                )
+                with context.begin_transaction():
+                    context.run_migrations()
+            await connection.run_sync(do_run_migrations)
+        await connectable.dispose()
+        logger.info("[startup] Alembic migrations applied successfully")
     except Exception as e:
         logger.warning("[startup] Alembic migration failed (non-fatal): %s", e)
     await seed_reference_library()

@@ -508,6 +508,10 @@ async def blog_junk_removal_startup_costs():
 async def blog_junk_removal_marketing():
     return FileResponse("static/blog/junk-removal-marketing.html")
 
+@router_pages.get("/blog/estimating-junk-removal-from-photos", response_class=HTMLResponse)
+async def blog_estimating_from_photos():
+    return FileResponse("static/blog/estimating-junk-removal-from-photos.html")
+
 
 @router_pages.get("/estimate", response_class=HTMLResponse)
 async def estimator(request: Request):

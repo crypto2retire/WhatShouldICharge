@@ -427,9 +427,11 @@ async def lifespan(app):
                     context.run_migrations()
             await connection.run_sync(do_run_migrations)
         await connectable.dispose()
-        logger.info("[startup] Alembic migrations applied successfully")
+        import logging
+        logging.getLogger("wsic.startup").info("[startup] Alembic migrations applied successfully")
     except Exception as e:
-        logger.warning("[startup] Alembic migration failed (non-fatal): %s", e)
+        import logging
+        logging.getLogger("wsic.startup").warning("[startup] Alembic migration failed (non-fatal): %s", e)
     await seed_reference_library()
     await seed_plan_configs()
     await seed_credit_packs()

@@ -48,7 +48,7 @@ Base = declarative_base()
 
 _STRIPE_PACK_PRICES = {
     "single": os.environ.get("STRIPE_PRICE_SINGLE", ""),
-    "10_pack": os.environ.get("STRIPE_PRICE_10PACK", ""),
+    "5_pack": os.environ.get("STRIPE_PRICE_5PACK", ""),
     "25_pack": os.environ.get("STRIPE_PRICE_25PACK", ""),
     "50_pack": os.environ.get("STRIPE_PRICE_50PACK", ""),
     "100_pack": os.environ.get("STRIPE_PRICE_100PACK", ""),
@@ -65,12 +65,12 @@ _STRIPE_PLAN_PRICES = {
 }
 
 _DEFAULT_CREDIT_PACKS_SEED = {
-    "single": {"name": "Single Estimate", "credits": 1, "price_cents": 1000, "discount_pct": 0, "description": "1 estimate credit", "is_featured": False},
-    "10_pack": {"name": "10-Pack", "credits": 10, "price_cents": 6000, "discount_pct": 40, "description": "10 estimate credits (40% off)", "is_featured": False},
-    "25_pack": {"name": "25-Pack", "credits": 25, "price_cents": 12500, "discount_pct": 50, "description": "25 estimate credits (50% off)", "is_featured": False},
-    "50_pack": {"name": "50-Pack", "credits": 50, "price_cents": 20000, "discount_pct": 60, "description": "50 estimate credits (60% off)", "is_featured": True},
-    "100_pack": {"name": "100-Pack", "credits": 100, "price_cents": 30000, "discount_pct": 70, "description": "100 estimate credits (70% off)", "is_featured": False},
-    "250_pack": {"name": "250-Pack", "credits": 250, "price_cents": 50000, "discount_pct": 80, "description": "250 estimate credits (80% off)", "is_featured": False},
+    "single": {"name": "Single Estimate", "credits": 1, "price_cents": 500, "discount_pct": 0, "description": "1 estimate credit", "is_featured": False},
+    "5_pack": {"name": "5-Pack", "credits": 5, "price_cents": 2000, "discount_pct": 20, "description": "5 estimate credits (20% off)", "is_featured": False},
+    "25_pack": {"name": "25-Pack", "credits": 25, "price_cents": 7500, "discount_pct": 40, "description": "25 estimate credits (40% off)", "is_featured": False},
+    "50_pack": {"name": "50-Pack", "credits": 50, "price_cents": 10000, "discount_pct": 60, "description": "50 estimate credits (60% off)", "is_featured": True},
+    "100_pack": {"name": "100-Pack", "credits": 100, "price_cents": 17500, "discount_pct": 65, "description": "100 estimate credits (65% off)", "is_featured": False},
+    "250_pack": {"name": "250-Pack", "credits": 250, "price_cents": 37500, "discount_pct": 70, "description": "250 estimate credits (70% off)", "is_featured": False},
 }
 
 _PACK_KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_]{0,62}$")

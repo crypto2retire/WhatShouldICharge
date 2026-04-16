@@ -3206,7 +3206,7 @@ async def auth_signup(request: Request):
         email,
         "Welcome to WhatShouldICharge!",
         f"<h2>Welcome, {company_name or 'there'}!</h2>"
-        "<p>You have <strong>2 free estimates</strong> to try out the platform.</p>"
+        "<p>You have <strong>5 free estimates</strong> to try out the platform.</p>"
         "<p>Upload customer photos and get AI-assisted pricing in seconds.</p>"
         "<p>— The WhatShouldICharge Team</p>"
     )

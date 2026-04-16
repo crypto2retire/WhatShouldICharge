@@ -391,12 +391,11 @@ def _stripe_product_id_from_price_sync(price_id: str) -> str:
 async def lifespan(app):
     await init_db()
     # Run any pending Alembic migrations automatically on startup
-    import subprocess, sys
     try:
-        subprocess.run(
-            [sys.executable, "-m", "alembic", "upgrade", "head"],
-            check=True, capture_output=True, text=True, timeout=60,
-        )
+        from alembic.config import Config
+        from alembic import command
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
     except Exception as e:
         logger.warning("[startup] Alembic migration failed (non-fatal): %s", e)
     await seed_reference_library()

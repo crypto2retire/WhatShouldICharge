@@ -390,6 +390,15 @@ def _stripe_product_id_from_price_sync(price_id: str) -> str:
 @asynccontextmanager
 async def lifespan(app):
     await init_db()
+    # Run any pending Alembic migrations automatically on startup
+    import subprocess, sys
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            check=True, capture_output=True, text=True, timeout=60,
+        )
+    except Exception as e:
+        logger.warning("[startup] Alembic migration failed (non-fatal): %s", e)
     await seed_reference_library()
     await seed_plan_configs()
     await seed_credit_packs()

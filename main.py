@@ -2836,7 +2836,8 @@ async def public_create_estimate(
         cu = result.scalar_one_or_none()
         if cu:
             free_remaining = max(0, 5 - (cu.free_trial_used or 0))
-            if (cu.credit_balance or 0) <= 0 and free_remaining <= 0:
+            is_admin = cu.is_admin or (cu.estimates_limit or 0) >= 999
+            if (cu.credit_balance or 0) <= 0 and free_remaining <= 0 and not is_admin:
                 raise HTTPException(status_code=403, detail="This estimator is temporarily unavailable. Please contact the company directly.")
             company_user = cu
 
@@ -2865,9 +2866,10 @@ async def public_create_estimate(
         if not cu:
             raise HTTPException(status_code=404, detail="Company not found")
         free_remaining = max(0, 5 - (cu.free_trial_used or 0))
-        if (cu.credit_balance or 0) <= 0 and free_remaining <= 0:
+        is_admin = cu.is_admin or (cu.estimates_limit or 0) >= 999
+        if (cu.credit_balance or 0) <= 0 and free_remaining <= 0 and not is_admin:
             raise HTTPException(status_code=403, detail="This estimator is temporarily unavailable. Please contact the company directly.")
-        if free_remaining > 0 and (cu.credit_balance or 0) <= 0:
+        if free_remaining > 0 and (cu.credit_balance or 0) <= 0 and not is_admin:
             cu.free_trial_used = (cu.free_trial_used or 0) + 1
             txn = CreditTransaction(
                 user_id=cu.id,
@@ -4982,7 +4984,8 @@ async def create_estimate(
         if not fresh_user:
             raise HTTPException(status_code=403, detail="estimate_limit_reached")
         free_remaining = max(0, 5 - (fresh_user.free_trial_used or 0))
-        if (fresh_user.credit_balance or 0) <= 0 and free_remaining <= 0:
+        is_admin = fresh_user.is_admin or (fresh_user.estimates_limit or 0) >= 999
+        if (fresh_user.credit_balance or 0) <= 0 and free_remaining <= 0 and not is_admin:
             return JSONResponse(status_code=402, content={
                 "detail": "no_credits",
                 "message": "No estimate credits remaining. Purchase a credit pack to continue."
@@ -5017,12 +5020,13 @@ async def create_estimate(
         if not fresh_user:
             raise HTTPException(status_code=403, detail="estimate_limit_reached")
         free_remaining = max(0, 5 - (fresh_user.free_trial_used or 0))
-        if (fresh_user.credit_balance or 0) <= 0 and free_remaining <= 0:
+        is_admin = fresh_user.is_admin or (fresh_user.estimates_limit or 0) >= 999
+        if (fresh_user.credit_balance or 0) <= 0 and free_remaining <= 0 and not is_admin:
             return JSONResponse(status_code=402, content={
                 "detail": "no_credits",
                 "message": "No estimate credits remaining. Purchase a credit pack to continue."
             })
-        if free_remaining > 0 and (fresh_user.credit_balance or 0) <= 0:
+        if free_remaining > 0 and (fresh_user.credit_balance or 0) <= 0 and not is_admin:
             fresh_user.free_trial_used = (fresh_user.free_trial_used or 0) + 1
             txn = CreditTransaction(
                 user_id=fresh_user.id,

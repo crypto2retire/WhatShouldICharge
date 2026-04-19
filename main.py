@@ -5232,7 +5232,9 @@ async def create_estimate(
         )
 
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.id == user.id))
+        result = await db.execute(
+            select(User).where(User.id == user.id).with_for_update()
+        )
         fresh_user = result.scalar_one_or_none()
         if not fresh_user:
             raise HTTPException(status_code=403, detail="estimate_limit_reached")
@@ -8177,7 +8179,9 @@ async def team_create_estimate(
         )
 
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.id == owner.id))
+        result = await db.execute(
+            select(User).where(User.id == owner.id).with_for_update()
+        )
         fresh_owner = result.scalar_one_or_none()
         if not fresh_owner:
             raise HTTPException(status_code=403, detail="estimate_limit_reached")
@@ -8208,9 +8212,9 @@ async def team_create_estimate(
         "user_id": owner.id,
         "team_member_id": member.id,
         "estimate_name": estimate_name.strip(),
-        "customer_name": customer_name,
-        "customer_email": customer_email,
-        "customer_phone": customer_phone,
+        "customer_name": _sanitize_customer_input(customer_name),
+        "customer_email": _sanitize_customer_input(customer_email, max_length=254),
+        "customer_phone": _sanitize_customer_input(customer_phone, max_length=30),
         "created_at": now,
         "stored_photos": stored_photos,
         "capture_mode": capture_mode,

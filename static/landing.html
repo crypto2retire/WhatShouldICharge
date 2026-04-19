@@ -1,23 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- Facebook Pixel -->
-<script>
-  !function(f,b,e,v,n,t,s)
-  {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-  n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-  n.queue=[];t=b.createElement(e);t.async=!0;
-  t.src=v;s=b.getElementsByTagName(e)[0];
-  s.parentNode.insertBefore(t,s)}(window, document,'script',
-  'https://connect.facebook.net/en_US/fbevents.js');
-  fbq('init', '1519465685959015');
-  fbq('track', 'PageView');
-</script>
-<noscript><img height="1" width="1" style="display:none"
-  src="https://www.facebook.com/tr?id=1519465685959015&ev=PageView&noscript=1"
-/></noscript>
-<!-- End Facebook Pixel -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WhatShouldICharge — AI Junk Removal Pricing Calculator | Estimates from Photos</title>
@@ -814,6 +797,51 @@ window.addEventListener('scroll', function() {
   }).catch(function() {
     if (fallback) fallback.style.display = 'block';
   });
+})();
+</script>
+<!-- Cookie Consent Banner -->
+<style>
+#cookie-banner{position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#161b22;border-top:1px solid #21262d;padding:16px 24px;display:none;font-family:'Inter',system-ui,sans-serif}
+#cookie-banner.show{display:block}
+#cookie-banner p{color:#8b949e;font-size:0.875rem;margin:0 0 12px;line-height:1.5}
+#cookie-banner p a{color:#16a34a;text-decoration:none}
+#cookie-banner p a:hover{text-decoration:underline}
+#cookie-banner .btn-group{display:flex;gap:10px;flex-wrap:wrap}
+#cookie-banner button{border:none;border-radius:6px;padding:9px 18px;font-size:0.875rem;font-weight:600;cursor:pointer;transition:opacity 0.2s}
+#cookie-banner .btn-accept{background:#16a34a;color:#fff}
+#cookie-banner .btn-accept:hover{opacity:0.9}
+#cookie-banner .btn-decline{background:#21262d;color:#8b949e}
+#cookie-banner .btn-decline:hover{opacity:0.8}
+</style>
+<div id="cookie-banner">
+  <p>We use cookies to measure marketing effectiveness via Facebook Pixel. See our <a href="/privacy">Privacy Policy</a> for details. No essential account cookies are affected.</p>
+  <div class="btn-group">
+    <button class="btn-accept" onclick="window.acceptCookies()">Accept</button>
+    <button class="btn-decline" onclick="window.declineCookies()">Decline</button>
+  </div>
+</div>
+<script>
+(function(){
+  var consent=localStorage.getItem('wsic_cookie_consent');
+  if(!consent){
+    document.getElementById('cookie-banner').classList.add('show');
+  }
+  window.acceptCookies=function(){
+    localStorage.setItem('wsic_cookie_consent','accepted');
+    document.getElementById('cookie-banner').classList.remove('show');
+    loadFBPixel();
+    fbq('track','PageView');
+  };
+  window.declineCookies=function(){
+    localStorage.setItem('wsic_cookie_consent','declined');
+    document.getElementById('cookie-banner').classList.remove('show');
+  };
+  function loadFBPixel(){
+    if(window.fbq)return;
+    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init','1519465685959015');
+  }
+  if(consent==='accepted'){loadFBPixel();fbq('track','PageView');}
 })();
 </script>
 </body>

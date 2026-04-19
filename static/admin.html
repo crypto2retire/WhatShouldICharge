@@ -183,6 +183,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
     <button class="nav-item active" data-section="dashboard"><span class="nav-icon">&#x1f4ca;</span> Dashboard</button>
     <button class="nav-item" data-section="clients"><span class="nav-icon">&#x1f465;</span> Clients</button>
     <button class="nav-item" data-section="estimates"><span class="nav-icon">&#x1f4cb;</span> Estimates</button>
+    <button class="nav-item" data-section="errors"><span class="nav-icon">&#x1f6a8;</span> Error Report</button>
     <button class="nav-item" data-section="plans"><span class="nav-icon">&#x1f4b3;</span> Plans &amp; Pricing</button>
     <button class="nav-item" data-section="promos"><span class="nav-icon">&#x1f3ab;</span> Promo Codes</button>
     <button class="nav-item" data-section="accuracy"><span class="nav-icon">&#x1f3af;</span> Accuracy</button>
@@ -285,6 +286,52 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
       <tbody id="estimates-body"></tbody>
     </table>
     <div class="pagination" id="estimates-pagination"></div>
+  </div>
+</div>
+
+<!-- ============ ERROR REPORT ============ -->
+<div class="section" id="sec-errors">
+  <div class="page-title">Error Report</div>
+  <div class="stats-grid" id="error-stats-grid">
+    <div class="stat-card"><div class="stat-label">Failed Estimates (24h)</div><div class="stat-value" id="err-failed-24h" style="color:var(--red)">--</div></div>
+    <div class="stat-card"><div class="stat-label">Provider Failures (24h)</div><div class="stat-value" id="err-provider-24h" style="color:var(--orange)">--</div></div>
+    <div class="stat-card"><div class="stat-label">Success Rate (7d)</div><div class="stat-value" id="err-success-rate">--</div></div>
+    <div class="stat-card"><div class="stat-label">Total Estimates (7d)</div><div class="stat-value" id="err-total-7d">--</div></div>
+    <div class="stat-card"><div class="stat-label">Avg Latency (7d)</div><div class="stat-value" id="err-avg-latency">--</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Errors by Type</div>
+    <table><thead><tr><th>Error Type</th><th>Count</th></tr></thead><tbody id="err-by-type-body"></tbody></table>
+  </div>
+  <div class="card">
+    <div class="card-title">Recent Provider Errors</div>
+    <table>
+      <thead><tr><th>Time</th><th>Provider</th><th>Model</th><th>Type</th><th>Message</th></tr></thead>
+      <tbody id="err-recent-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ============ ERROR REPORT ============ -->
+<div class="section" id="sec-errors">
+  <div class="page-title">Error Report</div>
+  <div class="stats-grid" id="error-stats-grid">
+    <div class="stat-card"><div class="stat-label">Failed Estimates (24h)</div><div class="stat-value" id="err-failed-24h" style="color:var(--red)">--</div></div>
+    <div class="stat-card"><div class="stat-label">Provider Failures (24h)</div><div class="stat-value" id="err-provider-24h" style="color:var(--orange)">--</div></div>
+    <div class="stat-card"><div class="stat-label">Success Rate (7d)</div><div class="stat-value" id="err-success-rate">--</div></div>
+    <div class="stat-card"><div class="stat-label">Total Estimates (7d)</div><div class="stat-value" id="err-total-7d">--</div></div>
+    <div class="stat-card"><div class="stat-label">Avg Latency (7d)</div><div class="stat-value" id="err-avg-latency">--</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Errors by Type</div>
+    <table><thead><tr><th>Error Type</th><th>Count</th></tr></thead><tbody id="err-by-type-body"></tbody></table>
+  </div>
+  <div class="card">
+    <div class="card-title">Recent Provider Errors</div>
+    <table>
+      <thead><tr><th>Time</th><th>Provider</th><th>Model</th><th>Type</th><th>Message</th></tr></thead>
+      <tbody id="err-recent-body"></tbody>
+    </table>
   </div>
 </div>
 
@@ -559,10 +606,11 @@ $$('.nav-item').forEach(item => {
     if (sec === 'accuracy' && !loaded.accuracy) loadAccuracy();
     if (sec === 'modeleval' && !loaded.modeleval) loadModelEvals();
     if (sec === 'settings' && !loaded.settings) loadSettings();
+    if (sec === 'errors' && !loaded.errors) loadErrorReport();
   });
 });
 
-const loaded = { dashboard: false, clients: false, estimates: false, providers: false, promos: false, accuracy: false, modeleval: false, settings: false };
+const loaded = { dashboard: false, clients: false, estimates: false, providers: false, promos: false, accuracy: false, modeleval: false, settings: false, errors: false };
 let _adminPacksCache = [];
 
 function getCsrfToken() {
@@ -583,7 +631,18 @@ async function apiFetch(url, opts = {}) {
     if (body.detail && body.detail.includes('CSRF')) {
       throw new Error('CSRF token error — try refreshing the page');
     }
-    window.location.href = '/login';
+    throw new Error('Not authorized');
+  }
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `Error ${res.status}`); }
+  return res.json();
+}
+  const res = await fetch(url, { credentials: 'include', ...opts, headers });
+  if (res.status === 401) { window.location.href = '/login'; throw new Error('Session expired'); }
+  if (res.status === 403) {
+    const body = await res.json().catch(() => ({}));
+    if (body.detail && body.detail.includes('CSRF')) {
+      throw new Error('CSRF token error — try refreshing the page');
+    }
     throw new Error('Not authorized');
   }
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `Error ${res.status}`); }
@@ -622,7 +681,11 @@ async function loadDashboard() {
     $('#recent-users-body').innerHTML = d.recent_users.map(u => `<tr><td>${esc(u.email)}</td><td>${esc(u.company_name||'--')}</td><td><span class="badge badge-green">${u.credit_balance||0}</span></td><td>${fmtShortDate(u.created_at)}</td></tr>`).join('');
     try { await loadApiCosts(); } catch (e) { console.error('API costs error:', e); }
     loaded.dashboard = true;
-  } catch(e) { console.error(e); }
+  } catch(e) {
+    console.error('Dashboard load failed:', e);
+    $('#stats-grid').innerHTML = '<div class="empty" style="grid-column:1/-1;color:var(--red)">Failed to load dashboard data. Try refreshing the page.</div>';
+    toast('Dashboard failed to load', 'error');
+  }
 }
 
 async function loadProviderHealth() {
@@ -708,7 +771,7 @@ async function loadClients(page) {
     }
     renderPagination('#clients-pagination', d.page, d.pages, 'loadClients');
     loaded.clients = true;
-  } catch(e) { console.error(e); tbody.innerHTML = '<tr><td colspan="8" class="empty">Error loading clients</td></tr>'; }
+  } catch(e) { console.error(e); tbody.innerHTML = '<tr><td colspan="8" class="empty">Error loading clients</td></tr'; toast('Failed to load clients', 'error'); }
 }
 
 async function loadClientDetail(userId) {
@@ -1468,6 +1531,64 @@ async function deleteModelEval(jobId) {
     await loadModelEvals();
   } catch (e) {
     toast(e.message, 'error');
+  }
+}
+
+// ── Error Report ──
+async function loadErrorReport() {
+  try {
+    const d = await apiFetch('/api/admin/error-report');
+    $('#err-failed-24h').textContent = d.failed_estimates_24h;
+    $('#err-failed-24h').style.color = d.failed_estimates_24h > 5 ? 'var(--red)' : d.failed_estimates_24h > 0 ? 'var(--orange)' : 'var(--green)';
+    $('#err-provider-24h').textContent = d.provider_failures_24h;
+    $('#err-provider-24h').style.color = d.provider_failures_24h > 10 ? 'var(--red)' : d.provider_failures_24h > 0 ? 'var(--orange)' : 'var(--green)';
+    const sr = d.success_rate_7d;
+    $('#err-success-rate').textContent = sr + '%';
+    $('#err-success-rate').style.color = sr >= 95 ? 'var(--green)' : sr >= 80 ? 'var(--orange)' : 'var(--red)';
+    $('#err-total-7d').textContent = d.total_estimates_7d.toLocaleString();
+    $('#err-avg-latency').textContent = d.avg_latency_ms_7d ? d.avg_latency_ms_7d + ' ms' : '--';
+    $('#err-by-type-body').innerHTML = d.error_by_type.length ? d.error_by_type.map(e => `<tr><td>${esc(e.type)}</td><td>${e.count}</td></tr>`).join('') : '<tr><td colspan="2" class="empty">No errors recorded</td></tr>';
+    $('#err-recent-body').innerHTML = d.recent_errors.length ? d.recent_errors.map(e => `<tr>
+      <td>${fmtDate(e.created_at)}</td>
+      <td>${esc(e.provider || '')}</td>
+      <td>${esc(e.model || '')}</td>
+      <td><span class="badge badge-red">${esc(e.error_type || 'unknown')}</span></td>
+      <td style="max-width:400px;white-space:normal;font-size:0.8rem">${esc(e.error_message || '')}</td>
+    </tr>`).join('') : '<tr><td colspan="5" class="empty">No recent provider errors</td></tr>';
+    loaded.errors = true;
+  } catch(e) {
+    console.error('Error report load failed:', e);
+    $('#error-stats-grid').innerHTML = '<div class="empty">Failed to load error report</div>';
+    toast('Failed to load error report', 'error');
+  }
+}
+
+// ── Error Report ──
+async function loadErrorReport() {
+  try {
+    const d = await apiFetch('/api/admin/error-report');
+    $('#err-failed-24h').textContent = d.failed_estimates_24h;
+    $('#err-failed-24h').style.color = d.failed_estimates_24h > 5 ? 'var(--red)' : d.failed_estimates_24h > 0 ? 'var(--orange)' : 'var(--green)';
+    $('#err-provider-24h').textContent = d.provider_failures_24h;
+    $('#err-provider-24h').style.color = d.provider_failures_24h > 10 ? 'var(--red)' : d.provider_failures_24h > 0 ? 'var(--orange)' : 'var(--green)';
+    const sr = d.success_rate_7d;
+    $('#err-success-rate').textContent = sr + '%';
+    $('#err-success-rate').style.color = sr >= 95 ? 'var(--green)' : sr >= 80 ? 'var(--orange)' : 'var(--red)';
+    $('#err-total-7d').textContent = d.total_estimates_7d.toLocaleString();
+    $('#err-avg-latency').textContent = d.avg_latency_ms_7d ? d.avg_latency_ms_7d + ' ms' : '--';
+    $('#err-by-type-body').innerHTML = d.error_by_type.length ? d.error_by_type.map(e => `<tr><td>${esc(e.type)}</td><td>${e.count}</td></tr>`).join('') : '<tr><td colspan="2" class="empty">No errors recorded</td></tr>';
+    $('#err-recent-body').innerHTML = d.recent_errors.length ? d.recent_errors.map(e => `<tr>
+      <td>${fmtDate(e.created_at)}</td>
+      <td>${esc(e.provider || '')}</td>
+      <td>${esc(e.model || '')}</td>
+      <td><span class="badge badge-red">${esc(e.error_type || 'unknown')}</span></td>
+      <td style="max-width:400px;white-space:normal;font-size:0.8rem">${esc(e.error_message || '')}</td>
+    </tr>`).join('') : '<tr><td colspan="5" class="empty">No recent provider errors</td></tr>';
+    loaded.errors = true;
+  } catch(e) {
+    console.error('Error report load failed:', e);
+    $('#error-stats-grid').innerHTML = '<div class="empty">Failed to load error report</div>';
+    toast('Failed to load error report', 'error');
   }
 }
 

@@ -1609,21 +1609,48 @@ if(window.parent!==window){{
 # ── Email Verification for Customer Estimates ──────────────────────────────
 # In-memory store for verification codes (keyed by email, TTL 10 minutes)
 _verify_codes: dict[str, dict] = {}
+_VERIFY_CODES_MAX_AGE = 600
+_VERIFY_CODES_MAX_PER_EMAIL = 3
+
+
+def _cleanup_expired_verify_codes():
+    """Remove expired entries from the in-memory verification code store."""
+    now = time.time()
+    expired_keys = [
+        k for k, v in _verify_codes.items()
+        if now > v.get("expires", 0)
+    ]
+    for k in expired_keys:
+        del _verify_codes[k]
+_VERIFY_CODES_MAX_AGE = 600
+_VERIFY_CODES_MAX_PER_EMAIL = 3
+
+
+def _cleanup_expired_verify_codes():
+    """Remove expired entries from the in-memory verification code store."""
+    now = time.time()
+    expired_keys = [
+        k for k, v in _verify_codes.items()
+        if now > v.get("expires", 0)
+    ]
+    for k in expired_keys:
+        del _verify_codes[k]
 
 
 @router_public.post("/api/public/verify/send")
 @limiter.limit("30/minute")
 async def public_verify_send(request: Request):
     """Send a 6-digit verification code to customer email."""
+    _cleanup_expired_verify_codes()
     body = await request.json()
     email = (body.get("email") or "").strip().lower()
     slug_val = (body.get("slug") or "").strip()
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Valid email required")
 
-    # Rate limit: max 3 codes per email per 10 minutes
+    _cleanup_expired_verify_codes()
     existing = _verify_codes.get(email)
-    if existing and existing.get("count", 0) >= 3 and time.time() - existing.get("first_sent", 0) < 600:
+    if existing and existing.get("count", 0) >= _VERIFY_CODES_MAX_PER_EMAIL and time.time() - existing.get("first_sent", 0) < _VERIFY_CODES_MAX_AGE:
         raise HTTPException(status_code=429, detail="Too many requests. Try again in a few minutes.")
 
     code = f"{secrets.randbelow(900000) + 100000}"
@@ -1658,6 +1685,7 @@ async def public_verify_send(request: Request):
 @limiter.limit("60/minute")
 async def public_verify_check(request: Request):
     """Verify the 6-digit code and return a verification token."""
+    _cleanup_expired_verify_codes()
     body = await request.json()
     email = (body.get("email") or "").strip().lower()
     code = (body.get("code") or "").strip()
@@ -1900,6 +1928,28 @@ def summarize_photo_quality(analyses: list[dict]) -> dict:
         "usable_photo_count": usable_photos,
         "duplicate_photo_count": duplicate_count,
     }
+
+
+def _sanitize_customer_input(value: str, max_length: int = 200) -> str:
+    """Sanitize customer-provided text fields to prevent stored XSS."""
+    if not value:
+        return ""
+    value = value.strip()[:max_length]
+    value = value.replace("<", "&lt;").replace(">", "&gt;")
+    value = value.replace('"', "&quot;").replace("'", "&#x27;")
+    value = value.replace("&", "&amp;")
+    return value
+
+
+def _sanitize_customer_input(value: str, max_length: int = 200) -> str:
+    """Sanitize customer-provided text fields to prevent stored XSS."""
+    if not value:
+        return ""
+    value = value.strip()[:max_length]
+    value = value.replace("<", "&lt;").replace(">", "&gt;")
+    value = value.replace('"', "&quot;").replace("'", "&#x27;")
+    value = value.replace("&", "&amp;")
+    return value
 
 
 def normalize_capture_mode(raw_mode: str | None) -> str:
@@ -2895,37 +2945,45 @@ async def public_create_estimate(
             },
         )
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.id == company_user.id))
-        cu = result.scalar_one_or_none()
-        if not cu:
+        result = await db.execute(
+            text("SELECT id, email, is_admin, estimates_limit, credit_balance, free_trial_used, company_name, company_phone FROM users WHERE id = :uid FOR UPDATE"),
+            {"uid": company_user.id}
+        )
+        row = result.mappings().first()
+        if not row:
             raise HTTPException(status_code=404, detail="Company not found")
-        free_remaining = max(0, 5 - (cu.free_trial_used or 0))
-        is_admin = cu.is_admin or (cu.estimates_limit or 0) >= 999
-        if (cu.credit_balance or 0) <= 0 and free_remaining <= 0 and not is_admin:
+        free_remaining = max(0, 5 - (row["free_trial_used"] or 0))
+        is_admin = row["is_admin"] or (row["estimates_limit"] or 0) >= 999
+        if (row["credit_balance"] or 0) <= 0 and free_remaining <= 0 and not is_admin:
             raise HTTPException(status_code=403, detail="This estimator is temporarily unavailable. Please contact the company directly.")
-        if free_remaining > 0 and (cu.credit_balance or 0) <= 0 and not is_admin:
-            cu.free_trial_used = (cu.free_trial_used or 0) + 1
+        if free_remaining > 0 and (row["credit_balance"] or 0) <= 0 and not is_admin:
+            await db.execute(
+                text("UPDATE users SET free_trial_used = COALESCE(free_trial_used, 0) + 1, estimates_used = COALESCE(estimates_used, 0) + 1 WHERE id = :uid"),
+                {"uid": company_user.id}
+            )
+            new_trial_count = free_remaining - 1
             txn = CreditTransaction(
-                user_id=cu.id,
+                user_id=company_user.id,
                 transaction_type="free_trial",
                 credits=-1,
-                balance_after=cu.credit_balance or 0,
-                description=f"Free Trial Widget Estimate #{cu.free_trial_used}",
+                balance_after=row["credit_balance"] or 0,
+                description=f"Free Trial Widget Estimate #{new_trial_count + 1}",
             )
         else:
-            cu.credit_balance = (cu.credit_balance or 0) - 1
-            cu.credits_used_total = (cu.credits_used_total or 0) + 1
+            await db.execute(
+                text("UPDATE users SET credit_balance = credit_balance - 1, credits_used_total = COALESCE(credits_used_total, 0) + 1, estimates_used = COALESCE(estimates_used, 0) + 1 WHERE id = :uid"),
+                {"uid": company_user.id}
+            )
+            new_balance = (row["credit_balance"] or 0) - 1
             txn = CreditTransaction(
-                user_id=cu.id,
+                user_id=company_user.id,
                 transaction_type="usage",
                 credits=-1,
-                balance_after=cu.credit_balance,
+                balance_after=new_balance,
                 description="Widget Estimate",
             )
-        cu.estimates_used = (cu.estimates_used or 0) + 1
         db.add(txn)
         await db.commit()
-        company_user = cu
 
     job_id = secrets.token_hex(8)
     estimate_jobs[job_id] = {
@@ -2933,11 +2991,11 @@ async def public_create_estimate(
         "message": "Analyzing photos...",
         "result": None,
         "user_id": company_user.id,
-        "estimate_name": f"Customer: {customer_name or 'Walk-in'}",
-        "customer_name": customer_name,
-        "customer_email": customer_email,
-        "customer_phone": customer_phone,
-        "preferred_contact": preferred_contact,
+        "estimate_name": f"Customer: {_sanitize_customer_input(customer_name) or 'Walk-in'}",
+        "customer_name": _sanitize_customer_input(customer_name),
+        "customer_email": _sanitize_customer_input(customer_email, max_length=254),
+        "customer_phone": _sanitize_customer_input(customer_phone, max_length=30),
+        "preferred_contact": _sanitize_customer_input(preferred_contact, max_length=20),
         "created_at": datetime.now(timezone.utc).replace(tzinfo=None),
         "stored_photos": stored_photos,
         "company_email": company_user.email,
@@ -2949,7 +3007,7 @@ async def public_create_estimate(
         "room_labels": _normalize_room_labels(photo_data),
         "truck_load_pct": None,
         "review_mode": "self_serve_clarify",
-        "used_free_trial": free_remaining > 0 and (cu.credit_balance or 0) <= 0,
+        "used_free_trial": free_remaining > 0 and (row["credit_balance"] or 0) <= 0,
     }
 
     asyncio.create_task(run_estimate(
@@ -4618,6 +4676,8 @@ estimate_jobs = {}
 JOB_TTL_SECONDS = 600
 MAX_CONCURRENT_JOBS = 10
 
+_processed_webhook_events: set[str] = set()
+
 model_eval_jobs = {}
 MODEL_EVAL_TTL_SECONDS = 6 * 60 * 60
 MODEL_EVAL_ROOT = Path(tempfile.gettempdir()) / "wsic_model_evals"
@@ -6000,6 +6060,13 @@ async def stripe_webhook(request: Request):
         event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid webhook signature.")
+
+    event_id = event.get("id", "")
+    if event_id in _processed_webhook_events:
+        return {"received": True, "duplicate": True}
+    _processed_webhook_events.add(event_id)
+    if len(_processed_webhook_events) > 10000:
+        _processed_webhook_events.clear()
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
@@ -7529,6 +7596,162 @@ async def admin_env_status(request: Request) -> dict[str, bool]:
         v = os.environ.get(k)
         out[k] = bool(isinstance(v, str) and v.strip())
     return out
+
+
+@router_admin.get("/api/admin/error-report")
+async def admin_error_report(request: Request):
+    """Return recent estimate errors, provider failures, and system health metrics."""
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        since_24h = now - timedelta(hours=24)
+        since_7d = now - timedelta(days=7)
+
+        failed_estimates_24h = (await db.execute(
+            select(func.count(Estimate.id)).where(
+                Estimate.created_at >= since_24h,
+                Estimate.review_status == "needs_review",
+            )
+        )).scalar() or 0
+
+        provider_failures_24h = (await db.execute(
+            select(func.count(ProviderHealthEvent.id)).where(
+                ProviderHealthEvent.created_at >= since_24h,
+                ProviderHealthEvent.status != "success",
+            )
+        )).scalar() or 0
+
+        recent_provider_errors = (await db.execute(
+            select(ProviderHealthEvent)
+            .where(ProviderHealthEvent.created_at >= since_7d, ProviderHealthEvent.status != "success")
+            .order_by(ProviderHealthEvent.created_at.desc())
+            .limit(20)
+        )).scalars().all()
+
+        total_estimates_7d = (await db.execute(
+            select(func.count(Estimate.id)).where(Estimate.created_at >= since_7d)
+        )).scalar() or 0
+
+        success_rate_7d = 0.0
+        if total_estimates_7d > 0:
+            failed_7d = (await db.execute(
+                select(func.count(Estimate.id)).where(
+                    Estimate.created_at >= since_7d,
+                    Estimate.review_status == "needs_review",
+                )
+            )).scalar() or 0
+            success_rate_7d = round((1 - failed_7d / total_estimates_7d) * 100, 1)
+
+        avg_latency_7d = (await db.execute(
+            select(func.avg(ProviderHealthEvent.latency_ms)).where(
+                ProviderHealthEvent.created_at >= since_7d,
+                ProviderHealthEvent.status == "success",
+                ProviderHealthEvent.latency_ms > 0,
+            )
+        )).scalar() or 0
+
+        error_by_type: dict[str, int] = {}
+        for ev in recent_provider_errors:
+            etype = ev.error_type or "unknown"
+            error_by_type[etype] = error_by_type.get(etype, 0) + 1
+
+        return {
+            "failed_estimates_24h": failed_estimates_24h,
+            "provider_failures_24h": provider_failures_24h,
+            "success_rate_7d": success_rate_7d,
+            "total_estimates_7d": total_estimates_7d,
+            "avg_latency_ms_7d": int(float(avg_latency_7d)) if avg_latency_7d else 0,
+            "error_by_type": [{"type": k, "count": v} for k, v in sorted(error_by_type.items(), key=lambda x: -x[1])],
+            "recent_errors": [
+                {
+                    "created_at": ev.created_at.isoformat() if ev.created_at else None,
+                    "provider": ev.provider_name,
+                    "model": ev.model_name,
+                    "error_type": ev.error_type,
+                    "error_message": (ev.error_message or "")[:200],
+                    "estimate_id": ev.estimate_id if ev.estimate_id else None,
+                }
+                for ev in recent_provider_errors[:10]
+            ],
+        }
+
+
+@router_admin.get("/api/admin/error-report")
+async def admin_error_report(request: Request):
+    """Return recent estimate errors, provider failures, and system health metrics."""
+    await require_admin(request)
+    async with AsyncSessionLocal() as db:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        since_24h = now - timedelta(hours=24)
+        since_7d = now - timedelta(days=7)
+
+        failed_estimates_24h = (await db.execute(
+            select(func.count(Estimate.id)).where(
+                Estimate.created_at >= since_24h,
+                Estimate.review_status == "needs_review",
+            )
+        )).scalar() or 0
+
+        provider_failures_24h = (await db.execute(
+            select(func.count(ProviderHealthEvent.id)).where(
+                ProviderHealthEvent.created_at >= since_24h,
+                ProviderHealthEvent.status != "success",
+            )
+        )).scalar() or 0
+
+        recent_provider_errors = (await db.execute(
+            select(ProviderHealthEvent)
+            .where(ProviderHealthEvent.created_at >= since_7d, ProviderHealthEvent.status != "success")
+            .order_by(ProviderHealthEvent.created_at.desc())
+            .limit(20)
+        )).scalars().all()
+
+        total_estimates_7d = (await db.execute(
+            select(func.count(Estimate.id)).where(Estimate.created_at >= since_7d)
+        )).scalar() or 0
+
+        success_rate_7d = 0.0
+        if total_estimates_7d > 0:
+            failed_7d = (await db.execute(
+                select(func.count(Estimate.id)).where(
+                    Estimate.created_at >= since_7d,
+                    Estimate.review_status == "needs_review",
+                )
+            )).scalar() or 0
+            success_rate_7d = round((1 - failed_7d / total_estimates_7d) * 100, 1)
+
+        avg_latency_7d = (await db.execute(
+            select(func.avg(ProviderHealthEvent.latency_ms)).where(
+                ProviderHealthEvent.created_at >= since_7d,
+                ProviderHealthEvent.status == "success",
+                ProviderHealthEvent.latency_ms > 0,
+            )
+        )).scalar() or 0
+
+        error_by_type: dict[str, int] = {}
+        for ev in recent_provider_errors:
+            etype = ev.error_type or "unknown"
+            error_by_type[etype] = error_by_type.get(etype, 0) + 1
+
+        return {
+            "failed_estimates_24h": failed_estimates_24h,
+            "provider_failures_24h": provider_failures_24h,
+            "success_rate_7d": success_rate_7d,
+            "total_estimates_7d": total_estimates_7d,
+            "avg_latency_ms_7d": int(float(avg_latency_7d)) if avg_latency_7d else 0,
+            "error_by_type": [{"type": k, "count": v} for k, v in sorted(error_by_type.items(), key=lambda x: -x[1])],
+            "recent_errors": [
+                {
+                    "created_at": ev.created_at.isoformat() if ev.created_at else None,
+                    "provider": ev.provider_name,
+                    "model": ev.model_name,
+                    "error_type": ev.error_type,
+                    "error_message": (ev.error_message or "")[:200],
+                    "estimate_id": ev.estimate_id if ev.estimate_id else None,
+                }
+                for ev in recent_provider_errors[:10]
+            ],
+        }
 
 
 @router_admin.get("/api/admin/usage")

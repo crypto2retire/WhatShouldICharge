@@ -3905,14 +3905,20 @@ def compress_image(image_bytes: bytes, max_size_kb: int = 500) -> bytes:
             img.thumbnail((max_dim, max_dim), Image.LANCZOS)
 
         output = io.BytesIO()
-        quality = 80
+        quality = 85
         img.save(output, format="JPEG", quality=quality)
 
-        while output.tell() > max_size_kb * 1024 and quality > 30:
-            quality -= 10
-            output = io.BytesIO()
-            img.save(output, format="JPEG", quality=quality)
+        if output.tell() <= max_size_kb * 1024:
+            return output.getvalue()
 
+        quality = 50
+        img.save(output, format="JPEG", quality=quality)
+        if output.tell() <= max_size_kb * 1024:
+            return output.getvalue()
+
+        quality = 30
+        output = io.BytesIO()
+        img.save(output, format="JPEG", quality=quality)
         return output.getvalue()
     finally:
         img.close()
@@ -6877,16 +6883,25 @@ async def admin_update_actual_price(request: Request, estimate_id: int):
 
 
 @router_admin.get("/api/admin/users/{user_id}")
-async def admin_user_detail(request: Request, user_id: int):
+async def admin_user_detail(request: Request, user_id: int, page: int = 1, est_page: int = 1):
     await require_admin(request)
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.id == user_id))
         u = result.scalar_one_or_none()
         if not u:
             raise HTTPException(status_code=404, detail="User not found.")
-        # Get their estimates
+        est_limit = 20
+        est_offset = (est_page - 1) * est_limit
+        count_result = await db.execute(
+            select(func.count(Estimate.id)).where(Estimate.user_id == user_id)
+        )
+        total_estimates = count_result.scalar() or 0
         est_result = await db.execute(
-            select(Estimate).where(Estimate.user_id == user_id).order_by(Estimate.created_at.desc()).limit(50)
+            select(Estimate)
+            .where(Estimate.user_id == user_id)
+            .order_by(Estimate.created_at.desc())
+            .offset(est_offset)
+            .limit(est_limit)
         )
         estimates = est_result.scalars().all()
         last_estimate_at = estimates[0].created_at.isoformat() if estimates and estimates[0].created_at else None
@@ -6920,6 +6935,9 @@ async def admin_user_detail(request: Request, user_id: int):
             "min_charge": u.min_charge, "truck_capacity_cy": u.truck_capacity_cy,
             "created_at": u.created_at.isoformat() if u.created_at else None,
             "last_estimate_at": last_estimate_at,
+            "total_estimates": total_estimates,
+            "est_page": est_page,
+            "est_pages": (total_estimates + est_limit - 1) // est_limit,
             "estimates": [
                 {"id": e.id, "photos_count": e.photos_count, "price_low": e.price_low,
                  "price_high": e.price_high, "cy_estimate": e.cy_estimate,

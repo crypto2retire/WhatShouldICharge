@@ -1,5 +1,5 @@
 from database import Base
-from sqlalchemy import Column, Integer, Float, DateTime, Text, String, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, Float, DateTime, Text, String, Boolean, ForeignKey, Index
 from datetime import datetime, timedelta, timezone
 
 
@@ -200,6 +200,13 @@ class Estimate(Base):
     appointment_requested_at = Column(DateTime, default=None)
     additional_items_text = Column(Text, default="")
     adjustments_json = Column(Text, default="")
+
+    __table_args__ = (
+        Index("ix_estimates_user_created", "user_id", "created_at"),
+        Index("ix_estimates_capture_mode", "capture_mode"),
+        Index("ix_estimates_scene_type", "scene_type"),
+        Index("ix_estimates_review_status", "review_status"),
+    )
 
 
 class ProviderHealthEvent(Base):

@@ -850,16 +850,45 @@ async function loadClientDetail(userId) {
     </div>`;
 
     // Estimates
-    html += `<div class="card"><div class="card-title">Estimates (${u.estimates.length})</div>`;
+    html += `<div class="card"><div class="card-title">Estimates (${u.total_estimates})</div>`;
     if (u.estimates.length) {
       html += `<table><thead><tr><th>ID</th><th>Date</th><th>CY</th><th>Price</th><th>Actual</th></tr></thead><tbody>`;
       html += u.estimates.map(e => `<tr class="clickable-row" onclick="openEstimate(${e.id})"><td>#${e.id}</td><td>${fmtShortDate(e.created_at)}</td><td>${e.cy_estimate?e.cy_estimate.toFixed(1):'--'}</td><td>$${e.price_low?Math.round(e.price_low):'--'}&ndash;$${e.price_high?Math.round(e.price_high):'--'}</td><td>${e.actual_price?'$'+Math.round(e.actual_price):'--'}</td></tr>`).join('');
       html += `</tbody></table>`;
+      if (u.est_pages > 1) {
+        html += `<div style="margin-top:10px;text-align:center">`;
+        for (let p = 1; p <= u.est_pages; p++) {
+          html += `<button class="btn btn-sm" style="margin:0 2px" onclick="loadClientEstimates(${u.id},${p})" ${p===u.est_page?'disabled':''}>${p}</button>`;
+        }
+        html += `</div>`;
+      }
     } else { html += '<div class="empty">No estimates yet</div>'; }
     html += '</div>';
 
     dv.innerHTML = html;
   } catch(e) { console.error(e); dv.innerHTML = '<div class="empty">Error loading client</div>'; }
+}
+
+async function loadClientEstimates(userId, page) {
+  try {
+    const d = await apiFetch(`/api/admin/users/${userId}?est_page=${page}`);
+    const card = document.querySelector('#client-detail-view .card:last-child');
+    if (!card) return;
+    let html = `<div class="card-title">Estimates (${d.total_estimates})</div>`;
+    if (d.estimates.length) {
+      html += `<table><thead><tr><th>ID</th><th>Date</th><th>CY</th><th>Price</th><th>Actual</th></tr></thead><tbody>`;
+      html += d.estimates.map(e => `<tr class="clickable-row" onclick="openEstimate(${e.id})"><td>#${e.id}</td><td>${fmtShortDate(e.created_at)}</td><td>${e.cy_estimate?e.cy_estimate.toFixed(1):'--'}</td><td>$${e.price_low?Math.round(e.price_low):'--'}&ndash;$${e.price_high?Math.round(e.price_high):'--'}</td><td>${e.actual_price?'$'+Math.round(e.actual_price):'--'}</td></tr>`).join('');
+      html += `</tbody></table>`;
+      if (d.est_pages > 1) {
+        html += `<div style="margin-top:10px;text-align:center">`;
+        for (let p = 1; p <= d.est_pages; p++) {
+          html += `<button class="btn btn-sm" style="margin:0 2px" onclick="loadClientEstimates(${userId},${p})" ${p===d.est_page?'disabled':''}>${p}</button>`;
+        }
+        html += `</div>`;
+      }
+    } else { html += '<div class="empty">No estimates yet</div>'; }
+    card.innerHTML = html;
+  } catch(e) { console.error(e); }
 }
 
 async function saveClientPricing(userId) {

@@ -312,29 +312,6 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
   </div>
 </div>
 
-<!-- ============ ERROR REPORT ============ -->
-<div class="section" id="sec-errors">
-  <div class="page-title">Error Report</div>
-  <div class="stats-grid" id="error-stats-grid">
-    <div class="stat-card"><div class="stat-label">Failed Estimates (24h)</div><div class="stat-value" id="err-failed-24h" style="color:var(--red)">--</div></div>
-    <div class="stat-card"><div class="stat-label">Provider Failures (24h)</div><div class="stat-value" id="err-provider-24h" style="color:var(--orange)">--</div></div>
-    <div class="stat-card"><div class="stat-label">Success Rate (7d)</div><div class="stat-value" id="err-success-rate">--</div></div>
-    <div class="stat-card"><div class="stat-label">Total Estimates (7d)</div><div class="stat-value" id="err-total-7d">--</div></div>
-    <div class="stat-card"><div class="stat-label">Avg Latency (7d)</div><div class="stat-value" id="err-avg-latency">--</div></div>
-  </div>
-  <div class="card">
-    <div class="card-title">Errors by Type</div>
-    <table><thead><tr><th>Error Type</th><th>Count</th></tr></thead><tbody id="err-by-type-body"></tbody></table>
-  </div>
-  <div class="card">
-    <div class="card-title">Recent Provider Errors</div>
-    <table>
-      <thead><tr><th>Time</th><th>Provider</th><th>Model</th><th>Type</th><th>Message</th></tr></thead>
-      <tbody id="err-recent-body"></tbody>
-    </table>
-  </div>
-</div>
-
 <!-- ============ PLANS & PRICING (credit packs) ============ -->
 <div class="section" id="sec-plans">
   <div class="page-title">Plans &amp; Pricing</div>
@@ -624,18 +601,6 @@ async function apiFetch(url, opts = {}) {
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
     headers['X-CSRF-Token'] = getCsrfToken();
   }
-  const res = await fetch(url, { credentials: 'include', ...opts, headers });
-  if (res.status === 401) { window.location.href = '/login'; throw new Error('Session expired'); }
-  if (res.status === 403) {
-    const body = await res.json().catch(() => ({}));
-    if (body.detail && body.detail.includes('CSRF')) {
-      throw new Error('CSRF token error — try refreshing the page');
-    }
-    throw new Error('Not authorized');
-  }
-  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `Error ${res.status}`); }
-  return res.json();
-}
   const res = await fetch(url, { credentials: 'include', ...opts, headers });
   if (res.status === 401) { window.location.href = '/login'; throw new Error('Session expired'); }
   if (res.status === 403) {

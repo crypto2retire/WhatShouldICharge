@@ -105,6 +105,17 @@ def decrypt_pii(ciphertext: str) -> str:
         return ciphertext
 
 
+import logging as _stdlib_logging
+_wsic_logger = _stdlib_logging.getLogger("wsic")
+
+
+def log(level: str, event: str, **kwargs):
+    """Structured logging: log(level, event, **context)."""
+    ctx = " | ".join(f"{k}={v}" for k, v in kwargs.items() if v is not None)
+    msg = f"[{event}] {ctx}" if ctx else f"[{event}]"
+    getattr(_wsic_logger, level, _wsic_logger.info)(msg)
+
+
 def _is_loopback_or_rfc1918(host: str) -> bool:
     """True when the TCP peer is local/private (typical when sitting behind Railway's proxy)."""
     if not host:
@@ -387,6 +398,35 @@ def _stripe_product_id_from_price_sync(price_id: str) -> str:
         return str(pid.id)
     return ""
 
+
+def _init_sentry():
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+    dsn = os.environ.get("SENTRY_DSN", "").strip()
+    if not dsn:
+        _wsic_logger.debug("[sentry] SENTRY_DSN not set, skipping")
+        return
+    sentry_sdk.init(
+        dsn=dsn,
+        integrations=[
+            FastApiIntegration(transaction_style="endpoint"),
+            SqlalchemyIntegration(),
+        ],
+        environment=os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("ENVIRONMENT") or "production",
+        release=os.environ.get("RAILWAY_GIT_COMMIT_SHA", "")[:12] or None,
+        traces_sample_rate=0.05,
+        _experiments={"max_spans": 1000},
+    )
+    _wsic_logger.info("[sentry] initialized")
+
+
+def _shutdown_sentry():
+    import sentry_sdk
+    sentry_sdk.flush()
+    _wsic_logger.info("[sentry] shutdown")
+
+
 @asynccontextmanager
 async def lifespan(app):
     await init_db()
@@ -437,7 +477,9 @@ async def lifespan(app):
     await seed_credit_packs()
     await seed_site_config()
     await ensure_admin_user()
+    _init_sentry()
     yield
+    _shutdown_sentry()
     await engine.dispose()
 
 
@@ -2985,6 +3027,7 @@ async def public_create_estimate(
         db.add(txn)
         await db.commit()
 
+    _check_user_rate_limit(company_user.id)
     job_id = secrets.token_hex(8)
     estimate_jobs[job_id] = {
         "status": "analyzing",
@@ -3009,6 +3052,8 @@ async def public_create_estimate(
         "review_mode": "self_serve_clarify",
         "used_free_trial": free_remaining > 0 and (row["credit_balance"] or 0) <= 0,
     }
+    await _upsert_job_to_db(job_id, company_user.id, 0, "analyzing")
+    _record_user_estimate(company_user.id)
 
     asyncio.create_task(run_estimate(
         job_id=job_id,
@@ -3081,6 +3126,7 @@ async def public_estimate_status(request: Request, job_id: str):
     if job["status"] == "retry_needed":
         msg = job["message"]
         del estimate_jobs[job_id]
+        await _delete_job_from_db(job_id)
         return {"status": "retry_needed", "message": msg, "result": None}
     return {"status": job["status"], "message": job["message"], "result": None}
 
@@ -4711,6 +4757,32 @@ def check_concurrent_limit():
         raise HTTPException(status_code=503, detail="Server is busy processing other estimates. Please try again in a minute.")
 
 
+_user_estimate_timestamps: dict[int, list[datetime]] = {}
+_ESTIMATES_PER_USER_WINDOW = 10
+_ESTIMATES_USER_WINDOW_SECONDS = 60
+
+
+def _check_user_rate_limit(user_id: int):
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if user_id not in _user_estimate_timestamps:
+        _user_estimate_timestamps[user_id] = []
+    times = _user_estimate_timestamps[user_id]
+    cutoff = datetime.fromtimestamp(now.timestamp() - _ESTIMATES_USER_WINDOW_SECONDS, tz=timezone.utc)
+    times[:] = [t for t in times if t > cutoff]
+    if len(times) >= _ESTIMATES_PER_USER_WINDOW:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many estimate requests. Please wait before creating another estimate.",
+        )
+    times.append(now)
+
+
+def _record_user_estimate(user_id: int):
+    if user_id not in _user_estimate_timestamps:
+        _user_estimate_timestamps[user_id] = []
+    _user_estimate_timestamps[user_id].append(datetime.now(timezone.utc).replace(tzinfo=None))
+
+
 def cleanup_expired_jobs():
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     expired = [k for k, v in estimate_jobs.items()
@@ -4719,6 +4791,51 @@ def cleanup_expired_jobs():
                    and (now - v.get("created_at", now)).total_seconds() > JOB_TTL_SECONDS)]
     for k in expired:
         del estimate_jobs[k]
+        asyncio.create_task(_delete_job_from_db(k))
+
+
+async def _upsert_job_to_db(job_id: str, user_id: int, team_member_id: int, status: str, result_json: str = "", error_message: str = "", completed_at=None):
+    try:
+        async with AsyncSessionLocal() as db:
+            from models import Job
+            result = await db.execute(select(Job).where(Job.id == job_id))
+            existing = result.scalar_one_or_none()
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            if existing:
+                existing.status = status
+                existing.result_json = result_json
+                existing.error_message = error_message
+                existing.updated_at = now
+                if completed_at:
+                    existing.completed_at = completed_at
+            else:
+                db.add(Job(
+                    id=job_id,
+                    user_id=user_id,
+                    team_member_id=team_member_id,
+                    status=status,
+                    result_json=result_json,
+                    error_message=error_message,
+                    created_at=now,
+                    updated_at=now,
+                    completed_at=completed_at,
+                ))
+            await db.commit()
+    except Exception:
+        pass
+
+
+async def _delete_job_from_db(job_id: str):
+    try:
+        async with AsyncSessionLocal() as db:
+            from models import Job
+            result = await db.execute(select(Job).where(Job.id == job_id))
+            job = result.scalar_one_or_none()
+            if job:
+                await db.delete(job)
+                await db.commit()
+    except Exception:
+        pass
 
 
 def _build_model_eval_comparisons(job: dict) -> dict:
@@ -5170,6 +5287,7 @@ async def create_estimate(
             )
         })
 
+    _check_user_rate_limit(user.id)
     job_id = secrets.token_hex(8)
     estimate_jobs[job_id] = {
         "status": "analyzing",
@@ -5187,6 +5305,8 @@ async def create_estimate(
         "review_mode": "self_serve_clarify",
         "used_free_trial": free_remaining > 0 and (fresh_user.credit_balance or 0) <= 0,
     }
+    await _upsert_job_to_db(job_id, user.id, 0, "analyzing")
+    _record_user_estimate(user.id)
 
     asyncio.create_task(run_estimate(
         job_id=job_id,
@@ -5963,6 +6083,18 @@ async def run_estimate(
                     logging.getLogger("wsic.estimate").info(f"[run_estimate] Refunded credit for job {job_id}, user {user.id}")
         except Exception as refund_err:
             logging.getLogger("wsic.estimate").error(f"[run_estimate] Refund failed for job {job_id}: {refund_err}")
+    finally:
+        if job_id in estimate_jobs:
+            final_job = estimate_jobs[job_id]
+            await _upsert_job_to_db(
+                job_id,
+                final_job.get("user_id", 0),
+                final_job.get("team_member_id", 0),
+                final_job.get("status", "unknown"),
+                json.dumps(final_job.get("result")) if final_job.get("result") else "",
+                final_job.get("message", "") if final_job.get("status") == "error" else "",
+                datetime.now(timezone.utc).replace(tzinfo=None) if final_job.get("status") in ("complete", "needs_review", "error") else None,
+            )
 
 
 @router_estimates.get("/api/estimate/status/{job_id}")
@@ -5981,6 +6113,7 @@ async def estimate_status(request: Request, job_id: str):
     if job["status"] == "complete":
         resp["result"] = job["result"]
         del estimate_jobs[job_id]
+        await _delete_job_from_db(job_id)
     elif job["status"] == "needs_review":
         jr = job.get("result") or {}
         resp["result"] = {
@@ -5989,10 +6122,13 @@ async def estimate_status(request: Request, job_id: str):
             "clarification_questions": jr.get("clarification_questions", []),
         }
         del estimate_jobs[job_id]
+        await _delete_job_from_db(job_id)
     elif job["status"] == "retry_needed":
         del estimate_jobs[job_id]
+        await _delete_job_from_db(job_id)
     elif job["status"] == "error":
         del estimate_jobs[job_id]
+        await _delete_job_from_db(job_id)
 
     return resp
 
@@ -8063,6 +8199,7 @@ async def team_create_estimate(
                 "left angle, and right angle. Prefer visible floor edges and avoid duplicate angles."
             )
         })
+    _check_user_rate_limit(owner.id)
     job_id = f"team-{member.id}-{secrets.token_hex(8)}"
     estimate_jobs[job_id] = {
         "status": "analyzing",
@@ -8084,6 +8221,8 @@ async def team_create_estimate(
         "review_mode": "self_serve_clarify",
         "used_free_trial": False,
     }
+    await _upsert_job_to_db(job_id, owner.id, member.id, "analyzing")
+    _record_user_estimate(owner.id)
 
     asyncio.create_task(run_estimate(
         job_id=job_id,

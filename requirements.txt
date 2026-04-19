@@ -15,3 +15,4 @@ aiosqlite>=0.22.1
 cryptography>=44.0.0
 alembic>=1.14.0
 google-genai>=1.0.0
+sentry-sdk>=2.0.0

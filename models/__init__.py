@@ -209,6 +209,19 @@ class Estimate(Base):
     )
 
 
+class Job(Base):
+    __tablename__ = "jobs"
+    id = Column(String(64), primary_key=True)
+    user_id = Column(Integer, default=0, index=True)
+    team_member_id = Column(Integer, default=0)
+    status = Column(String(30), default="pending", index=True)
+    result_json = Column(Text, default="")
+    error_message = Column(Text, default="")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    completed_at = Column(DateTime, default=None)
+
+
 class ProviderHealthEvent(Base):
     __tablename__ = "provider_health_events"
     id = Column(Integer, primary_key=True, index=True)

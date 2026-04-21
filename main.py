@@ -266,7 +266,6 @@ class CSRFMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if request.method in ("POST", "PUT", "DELETE"):
             path = request.url.path
-            # Exempt public endpoints, auth endpoints, and webhook
             if not path.startswith("/api/public/") and path not in CSRF_EXEMPT_PATHS:
                 cookie_token = request.cookies.get("csrf_token")
                 header_token = request.headers.get("x-csrf-token")
@@ -275,7 +274,8 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
 
-        if "csrf_token" not in request.cookies:
+        existing = request.cookies.get("csrf_token")
+        if not existing:
             csrf_token = secrets.token_hex(32)
             response.set_cookie(
                 "csrf_token", csrf_token, httponly=False, samesite="lax",

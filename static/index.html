@@ -1562,7 +1562,7 @@ async function submitEstimate() {
     : 'AI is estimating cubic yards and pricing';
 
   try {
-    const resp = await fetch('/api/estimate', { method: 'POST', headers: {'X-CSRF-Token': getCsrfToken()}, body: formData });
+    const resp = await fetch('/api/estimate', { method: 'POST', credentials: 'include', headers: {'X-CSRF-Token': getCsrfToken()}, body: formData });
     const data = await resp.json();
 
     if (!resp.ok) {

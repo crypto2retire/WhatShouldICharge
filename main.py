@@ -1983,17 +1983,6 @@ def _sanitize_customer_input(value: str, max_length: int = 200) -> str:
     return value
 
 
-def _sanitize_customer_input(value: str, max_length: int = 200) -> str:
-    """Sanitize customer-provided text fields to prevent stored XSS."""
-    if not value:
-        return ""
-    value = value.strip()[:max_length]
-    value = value.replace("<", "&lt;").replace(">", "&gt;")
-    value = value.replace('"', "&quot;").replace("'", "&#x27;")
-    value = value.replace("&", "&amp;")
-    return value
-
-
 def normalize_capture_mode(raw_mode: str | None) -> str:
     mode = str(raw_mode or "").strip().lower()
     return "operator_assist" if mode == "operator_assist" else "remote"

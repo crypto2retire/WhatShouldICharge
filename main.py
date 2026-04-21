@@ -4753,7 +4753,7 @@ def _check_user_rate_limit(user_id: int):
     if user_id not in _user_estimate_timestamps:
         _user_estimate_timestamps[user_id] = []
     times = _user_estimate_timestamps[user_id]
-    cutoff = datetime.fromtimestamp(now.timestamp() - _ESTIMATES_USER_WINDOW_SECONDS, tz=timezone.utc)
+    cutoff = datetime.fromtimestamp(now.timestamp() - _ESTIMATES_USER_WINDOW_SECONDS, tz=timezone.utc).replace(tzinfo=None)
     times[:] = [t for t in times if t > cutoff]
     if len(times) >= _ESTIMATES_PER_USER_WINDOW:
         raise HTTPException(

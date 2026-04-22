@@ -221,52 +221,46 @@ def _is_fuzzy_duplicate(item_a: dict, item_b: dict) -> bool:
     if not name_a or not name_b:
         return False
 
-    # Conflicting specific sizes → different items (5-gallon vs 1-gallon).
-    sz_a = _extract_size_marker(name_a)
-    sz_b = _extract_size_marker(name_b)
-    if sz_a and sz_b and sz_a != sz_b:
-        return False
-
     words_a = _normalize_for_match(name_a)
     words_b = _normalize_for_match(name_b)
     if not words_a or not words_b:
         return False
 
-    # If core words are identical but one has a substantive parenthetical qualifier
-    # (e.g. "cardboard boxes (drawer kits)" vs "large cardboard boxes"),
-    # the qualifier makes it a different item. Color/material tags don't count.
-    # Also block when both have different substantive qualifiers
-    # (e.g. "bed frame (headboard)" vs "bed frame (side rails)").
-    if words_a == words_b:
-        sub_a = _has_substantive_parenthetical(name_a)
-        sub_b = _has_substantive_parenthetical(name_b)
-        if sub_a != sub_b:
-            return False
-        if sub_a and sub_b:
-            # Both substantive — merge only if same qualifier
-            qual_a = re.search(r"\((.*?)\)", name_a)
-            qual_b = re.search(r"\((.*?)\)", name_b)
-            if qual_a and qual_b and qual_a.group(1).strip().lower() != qual_b.group(1).strip().lower():
-                return False
-
     intersection = words_a & words_b
     union = words_a | words_b
     jaccard = len(intersection) / len(union) if union else 0.0
 
-    # 1. High Jaccard overlap → duplicate.
-    if jaccard >= 0.5:
+    # Size markers: only block if both present AND different AND neither is a superset of the other.
+    # "5-gallon" vs "20-gallon" → different items. "5-gallon" vs None → may be same item.
+    sz_a = _extract_size_marker(name_a)
+    sz_b = _extract_size_marker(name_b)
+    size_conflict = False
+    if sz_a and sz_b and sz_a != sz_b:
+        sz_a_val = re.sub(r"[^\d.]", "", sz_a)
+        sz_b_val = re.sub(r"[^\d.]", "", sz_b)
+        try:
+            if float(sz_a_val) != float(sz_b_val):
+                size_conflict = True
+        except ValueError:
+            size_conflict = True
+
+    # High Jaccard overlap → duplicate (unless clear size conflict like "5-gallon" vs "20-gallon").
+    if jaccard >= 0.45 and not size_conflict:
         return True
 
-    # 2. One name's normalized words are a subset of the other + share ≥2 words.
+    # Identical core words → duplicate even if one has a parenthetical qualifier,
+    # unless there's a direct size conflict ("5-gallon" vs "20-gallon").
+    if words_a == words_b and not size_conflict:
+        return True
+
+    # Near-identical with size qualifiers that are compatible (one has size, other doesn't).
+    if jaccard >= 0.5 and (not sz_a or not sz_b) and not size_conflict:
+        return True
+
+    # One name's normalized words are a subset of the other + share ≥3 words.
     shorter = words_a if len(words_a) <= len(words_b) else words_b
     longer = words_b if len(words_a) <= len(words_b) else words_a
-    if shorter.issubset(longer) and len(intersection) >= 2:
-        return True
-
-    # 3. Containment in raw text + material overlap.
-    norm_a = " ".join(sorted(words_a))
-    norm_b = " ".join(sorted(words_b))
-    if (norm_a in norm_b or norm_b in norm_a) and len(intersection) >= 2:
+    if shorter.issubset(longer) and len(intersection) >= 3:
         return True
 
     return False

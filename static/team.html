@@ -330,6 +330,10 @@
     border: 1px solid var(--border);
     border-radius: 10px;
   }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  @media (prefers-reduced-motion: reduce) {
+    .spinner { animation: none; opacity: 0.5; }
+  }
 </style>
 </head>
 <body>
@@ -353,9 +357,9 @@
     <div class="section-title">Job Info</div>
     <div class="card">
       <div class="customer-fields">
-        <label for="estimate-name" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Estimate name</label>
+        <label for="estimate-name" class="sr-only">Estimate name</label>
         <input type="text" id="estimate-name" placeholder="Estimate name (e.g. 123 Main St)" maxlength="100">
-        <label for="cust-name" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Customer name</label>
+        <label for="cust-name" class="sr-only">Customer name</label>
         <input type="text" id="cust-name" placeholder="Customer name (optional)">
         <label for="cust-email" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Customer email</label>
         <input type="email" id="cust-email" placeholder="Customer email (optional)">
@@ -569,6 +573,7 @@ function syncOperatorAssistUI() {
 document.getElementById('operator-assist-toggle').addEventListener('change', syncOperatorAssistUI);
 
 async function submitEstimate() {
+  if (!navigator.onLine) { showError('You appear to be offline. Please check your connection and try again.'); return; }
   document.getElementById('upload-section').style.display = 'none';
   document.getElementById('loading').classList.add('visible');
   document.getElementById('results').classList.remove('visible');

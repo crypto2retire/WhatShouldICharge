@@ -15,6 +15,7 @@
   iframe.setAttribute('loading', 'lazy');
   iframe.setAttribute('title', 'Get a Free Junk Removal Estimate');
   iframe.setAttribute('allow', 'camera');
+  iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-camera');
 
   container.appendChild(iframe);
   script.parentNode.insertBefore(container, script.nextSibling);

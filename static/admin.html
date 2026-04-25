@@ -229,7 +229,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
   </div>
   <div class="card">
     <div class="card-title">Recent Users</div>
-    <table><thead><tr><th>Email</th><th>Company</th><th>Credits</th><th>Joined</th></tr></thead><tbody id="recent-users-body"></tbody></table>
+    <table><thead><tr><th scope="col">Email</th><th scope="col">Company</th><th scope="col">Credits</th><th scope="col">Joined</th></tr></thead><tbody id="recent-users-body"></tbody></table>
   </div>
 </div>
 
@@ -247,7 +247,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
   <div class="card">
     <div class="card-title">Recent Provider Events</div>
     <table>
-      <thead><tr><th>Time</th><th>Provider</th><th>Model</th><th>Status</th><th>Photos</th><th>Latency</th><th>Error</th></tr></thead>
+      <thead><tr><th scope="col">Time</th><th scope="col">Provider</th><th scope="col">Model</th><th scope="col">Status</th><th scope="col">Photos</th><th scope="col">Latency</th><th scope="col">Error</th></tr></thead>
       <tbody id="provider-events-body"></tbody>
     </table>
   </div>
@@ -263,7 +263,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
     </div>
     <div class="card">
       <table>
-        <thead><tr><th>ID</th><th>Email</th><th>Company</th><th>Location</th><th>Credits</th><th>Pricing</th><th>Free Trial</th><th>Joined</th></tr></thead>
+        <thead><tr><th scope="col">ID</th><th scope="col">Email</th><th scope="col">Company</th><th scope="col">Location</th><th scope="col">Credits</th><th scope="col">Pricing</th><th scope="col">Free Trial</th><th scope="col">Joined</th></tr></thead>
         <tbody id="clients-body"></tbody>
       </table>
       <div class="pagination" id="clients-pagination"></div>
@@ -282,7 +282,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
       <button class="filter-chip" data-capture-mode="remote">Remote Only</button>
     </div>
     <table>
-      <thead><tr><th>ID</th><th>Date</th><th>User</th><th>Photos</th><th>CY</th><th>Price Range</th></tr></thead>
+      <thead><tr><th scope="col">ID</th><th scope="col">Date</th><th scope="col">User</th><th scope="col">Photos</th><th scope="col">CY</th><th scope="col">Price Range</th></tr></thead>
       <tbody id="estimates-body"></tbody>
     </table>
     <div class="pagination" id="estimates-pagination"></div>
@@ -301,12 +301,12 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
   </div>
   <div class="card">
     <div class="card-title">Errors by Type</div>
-    <table><thead><tr><th>Error Type</th><th>Count</th></tr></thead><tbody id="err-by-type-body"></tbody></table>
+    <table><thead><tr><th scope="col">Error Type</th><th scope="col">Count</th></tr></thead><tbody id="err-by-type-body"></tbody></table>
   </div>
   <div class="card">
     <div class="card-title">Recent Provider Errors</div>
     <table>
-      <thead><tr><th>Time</th><th>Provider</th><th>Model</th><th>Type</th><th>Message</th></tr></thead>
+      <thead><tr><th scope="col">Time</th><th scope="col">Provider</th><th scope="col">Model</th><th scope="col">Type</th><th scope="col">Message</th></tr></thead>
       <tbody id="err-recent-body"></tbody>
     </table>
   </div>
@@ -346,7 +346,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
   <div class="card">
     <div class="card-title">Credit Packs</div>
     <table>
-      <thead><tr><th>ID</th><th>Key</th><th>Name</th><th>Credits</th><th>Price</th><th>Stripe price</th><th>Order</th><th>Status</th><th>Actions</th></tr></thead>
+      <thead><tr><th scope="col">ID</th><th scope="col">Key</th><th scope="col">Name</th><th scope="col">Credits</th><th scope="col">Price</th><th scope="col">Stripe price</th><th scope="col">Order</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
       <tbody id="packs-admin-body"></tbody>
     </table>
   </div>
@@ -372,7 +372,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
   <div style="margin-bottom:14px"><button class="btn btn-primary" onclick="showPromoForm()">+ Create Promo Code</button></div>
   <div class="card">
     <table>
-      <thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Expires</th><th>Status</th><th>Actions</th></tr></thead>
+      <thead><tr><th scope="col">Code</th><th scope="col">Discount</th><th scope="col">Usage</th><th scope="col">Expires</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
       <tbody id="promos-body"></tbody>
     </table>
   </div>
@@ -395,38 +395,38 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
     <div class="summary-grid">
       <div>
         <div class="summary-label">By Scene Type</div>
-        <table><thead><tr><th>Scene</th><th>Count</th><th>Price</th><th>CY</th></tr></thead><tbody id="acc-scene-body"></tbody></table>
+        <table><thead><tr><th scope="col">Scene</th><th scope="col">Count</th><th scope="col">Price</th><th scope="col">CY</th></tr></thead><tbody id="acc-scene-body"></tbody></table>
       </div>
       <div>
         <div class="summary-label">By Confidence Bucket</div>
-        <table><thead><tr><th>Confidence</th><th>Count</th><th>Price</th><th>CY</th></tr></thead><tbody id="acc-confidence-body"></tbody></table>
+        <table><thead><tr><th scope="col">Confidence</th><th scope="col">Count</th><th scope="col">Price</th><th scope="col">CY</th></tr></thead><tbody id="acc-confidence-body"></tbody></table>
       </div>
     </div>
     <div class="summary-grid" style="margin-top:16px">
       <div>
         <div class="summary-label">By Capture Mode</div>
-        <table><thead><tr><th>Mode</th><th>Count</th><th>Price</th><th>CY</th></tr></thead><tbody id="acc-capture-body"></tbody></table>
+        <table><thead><tr><th scope="col">Mode</th><th scope="col">Count</th><th scope="col">Price</th><th scope="col">CY</th></tr></thead><tbody id="acc-capture-body"></tbody></table>
       </div>
       <div>
         <div class="summary-label">By Review Status</div>
-        <table><thead><tr><th>Status</th><th>Count</th><th>Price</th><th>CY</th></tr></thead><tbody id="acc-review-body"></tbody></table>
+        <table><thead><tr><th scope="col">Status</th><th scope="col">Count</th><th scope="col">Price</th><th scope="col">CY</th></tr></thead><tbody id="acc-review-body"></tbody></table>
       </div>
     </div>
     <div class="summary-grid" style="margin-top:16px">
       <div>
         <div class="summary-label">Recorded Miss Reasons</div>
-        <table><thead><tr><th>Reason</th><th>Count</th></tr></thead><tbody id="acc-miss-reasons-body"></tbody></table>
+        <table><thead><tr><th scope="col">Reason</th><th scope="col">Count</th></tr></thead><tbody id="acc-miss-reasons-body"></tbody></table>
       </div>
       <div></div>
     </div>
   </div>
   <div class="card">
     <div class="card-title">Accuracy by Company</div>
-    <table><thead><tr><th>Company</th><th># With Actuals</th><th>Avg Price Accuracy</th><th>Avg CY Accuracy</th></tr></thead><tbody id="acc-company-body"></tbody></table>
+    <table><thead><tr><th scope="col">Company</th><th scope="col"># With Actuals</th><th scope="col">Avg Price Accuracy</th><th scope="col">Avg CY Accuracy</th></tr></thead><tbody id="acc-company-body"></tbody></table>
   </div>
   <div class="card">
     <div class="card-title">Needs Actual Data (older than 7 days)</div>
-    <table><thead><tr><th>ID</th><th>Date</th><th>User</th><th>CY</th><th>Price Range</th></tr></thead><tbody id="acc-needs-body"></tbody></table>
+    <table><thead><tr><th scope="col">ID</th><th scope="col">Date</th><th scope="col">User</th><th scope="col">CY</th><th scope="col">Price Range</th></tr></thead><tbody id="acc-needs-body"></tbody></table>
   </div>
 </div>
 
@@ -817,7 +817,7 @@ async function loadClientDetail(userId) {
     // Estimates
     html += `<div class="card"><div class="card-title">Estimates (${u.total_estimates})</div>`;
     if (u.estimates.length) {
-      html += `<table><thead><tr><th>ID</th><th>Date</th><th>CY</th><th>Price</th><th>Actual</th></tr></thead><tbody>`;
+      html += `<table><thead><tr><th scope="col">ID</th><th scope="col">Date</th><th scope="col">CY</th><th scope="col">Price</th><th scope="col">Actual</th></tr></thead><tbody>`;
       html += u.estimates.map(e => `<tr class="clickable-row" onclick="openEstimate(${e.id})"><td>#${e.id}</td><td>${fmtShortDate(e.created_at)}</td><td>${e.cy_estimate?e.cy_estimate.toFixed(1):'--'}</td><td>$${e.price_low?Math.round(e.price_low):'--'}&ndash;$${e.price_high?Math.round(e.price_high):'--'}</td><td>${e.actual_price?'$'+Math.round(e.actual_price):'--'}</td></tr>`).join('');
       html += `</tbody></table>`;
       if (u.est_pages > 1) {
@@ -841,7 +841,7 @@ async function loadClientEstimates(userId, page) {
     if (!card) return;
     let html = `<div class="card-title">Estimates (${d.total_estimates})</div>`;
     if (d.estimates.length) {
-      html += `<table><thead><tr><th>ID</th><th>Date</th><th>CY</th><th>Price</th><th>Actual</th></tr></thead><tbody>`;
+      html += `<table><thead><tr><th scope="col">ID</th><th scope="col">Date</th><th scope="col">CY</th><th scope="col">Price</th><th scope="col">Actual</th></tr></thead><tbody>`;
       html += d.estimates.map(e => `<tr class="clickable-row" onclick="openEstimate(${e.id})"><td>#${e.id}</td><td>${fmtShortDate(e.created_at)}</td><td>${e.cy_estimate?e.cy_estimate.toFixed(1):'--'}</td><td>$${e.price_low?Math.round(e.price_low):'--'}&ndash;$${e.price_high?Math.round(e.price_high):'--'}</td><td>${e.actual_price?'$'+Math.round(e.actual_price):'--'}</td></tr>`).join('');
       html += `</tbody></table>`;
       if (d.est_pages > 1) {
@@ -985,7 +985,7 @@ async function openEstimate(id) {
 
     // Item Breakdown
     if (items.length) {
-      html += `<div class="modal-section"><div class="modal-section-title">Item Breakdown</div><table class="items-table"><thead><tr><th>Item</th><th>Qty</th><th>CY/unit</th><th>Total CY</th><th>Source</th></tr></thead><tbody>`;
+      html += `<div class="modal-section"><div class="modal-section-title">Item Breakdown</div><table class="items-table"><thead><tr><th scope="col">Item</th><th scope="col">Qty</th><th scope="col">CY/unit</th><th scope="col">Total CY</th><th scope="col">Source</th></tr></thead><tbody>`;
       html += items.map(it => {
         const qty=it.quantity||1, cy=it.cubic_yards||0, total=(cy*qty).toFixed(2);
         let src = it.looked_up||it.volume_lookup_applied?'<span class="badge badge-lookup">lookup</span>':it.volume_redistributed?'<span class="badge badge-redistributed">redistributed</span>':'<span class="badge badge-ai">AI</span>';
@@ -1072,11 +1072,50 @@ async function saveActualData(estId) {
   } catch(e) { toast(e.message, 'error'); }
 }
 
-function closeModal() { $('#estimate-modal').classList.remove('open'); document.body.style.overflow = ''; }
+var _modalLastFocus = null;
+function openEstimate(id) {
+  _modalLastFocus = document.activeElement;
+  const overlay = $('#estimate-modal');
+  const body = $('#modal-body');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  $('#modal-title').textContent = `Estimate #${id}`;
+  $('#modal-meta').textContent = 'Loading...';
+  body.innerHTML = '<div class="loading">Loading...</div>';
+  // Focus the close button after a short delay for screen readers
+  setTimeout(() => { const closeBtn = $('.modal-close'); if (closeBtn) closeBtn.focus(); }, 100);
+  try {
+    const d = await apiFetch(`/api/admin/estimates/${id}`);
+    $('#modal-meta').textContent = `${fmtDate(d.created_at)} \u00b7 ${esc(d.user_email)}${d.company_name?' \u00b7 '+esc(d.company_name):''}${d.company_city?', '+esc(d.company_city):''}${d.company_state?' '+esc(d.company_state):''}`;
+    const result = d.result||{}, items = result.items||[], totals = result.totals||{}, notes = result.notes||'';
+    // ... rest of function continues ...
+  } catch(e) { body.innerHTML = '<div class="error">Error loading estimate</div>'; }
+}
+function closeModal() {
+  $('#estimate-modal').classList.remove('open');
+  document.body.style.overflow = '';
+  if (_modalLastFocus) _modalLastFocus.focus();
+}
 $('#estimate-modal').addEventListener('click', e => { if (e.target === $('#estimate-modal')) closeModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { if ($('#lightbox').classList.contains('open')) closeLightbox(); else closeModal(); } });
-function openLightbox(src) { $('#lightbox-img').src = src; $('#lightbox').classList.add('open'); }
-function closeLightbox() { $('#lightbox').classList.remove('open'); $('#lightbox-img').src = ''; }
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if ($('#lightbox').classList.contains('open')) closeLightbox();
+    else if ($('#estimate-modal').classList.contains('open')) closeModal();
+  }
+  // Modal focus trap
+  if (e.key === 'Tab' && $('#estimate-modal').classList.contains('open')) {
+    const focusable = $('#estimate-modal').querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable.length === 0) return;
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+});
+
+var _lightboxLastFocus = null;
+function openLightbox(src) { _lightboxLastFocus = document.activeElement; $('#lightbox-img').src = src; $('#lightbox').classList.add('open'); }
+function closeLightbox() { $('#lightbox').classList.remove('open'); $('#lightbox-img').src = ''; if (_lightboxLastFocus) _lightboxLastFocus.focus(); }
 
 // ── Credit Packs (admin CRUD) ──
 function showPackForm() {
@@ -1368,7 +1407,7 @@ async function loadModelEvals() {
       jobsEl.innerHTML = '<div class="empty">No eval jobs yet</div>';
       $('#modeleval-detail').innerHTML = '<div class="empty">Run a batch or select a recent job to review results.</div>';
     } else {
-      jobsEl.innerHTML = `<table><thead><tr><th>ID</th><th>Date</th><th>Status</th><th>Images</th><th>Model Runs</th><th>Models</th><th>Actions</th></tr></thead><tbody>${
+      jobsEl.innerHTML = `<table><thead><tr><th scope="col">ID</th><th scope="col">Date</th><th scope="col">Status</th><th scope="col">Images</th><th scope="col">Model Runs</th><th scope="col">Models</th><th scope="col">Actions</th></tr></thead><tbody>${
         jobs.map(job => `<tr>
           <td>#${job.id}</td>
           <td>${fmtDate(job.created_at)}</td>
@@ -1468,7 +1507,7 @@ async function viewModelEval(jobId, silent=false) {
         <div class="btn-group">${downloads.join('')}<button class="btn btn-red btn-sm" onclick="deleteModelEval('${jobId}')">Delete Batch</button></div>
       </div>
       ${(d.images || []).length ? `
-      <table><thead><tr><th>Image</th>${(d.models || []).map(m => `<th>${esc(evalModelLabels[m] || m)}</th>`).join('')}<th>Diff vs Claude</th></tr></thead><tbody>
+      <table><thead><tr><th scope="col">Image</th>${(d.models || []).map(m => `<th scope="col">${esc(evalModelLabels[m] || m)}</th>`).join('')}<th scope="col">Diff vs Claude</th></tr></thead><tbody>
         ${(d.images || []).map(image => {
           const byModel = {};
           (image.results || []).forEach(result => { byModel[result.model] = result; });

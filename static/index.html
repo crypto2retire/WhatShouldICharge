@@ -341,6 +341,11 @@
   }
 
   @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .loading-spinner { animation: none; }
+    #usage-bar, #us-bar { transition: none; }
+    .skip-link { transition: none; }
+  }
 
   .loading-text { font-size: 1rem; font-weight: 600; }
   .loading-sub { font-size: 0.83rem; color: var(--muted); margin-top: 6px; }

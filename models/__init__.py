@@ -115,7 +115,7 @@ class CreditTransaction(Base):
     credits = Column(Integer, nullable=False)
     balance_after = Column(Integer, nullable=False)
     description = Column(String, default="")
-    stripe_session_id = Column(String, default="")
+    stripe_session_id = Column(String, unique=True, nullable=True, default=None)
     pack_type = Column(String, default="")
     amount_cents = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)

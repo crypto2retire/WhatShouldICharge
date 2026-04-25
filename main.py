@@ -231,6 +231,16 @@ class MaxBodySizeMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        import uuid
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())[:16]
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
@@ -293,6 +303,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(MaxBodySizeMiddleware)
+app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CSRFMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -503,6 +514,7 @@ async def health_check():
             await db.execute(text("SELECT 1"))
         return {"status": "ok"}
     except Exception:
+        logger.exception("[health_check] Database health check failed")
         return JSONResponse(status_code=503, content={"status": "unhealthy"})
 
 
@@ -4735,8 +4747,6 @@ estimate_jobs = {}
 JOB_TTL_SECONDS = 300
 MAX_CONCURRENT_JOBS = 10
 
-_processed_webhook_events: set[str] = set()
-
 _TEAM_AUTH_MAX_FAILURES = 5
 _TEAM_AUTH_LOCKOUT_SECONDS = 900
 _team_auth_failures: dict[tuple[int, int], list[datetime]] = {}
@@ -4804,7 +4814,7 @@ async def _cleanup_old_rate_limit_events():
             await db.execute(text("DELETE FROM rate_limit_events WHERE created_at < :cutoff"), {"cutoff": cutoff})
             await db.commit()
     except Exception:
-        pass
+        logger.exception("[_cleanup_old_rate_limit_events] Failed to clean up old rate limit events")
 
 
 async def _periodic_cleanup():
@@ -6244,13 +6254,6 @@ async def stripe_webhook(request: Request):
         event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid webhook signature.")
-
-    event_id = event.get("id", "")
-    if event_id in _processed_webhook_events:
-        return {"received": True, "duplicate": True}
-    _processed_webhook_events.add(event_id)
-    if len(_processed_webhook_events) > 10000:
-        _processed_webhook_events.clear()
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]

@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://api.whatshouldicharge.app">
+<link rel="preconnect" href="https://js.stripe.com">
+<link rel="preconnect" href="https://fonts.googleapis.com">
 <title>JunkEstimate AI — Instant Junk Removal Pricing</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1201,13 +1204,16 @@ document.getElementById('nav-logout').addEventListener('click', async () => {
 
   function closeSettings() { modal.style.display = 'none'; }
 
+  function escHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
   function updateSlugPreview() {
     var slug = document.getElementById('set-slug').value.trim();
     var preview = document.getElementById('slug-preview');
     var embedSection = document.getElementById('embed-code-section');
     if (slug) {
-      preview.innerHTML = 'Public page: <a href="/estimate/' + slug + '" target="_blank" style="color:var(--accent);">whatshouldicharge.app/estimate/' + slug + '</a>';
-      var embedCode = '<script src="https://whatshouldicharge.app/static/widget.js" data-slug="' + slug + '"></' + 'script>';
+      preview.innerHTML = 'Public page: <a href="/estimate/' + escHtml(slug) + '" target="_blank" style="color:var(--accent);">whatshouldicharge.app/estimate/' + escHtml(slug) + '</a>';
+      var embedCode = '<script src="https://whatshouldicharge.app/static/widget.js" data-slug="' + escHtml(slug) + '"></' + 'script>';
       document.getElementById('embed-code').value = embedCode;
       embedSection.style.display = 'block';
     } else {
@@ -1543,6 +1549,7 @@ function updateLoadingStatus(status, message) {
 }
 
 async function submitEstimate() {
+  if (!navigator.onLine) { showError('You appear to be offline. Please check your connection and try again.'); return; }
   hideError();
   submitSection.style.display = 'none';
   uploadCard.style.display = 'none';

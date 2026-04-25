@@ -60,12 +60,12 @@ input, select { width: 100%; padding: 10px 12px; background: var(--bg); border: 
 </head>
 <body>
 
-<div class="container">
-  <div class="header" id="header">
+<main class="container">
+  <header class="header" id="header">
     <div id="company-logo"></div>
     <h1 id="company-name">Get a Free Estimate</h1>
     <div class="phone" id="company-phone"></div>
-  </div>
+  </header>
 
   <!-- Step 1: Contact Info + Verification -->
   <div id="verify-section">
@@ -144,7 +144,7 @@ input, select { width: 100%; padding: 10px 12px; background: var(--bg); border: 
   </div>
 
   <div class="powered">Powered by <a href="https://whatshouldicharge.app">WhatShouldICharge</a> by <a href="https://donelocal.io">DoneLocal.io</a></div>
-</div>
+</main>
 
 <script>
 var slug = window.location.pathname.split('/estimate/')[1] || '';

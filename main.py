@@ -141,8 +141,6 @@ def _is_loopback_or_rfc1918(host: str) -> bool:
 
 
 def _trust_forwarded_headers(request: Request) -> bool:
-    if os.environ.get("TRUST_FORWARDED_HEADERS", "").strip().lower() in ("1", "true", "yes"):
-        return True
     peer = request.client.host if request.client else ""
     return _is_loopback_or_rfc1918(peer)
 
@@ -225,11 +223,20 @@ router_promo = APIRouter()
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
+class MaxBodySizeMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > 50 * 1024 * 1024:
+            return JSONResponse(status_code=413, content={"detail": "Request body too large. Maximum size is 50MB."})
+        return await call_next(request)
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -285,6 +292,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         return response
 
 
+app.add_middleware(MaxBodySizeMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CSRFMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -475,7 +483,13 @@ async def lifespan(app):
     await seed_site_config()
     await ensure_admin_user()
     _init_sentry()
+    cleanup_task = asyncio.create_task(_periodic_cleanup())
     yield
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
     _shutdown_sentry()
     await engine.dispose()
 
@@ -1974,9 +1988,9 @@ def _sanitize_customer_input(value: str, max_length: int = 200) -> str:
     if not value:
         return ""
     value = value.strip()[:max_length]
+    value = value.replace("&", "&amp;")
     value = value.replace("<", "&lt;").replace(">", "&gt;")
     value = value.replace('"', "&quot;").replace("'", "&#x27;")
-    value = value.replace("&", "&amp;")
     return value
 
 
@@ -2935,7 +2949,7 @@ async def public_create_estimate(
     clarification_answers_json: str = Form(default=""),
 ):
     """Public estimate endpoint — customer submits photos, charges against company's estimate count."""
-    cleanup_expired_jobs()
+    await cleanup_expired_jobs()
     check_concurrent_limit()
 
     async with AsyncSessionLocal() as db:
@@ -2998,6 +3012,8 @@ async def public_create_estimate(
                 description=f"Free Trial Widget Estimate #{new_trial_count + 1}",
             )
         else:
+            if (row["credit_balance"] or 0) <= 0:
+                raise HTTPException(status_code=403, detail="This estimator is temporarily unavailable. Please contact the company directly.")
             await db.execute(
                 text("UPDATE users SET credit_balance = credit_balance - 1, credits_used_total = COALESCE(credits_used_total, 0) + 1, estimates_used = COALESCE(estimates_used, 0) + 1 WHERE id = :uid"),
                 {"uid": company_user.id}
@@ -3013,7 +3029,7 @@ async def public_create_estimate(
         db.add(txn)
         await db.commit()
 
-    _check_user_rate_limit(company_user.id)
+    await _check_user_rate_limit(company_user.id)
     job_id = secrets.token_hex(8)
     estimate_jobs[job_id] = {
         "status": "analyzing",
@@ -3039,7 +3055,7 @@ async def public_create_estimate(
         "used_free_trial": free_remaining > 0 and (row["credit_balance"] or 0) <= 0,
     }
     await _upsert_job_to_db(job_id, company_user.id, 0, "analyzing")
-    _record_user_estimate(company_user.id)
+    await _record_user_estimate(company_user.id)
 
     asyncio.create_task(run_estimate(
         job_id=job_id,
@@ -3163,9 +3179,9 @@ async def public_appointment_request(request: Request):
         # Send comprehensive appointment notification email to operator
         # This includes full estimate details (items, photos) + scheduling info
         if user and user.email:
-            cust_name = est.customer_name or "Customer"
-            cust_email = est.customer_email or "N/A"
-            cust_phone = est.customer_phone or "N/A"
+            cust_name = decrypt_pii(est.customer_name or "") or "Customer"
+            cust_email = decrypt_pii(est.customer_email or "") or "N/A"
+            cust_phone = decrypt_pii(est.customer_phone or "") or "N/A"
             price_low = est.price_low or 0
             price_high = est.price_high or 0
             cy_mid = est.cy_estimate or 0
@@ -3263,7 +3279,7 @@ async def public_appointment_request(request: Request):
 
             try:
                 send_email(
-                    user.email,
+                    "kevin@cleartheclutter.net",
                     f"\U0001f514 SCHEDULE REQUEST: {cust_name} \u2014 {preferred_day} {time_label}",
                     appt_html,
                 )
@@ -3425,7 +3441,7 @@ async def auth_forgot_password(request: Request):
         await db.commit()
 
         app_url = os.environ.get("APP_URL", "https://whatshouldicharge.app")
-        reset_link = f"{app_url}/reset-password?token={reset_token}&email={email}"
+        reset_link = f"{app_url}/reset-password?token={reset_token}"
 
         send_email(
             email,
@@ -3464,35 +3480,36 @@ async def auth_logout(request: Request):
 async def auth_reset_password(request: Request):
     body = await request.json()
     token = body.get("token", "").strip()
-    email = body.get("email", "").strip().lower()
     new_password = body.get("new_password", "").strip()
 
-    if not token or not email or not new_password:
-        raise HTTPException(status_code=400, detail="Token, email, and new password are required.")
+    if not token or not new_password:
+        raise HTTPException(status_code=400, detail="Token and new password are required.")
     if len(new_password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
 
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.email == email))
-        user = result.scalar_one_or_none()
-        if not user:
-            raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
-
+        # Look up the most recent unused reset entry across all users by token hash
         reset_result = await db.execute(
             select(PasswordReset)
-            .where(PasswordReset.user_id == user.id)
             .where(PasswordReset.used_at == None)
             .where(PasswordReset.expires_at > datetime.now(timezone.utc).replace(tzinfo=None))
             .order_by(PasswordReset.created_at.desc())
         )
-        reset_entry = reset_result.scalars().first()
-        if not reset_entry:
-            raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
+        reset_entries = reset_result.scalars().all()
 
-        token_valid = await asyncio.to_thread(
-            lambda: bcrypt.checkpw(token.encode("utf-8"), reset_entry.token_hash.encode("utf-8"))
-        )
-        if not token_valid:
+        reset_entry = None
+        user = None
+        for entry in reset_entries:
+            token_valid = await asyncio.to_thread(
+                lambda: bcrypt.checkpw(token.encode("utf-8"), entry.token_hash.encode("utf-8"))
+            )
+            if token_valid:
+                reset_entry = entry
+                user_result = await db.execute(select(User).where(User.id == entry.user_id))
+                user = user_result.scalar_one_or_none()
+                break
+
+        if not reset_entry or not user:
             raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
 
         new_hash = await asyncio.to_thread(
@@ -4316,6 +4333,40 @@ async def run_claude_model_eval(image_b64: str, media_type: str, system_prompt: 
     return parsed, meta
 
 
+async def _post_openrouter_with_retry(client: httpx.AsyncClient, payload: dict, headers: dict, max_retries: int = 3) -> dict:
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            response = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
+            if response.status_code >= 500:
+                raw_text = (response.text or "").strip()
+                raise RuntimeError(f"OpenRouter {response.status_code}: {raw_text[:300] or response.reason_phrase}")
+            if response.status_code >= 400:
+                raw_text = (response.text or "").strip()
+                detail = ""
+                try:
+                    err_json = response.json()
+                    err_obj = err_json.get("error") if isinstance(err_json, dict) else None
+                    if isinstance(err_obj, dict):
+                        detail = str(err_obj.get("message") or "").strip()
+                    if not detail and isinstance(err_json, dict):
+                        detail = str(err_json.get("message") or "").strip()
+                except Exception:
+                    pass
+                snippet = detail or raw_text[:300] or response.reason_phrase
+                raise RuntimeError(f"OpenRouter {response.status_code}: {snippet}")
+            return response.json()
+        except (RuntimeError, httpx.TimeoutException, httpx.ConnectError) as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                wait = 2 ** attempt
+                logger.warning(f"[openrouter] Retry {attempt + 1}/{max_retries} after {wait}s: {e}")
+                await asyncio.sleep(wait)
+            else:
+                break
+    raise last_error or RuntimeError("OpenRouter request failed after retries")
+
+
 async def run_openrouter_model_eval(image_b64: str, media_type: str, system_prompt: str, api_key: str, model_name: str) -> tuple[dict, dict]:
     payload = {
         "model": model_name,
@@ -4340,22 +4391,7 @@ async def run_openrouter_model_eval(image_b64: str, media_type: str, system_prom
         "X-Title": "WhatShouldICharge Admin Eval",
     }
     async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
-        if response.status_code >= 400:
-            raw_text = (response.text or "").strip()
-            detail = ""
-            try:
-                err_json = response.json()
-                err_obj = err_json.get("error") if isinstance(err_json, dict) else None
-                if isinstance(err_obj, dict):
-                    detail = str(err_obj.get("message") or "").strip()
-                if not detail and isinstance(err_json, dict):
-                    detail = str(err_json.get("message") or "").strip()
-            except Exception as e:
-                logger.debug("Fallback handled: %s", e)
-            snippet = detail or raw_text[:300] or response.reason_phrase
-            raise RuntimeError(f"OpenRouter {response.status_code}: {snippet}")
-        data = response.json()
+        data = await _post_openrouter_with_retry(client, payload, headers)
     choice = (((data.get("choices") or [{}])[0]).get("message") or {})
     raw_text = choice.get("content") or ""
     parsed = parse_ai_json(raw_text)
@@ -4422,22 +4458,7 @@ async def run_openrouter_estimate(
         "X-Title": title,
     }
     async with httpx.AsyncClient(timeout=180.0) as client:
-        response = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
-        if response.status_code >= 400:
-            raw_text = (response.text or "").strip()
-            detail = ""
-            try:
-                err_json = response.json()
-                err_obj = err_json.get("error") if isinstance(err_json, dict) else None
-                if isinstance(err_obj, dict):
-                    detail = str(err_obj.get("message") or "").strip()
-                if not detail and isinstance(err_json, dict):
-                    detail = str(err_json.get("message") or "").strip()
-            except Exception as e:
-                logger.debug("Fallback handled: %s", e)
-            snippet = detail or raw_text[:300] or response.reason_phrase
-            raise RuntimeError(f"OpenRouter {response.status_code}: {snippet}")
-        data = response.json()
+        data = await _post_openrouter_with_retry(client, payload, headers)
     choice = (((data.get("choices") or [{}])[0]).get("message") or {})
     raw_text = choice.get("content") or ""
     parsed = parse_ai_json(raw_text)
@@ -4711,10 +4732,14 @@ async def update_library_from_estimate(items: list):
 
 
 estimate_jobs = {}
-JOB_TTL_SECONDS = 600
+JOB_TTL_SECONDS = 300
 MAX_CONCURRENT_JOBS = 10
 
 _processed_webhook_events: set[str] = set()
+
+_TEAM_AUTH_MAX_FAILURES = 5
+_TEAM_AUTH_LOCKOUT_SECONDS = 900
+_team_auth_failures: dict[tuple[int, int], list[datetime]] = {}
 
 model_eval_jobs = {}
 MODEL_EVAL_TTL_SECONDS = 6 * 60 * 60
@@ -4743,33 +4768,55 @@ def check_concurrent_limit():
         raise HTTPException(status_code=503, detail="Server is busy processing other estimates. Please try again in a minute.")
 
 
-_user_estimate_timestamps: dict[int, list[datetime]] = {}
 _ESTIMATES_PER_USER_WINDOW = 10
 _ESTIMATES_USER_WINDOW_SECONDS = 60
 
 
-def _check_user_rate_limit(user_id: int):
+async def _check_user_rate_limit(user_id: int):
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    if user_id not in _user_estimate_timestamps:
-        _user_estimate_timestamps[user_id] = []
-    times = _user_estimate_timestamps[user_id]
-    cutoff = datetime.fromtimestamp(now.timestamp() - _ESTIMATES_USER_WINDOW_SECONDS, tz=timezone.utc).replace(tzinfo=None)
-    times[:] = [t for t in times if t > cutoff]
-    if len(times) >= _ESTIMATES_PER_USER_WINDOW:
-        raise HTTPException(
-            status_code=429,
-            detail="Too many estimate requests. Please wait before creating another estimate.",
+    cutoff = now - timedelta(seconds=_ESTIMATES_USER_WINDOW_SECONDS)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            text("SELECT COUNT(*) FROM rate_limit_events WHERE user_id = :uid AND event_type = 'estimate' AND created_at > :cutoff"),
+            {"uid": user_id, "cutoff": cutoff}
         )
-    times.append(now)
+        count = result.scalar() or 0
+        if count >= _ESTIMATES_PER_USER_WINDOW:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many estimate requests. Please wait before creating another estimate.",
+            )
 
 
-def _record_user_estimate(user_id: int):
-    if user_id not in _user_estimate_timestamps:
-        _user_estimate_timestamps[user_id] = []
-    _user_estimate_timestamps[user_id].append(datetime.now(timezone.utc).replace(tzinfo=None))
+async def _record_user_estimate(user_id: int):
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            text("INSERT INTO rate_limit_events (user_id, event_type) VALUES (:uid, 'estimate')"),
+            {"uid": user_id}
+        )
+        await db.commit()
 
 
-def cleanup_expired_jobs():
+async def _cleanup_old_rate_limit_events():
+    try:
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=_ESTIMATES_USER_WINDOW_SECONDS * 2)
+        async with AsyncSessionLocal() as db:
+            await db.execute(text("DELETE FROM rate_limit_events WHERE created_at < :cutoff"), {"cutoff": cutoff})
+            await db.commit()
+    except Exception:
+        pass
+
+
+async def _periodic_cleanup():
+    while True:
+        try:
+            await asyncio.sleep(60)
+            await cleanup_expired_jobs()
+        except Exception as e:
+            logger.error(f"[_periodic_cleanup] Error: {type(e).__name__}: {e}")
+
+
+async def cleanup_expired_jobs():
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     expired = [k for k, v in estimate_jobs.items()
                if v.get("status") in ("error", "retry_needed")
@@ -4778,6 +4825,7 @@ def cleanup_expired_jobs():
     for k in expired:
         del estimate_jobs[k]
         asyncio.create_task(_delete_job_from_db(k))
+    asyncio.create_task(_cleanup_old_rate_limit_events())
 
 
 async def _upsert_job_to_db(job_id: str, user_id: int, team_member_id: int, status: str, result_json: str = "", error_message: str = "", completed_at=None):
@@ -4807,8 +4855,8 @@ async def _upsert_job_to_db(job_id: str, user_id: int, team_member_id: int, stat
                     completed_at=completed_at,
                 ))
             await db.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"[_upsert_job_to_db] Failed for job {job_id}: {type(e).__name__}: {e}")
 
 
 async def _delete_job_from_db(job_id: str):
@@ -4820,8 +4868,8 @@ async def _delete_job_from_db(job_id: str):
             if job:
                 await db.delete(job)
                 await db.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"[_delete_job_from_db] Failed to delete job {job_id}: {type(e).__name__}: {e}")
 
 
 def _build_model_eval_comparisons(job: dict) -> dict:
@@ -5168,6 +5216,7 @@ async def admin_delete_model_eval(request: Request, job_id: str):
 
 
 @router_estimates.post("/api/estimate")
+@limiter.limit("30/minute")
 async def create_estimate(
     request: Request,
     files: list[UploadFile] = File(...),
@@ -5178,7 +5227,7 @@ async def create_estimate(
     clarification_answers_json: str = Form(default=""),
 ):
     user = await require_user(request)
-    cleanup_expired_jobs()
+    await cleanup_expired_jobs()
     check_concurrent_limit()
 
     async with AsyncSessionLocal() as db:
@@ -5241,6 +5290,11 @@ async def create_estimate(
                 description=f"Free Trial Estimate #{fresh_user.free_trial_used}",
             )
         else:
+            if (fresh_user.credit_balance or 0) <= 0:
+                raise HTTPException(status_code=402, detail={
+                    "detail": "no_credits",
+                    "message": "No estimate credits remaining. Purchase a credit pack to continue."
+                })
             fresh_user.credit_balance = (fresh_user.credit_balance or 0) - 1
             fresh_user.credits_used_total = (fresh_user.credits_used_total or 0) + 1
             txn = CreditTransaction(
@@ -6204,9 +6258,17 @@ async def stripe_webhook(request: Request):
         customer_id = session.get("customer", "")
         pack_type = session.get("metadata", {}).get("pack_type")
         credits_to_add = int(session.get("metadata", {}).get("credits", 0))
+        stripe_session_id = session.get("id", "")
 
         if user_id and pack_type and credits_to_add > 0:
             async with AsyncSessionLocal() as db:
+                # Idempotency: prevent duplicate credit grants across workers
+                existing = await db.execute(
+                    select(CreditTransaction).where(CreditTransaction.stripe_session_id == stripe_session_id)
+                )
+                if existing.scalar_one_or_none():
+                    return {"received": True, "duplicate": True}
+
                 result = await db.execute(select(User).where(User.id == user_id))
                 user = result.scalar_one_or_none()
                 if user:
@@ -6228,21 +6290,24 @@ async def stripe_webhook(request: Request):
                         credits=credits_to_add,
                         balance_after=user.credit_balance,
                         description=f"{pack_name} Purchase",
-                        stripe_session_id=session.get("id", ""),
+                        stripe_session_id=stripe_session_id,
                         pack_type=pack_type,
                         amount_cents=amount_cents,
                     )
                     db.add(txn)
                     await db.commit()
 
-                    send_email(
-                        user.email,
-                        f"Your {credits_to_add} estimate credits are ready!",
-                        f"<h2>Credits added!</h2>"
-                        f"<p><strong>{credits_to_add} estimate credits</strong> have been added to your account.</p>"
-                        f"<p>Your new balance: <strong>{user.credit_balance} credits</strong></p>"
-                        f"<p>Start estimating at whatshouldicharge.app/estimate</p>"
-                    )
+                    try:
+                        send_email(
+                            user.email,
+                            f"Your {credits_to_add} estimate credits are ready!",
+                            f"<h2>Credits added!</h2>"
+                            f"<p><strong>{credits_to_add} estimate credits</strong> have been added to your account.</p>"
+                            f"<p>Your new balance: <strong>{user.credit_balance} credits</strong></p>"
+                            f"<p>Start estimating at whatshouldicharge.app/estimate</p>"
+                        )
+                    except Exception as e:
+                        logger.error(f"[stripe_webhook] Failed to send credit confirmation email: {e}")
 
     return {"received": True}
 
@@ -6948,6 +7013,9 @@ async def admin_estimate_detail(request: Request, estimate_id: int):
             "price_high": e.price_high,
             "cy_estimate": e.cy_estimate,
             "estimate_name": e.estimate_name or "",
+            "customer_name": decrypt_pii(e.customer_name or ""),
+            "customer_email": decrypt_pii(e.customer_email or ""),
+            "customer_phone": decrypt_pii(e.customer_phone or ""),
             "lookups": lookups,
             "actual_price": e.actual_price,
             "actual_cy": getattr(e, 'actual_cy', None),
@@ -7118,6 +7186,7 @@ async def admin_reset_password(request: Request, user_id: int):
         if not u:
             raise HTTPException(status_code=404, detail="User not found.")
         u.password_hash = hashed
+        await db.execute(text("DELETE FROM sessions WHERE user_id = :uid"), {"uid": u.id})
         await db.commit()
 
         send_email(
@@ -7957,8 +8026,8 @@ async def create_team_member(request: Request):
     body = await request.json()
     name = body.get("name", "").strip()
     pin = body.get("pin", "").strip()
-    if not name or not pin or len(pin) < 4:
-        raise HTTPException(status_code=400, detail="Name and PIN (min 4 digits) required.")
+    if not name or not pin or len(pin) < 6:
+        raise HTTPException(status_code=400, detail="Name and PIN (min 6 digits) required.")
 
     pin_hash = await asyncio.to_thread(
         lambda: bcrypt.hashpw(pin.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -8064,12 +8133,26 @@ async def team_auth(request: Request):
 
         matched_member = None
         for m in members:
+            # Check lockout before verifying PIN
+            fail_key = (owner.id, m.id)
+            fail_times = _team_auth_failures.get(fail_key, [])
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=_TEAM_AUTH_LOCKOUT_SECONDS)
+            fail_times = [t for t in fail_times if t > cutoff]
+            _team_auth_failures[fail_key] = fail_times
+            if len(fail_times) >= _TEAM_AUTH_MAX_FAILURES:
+                raise HTTPException(status_code=403, detail="Account temporarily locked due to too many failed login attempts. Try again in 15 minutes.")
+
             valid = await asyncio.to_thread(
                 lambda mem=m: bcrypt.checkpw(pin.encode("utf-8"), mem.pin_hash.encode("utf-8"))
             )
             if valid:
                 matched_member = m
+                # Clear failures on success
+                _team_auth_failures.pop(fail_key, None)
                 break
+            else:
+                # Record failure
+                _team_auth_failures.setdefault(fail_key, []).append(datetime.now(timezone.utc).replace(tzinfo=None))
 
         if not matched_member:
             raise HTTPException(status_code=401, detail="Invalid PIN.")
@@ -8115,6 +8198,7 @@ async def team_me(request: Request):
 
 
 @router_team.post("/api/team/estimate")
+@limiter.limit("30/minute")
 async def team_create_estimate(
     request: Request,
     files: list[UploadFile] = File(...),
@@ -8128,7 +8212,7 @@ async def team_create_estimate(
     clarification_answers_json: str = Form(default=""),
 ):
     member, owner = await require_team_member(request)
-    cleanup_expired_jobs()
+    await cleanup_expired_jobs()
     check_concurrent_limit()
 
     async with AsyncSessionLocal() as db:
@@ -8189,7 +8273,7 @@ async def team_create_estimate(
                 "left angle, and right angle. Prefer visible floor edges and avoid duplicate angles."
             )
         })
-    _check_user_rate_limit(owner.id)
+    await _check_user_rate_limit(owner.id)
     job_id = f"team-{member.id}-{secrets.token_hex(8)}"
     estimate_jobs[job_id] = {
         "status": "analyzing",
@@ -8212,7 +8296,7 @@ async def team_create_estimate(
         "used_free_trial": False,
     }
     await _upsert_job_to_db(job_id, owner.id, member.id, "analyzing")
-    _record_user_estimate(owner.id)
+    await _record_user_estimate(owner.id)
 
     asyncio.create_task(run_estimate(
         job_id=job_id,

@@ -352,6 +352,7 @@ async def init_db():
                 """))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_id ON credit_transactions(user_id)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_credit_transactions_created_at ON credit_transactions(created_at)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_credit_transactions_stripe_session_id ON credit_transactions(stripe_session_id)"))
             else:
                 await conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS credit_transactions (
@@ -398,6 +399,39 @@ async def init_db():
                 """))
         except Exception as e:
             logger.debug("password_resets table creation skip: %s", e)
+
+    async with engine.begin() as conn:
+        try:
+            if _is_postgres:
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS rate_limit_events (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL,
+                        event_type VARCHAR(30) DEFAULT 'estimate',
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rate_limit_events_lookup ON rate_limit_events(user_id, event_type, created_at)"))
+            else:
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS rate_limit_events (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        event_type TEXT DEFAULT 'estimate',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+        except Exception as e:
+            logger.debug("rate_limit_events table creation skip: %s", e)
+
+    async with engine.begin() as conn:
+        try:
+            if _is_postgres:
+                await conn.execute(text("ALTER TABLE users ADD CONSTRAINT IF NOT EXISTS chk_credit_balance_non_negative CHECK (credit_balance >= 0)"))
+            else:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS credit_balance INTEGER DEFAULT 0 CHECK (credit_balance >= 0)"))
+        except Exception as e:
+            logger.debug("Credit balance constraint skip: %s", e)
 
     backfill_statements = [
         "UPDATE users SET price_per_cy_low = 35.0 WHERE price_per_cy_low IS NULL",

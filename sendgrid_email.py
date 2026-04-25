@@ -1,7 +1,10 @@
 import os
+import re
 import logging
 
 logger = logging.getLogger("wsic.email")
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def send_email(to_email: str, subject: str, html_content: str):
@@ -9,6 +12,9 @@ def send_email(to_email: str, subject: str, html_content: str):
     from_email = os.environ.get("SENDGRID_FROM_EMAIL", "noreply@whatshouldicharge.app")
     if not api_key:
         logger.error("[send_email] SENDGRID_API_KEY not set — email not sent")
+        return False
+    if not to_email or not _EMAIL_RE.match(to_email):
+        logger.error(f"[send_email] Invalid recipient email: {to_email}")
         return False
     try:
         from sendgrid import SendGridAPIClient

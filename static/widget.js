@@ -21,6 +21,7 @@
 
   // Auto-resize iframe based on content height
   window.addEventListener('message', function(e) {
+    if (e.origin !== host) return;
     if (e.data && e.data.type === 'wsic-resize' && e.data.height) {
       iframe.style.height = e.data.height + 'px';
     }

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Team Estimator — WhatShouldICharge</title>
 <style>
   :root {
@@ -891,7 +891,10 @@ async function downloadPDF() {
   }
 }
 
+var _sendModalLastFocus = null;
+
 function openSendModal() {
+  _sendModalLastFocus = document.activeElement;
   document.getElementById('send-modal').classList.add('visible');
   document.getElementById('send-email').focus();
   document.addEventListener('keydown', sendModalKeyHandler);
@@ -899,9 +902,24 @@ function openSendModal() {
 function closeSendModal() {
   document.getElementById('send-modal').classList.remove('visible');
   document.removeEventListener('keydown', sendModalKeyHandler);
+  if (_sendModalLastFocus) _sendModalLastFocus.focus();
 }
 function sendModalKeyHandler(e) {
-  if (e.key === 'Escape') closeSendModal();
+  if (e.key === 'Escape') { closeSendModal(); return; }
+  if (e.key !== 'Tab') return;
+  var modal = document.getElementById('send-modal');
+  if (!modal.classList.contains('visible')) return;
+  var focusable = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  if (focusable.length === 0) return;
+  var first = focusable[0];
+  var last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
 }
 
 async function sendEstimate() {

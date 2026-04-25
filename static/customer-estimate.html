@@ -239,7 +239,12 @@ async function verifyAndContinue() {
       document.getElementById('cta-card').style.display = 'none';
     }
     if (companyData.company_logo_url) {
-      document.getElementById('company-logo').innerHTML = '<img src="' + esc(companyData.company_logo_url) + '" alt="' + esc(companyData.company_name) + '">';
+      var logoImg = document.createElement('img');
+      logoImg.src = companyData.company_logo_url;
+      logoImg.alt = companyData.company_name || '';
+      logoImg.style.maxHeight = '60px';
+      logoImg.style.marginBottom = '12px';
+      document.getElementById('company-logo').appendChild(logoImg);
     }
     document.title = (companyData.company_name || 'Junk Removal') + ' - Free Estimate';
   } catch(e) {}
@@ -380,8 +385,20 @@ function showResults(r) {
 
 // Notify parent iframe of height changes for widget auto-resize
 if (window.parent !== window) {
+  function getParentOrigin() {
+    try {
+      var ref = document.referrer;
+      if (ref) {
+        var a = document.createElement('a');
+        a.href = ref;
+        return a.protocol + '//' + a.host;
+      }
+    } catch (e) {}
+    return '*';
+  }
+  var parentOrigin = getParentOrigin();
   function postHeight() {
-    window.parent.postMessage({ type: 'wsic-resize', height: document.body.scrollHeight + 40 }, '*');
+    window.parent.postMessage({ type: 'wsic-resize', height: document.body.scrollHeight + 40 }, parentOrigin);
   }
   new MutationObserver(postHeight).observe(document.body, { childList: true, subtree: true, attributes: true });
   setInterval(postHeight, 1000);

@@ -84,6 +84,11 @@ var forgotBtn = document.getElementById('forgot-btn');
 var authTitle = document.querySelector('.auth-title');
 var authSub = document.querySelector('.auth-sub');
 
+function getCsrfToken() {
+  var match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
 document.getElementById('forgot-link').addEventListener('click', function() {
   loginForm.classList.add('hidden');
   forgotForm.classList.add('visible');
@@ -111,7 +116,7 @@ loginForm.addEventListener('submit', async function(e) {
   try {
     var resp = await fetch('/api/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
       body: JSON.stringify({
         email: document.getElementById('email').value,
         password: document.getElementById('password').value,
@@ -138,7 +143,7 @@ forgotForm.addEventListener('submit', async function(e) {
   try {
     var resp = await fetch('/api/auth/forgot-password', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
       body: JSON.stringify({ email: document.getElementById('forgot-email').value }),
     });
     var data = await resp.json();

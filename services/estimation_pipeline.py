@@ -510,6 +510,34 @@ def _compute_item_cy_from_dimensions(items: list) -> int:
     return replaced
 
 
+async def run_verification_pass(images: list, verification_prompt: str) -> Optional[dict]:
+    """Run a focused spatial verification pass on the primary estimate's item list.
+
+    Uses a SINGLE provider (first available) to save cost.  The verifier receives
+    the item list from the primary pass and focuses exclusively on verifying/correcting
+    dimensions and totals.
+
+    Returns parsed result dict on success, None on failure.
+    """
+    providers = await _build_providers()
+    if not providers:
+        logger.warning("[verification] No providers available for verification pass")
+        return None
+
+    verifier = providers[0]
+    logger.info("[verification] Running verification pass with %s", verifier.name)
+    result = await _run_single(verifier, images, verification_prompt)
+    if result is None or not isinstance(result.data, dict):
+        logger.warning("[verification] Verification pass returned no usable data")
+        return None
+
+    items = result.data.get("items", [])
+    totals = result.data.get("totals", {})
+    mid = totals.get("cubic_yards_mid", 0) if isinstance(totals, dict) else 0
+    logger.info("[verification] Verifier found %d items, %.1f CY total", len(items), mid)
+    return result.data
+
+
 async def run_parallel_estimate(images: list, prompt: str) -> tuple[dict, dict]:
     providers = await _build_providers()
     if not providers:

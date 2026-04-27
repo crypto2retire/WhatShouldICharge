@@ -262,9 +262,11 @@ CRITICAL RULES:
 
 You will receive:
 - Photos of items to be removed
-- An item list from the spotting agent identifying each object
+- An item list from the primary estimator identifying each object (below)
 
-Your job is to estimate the ACTUAL LOADED VOLUME in cubic yards for each spotted item ONLY. Do NOT add items that were not in the spotted list. Do NOT re-identify objects from the photos — that was already done. Only estimate sizes for the items you are given.
+{{ITEM_LIST}}
+
+Your job is to verify and correct the cubic yard estimates for each listed item. Do NOT add items that were not in the list. Do NOT re-identify objects from the photos — that was already done. Only verify sizes for the items you are given.
 
 SIZING METHOD:
 1. USE REFERENCE OBJECTS FOR SCALE. Look for these common references:
@@ -473,14 +475,30 @@ def get_extraction_prompt(industry_id: str) -> str:
     )
 
 
-def get_verification_prompt(industry_id: str) -> str:
+def get_verification_prompt(industry_id: str, item_list: list[dict] | None = None) -> str:
     config = get_industry_config(industry_id)
-    return (
+    base = (
         config.get("sizing_prompt")
         or config.get("verification_prompt")
         or config.get("extraction_prompt")
         or config.get("system_prompt", "")
     )
+    if item_list:
+        lines = []
+        for it in item_list:
+            if not isinstance(it, dict):
+                continue
+            name = it.get("name", "?")
+            qty = it.get("quantity", 1)
+            cy = it.get("cubic_yards", 0)
+            h = it.get("height_in", 0)
+            w = it.get("width_in", 0)
+            d = it.get("depth_in", 0)
+            dims = f" {int(h)}x{int(w)}x{int(d)} in" if (h and w and d) else ""
+            lines.append(f"  - {name} (qty: {qty}, estimated {cy:.2f} CY{dims})")
+        item_text = "\n".join(lines) if lines else "  (no items)"
+        base = base.replace("{{ITEM_LIST}}", item_text)
+    return base
 
 def get_calibration_items(industry_id: str) -> dict:
     """Get calibration items (known volumes) for an industry."""

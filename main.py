@@ -5423,7 +5423,7 @@ async def run_estimate(
         model_name = "parallel_pipeline"
 
         try:
-            from services.estimation_pipeline import run_parallel_estimate, VARIANCE_FLAG_THRESHOLD
+            from services.estimation_pipeline import run_parallel_estimate, run_verification_pass, VARIANCE_FLAG_THRESHOLD
             job["message"] = "Identifying items and estimating sizes..."
             result_data, pipeline_meta = await run_parallel_estimate(image_content, extraction_prompt)
 
@@ -5458,8 +5458,7 @@ async def run_estimate(
 
         pass1_json_str = ""
         pass2_json_str = json.dumps(result_data)
-        verifier_result = None
-
+    
         job["message"] = "Calculating volume..."
 
         result_data, _guardrail_notes = apply_visual_estimate_guardrails(result_data, room_labels)
@@ -5760,6 +5759,23 @@ async def run_estimate(
         min_charge = user.min_charge or 75.0
         range_widened = False
 
+        primary_low = price_low
+        primary_high = price_high
+        primary_pct = _model_uncertainty_pct(confidence_bucket, scene_type, num_photos)
+
+        verifier_result = None
+        try:
+            items_for_verification = result_data.get("items", [])
+            if items_for_verification:
+                v_prompt = get_verification_prompt(industry_id, item_list=items_for_verification)
+                if library_context:
+                    v_prompt += "\n" + library_context
+                if scene_prompt_hint:
+                    v_prompt += "\n\n" + scene_prompt_hint
+                verifier_result = await run_verification_pass(image_content, v_prompt)
+        except Exception as e:
+            logger.warning(f"[run_estimate] Verification pass failed: {e}", exc_info=True)
+
         if verifier_result:
             verifier_data = validate_estimate(verifier_result)
             verifier_data, _verifier_pile_notes = apply_pile_adjustment(verifier_data)
@@ -5817,7 +5833,7 @@ async def run_estimate(
             if has_overlap:
                 price_low, price_high = overlap_low, overlap_high
                 confidence_reasons.append(
-                    f"Range calibrated by Qwen+Pixtral overlap (primary ±{int(primary_pct * 100)}%, verifier ±{int(verifier_pct * 100)}%)."
+                    f"Range calibrated by two-model overlap (primary ±{int(primary_pct * 100)}%, verifier ±{int(verifier_pct * 100)}%)."
                 )
             else:
                 review_reason_flags.append("model_disagreement_no_overlap")

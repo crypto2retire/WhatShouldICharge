@@ -401,6 +401,32 @@ def validate_estimate(result_data: dict) -> dict:
         return result_data
 
     out = copy.deepcopy(result_data)
+
+    # ── Spatial-first branch: use area_measurements directly ──
+    areas = out.get("area_measurements")
+    if isinstance(areas, list) and areas:
+        total_cy = 0.0
+        for area in areas:
+            if isinstance(area, dict):
+                total_cy += float(area.get("estimated_cy", 0) or 0)
+        if total_cy > 0:
+            _sync_totals_from_target(out, round(total_cy, 2))
+            # Still clean up phantom misc items for tag cleanliness
+            items = out.get("items", [])
+            if isinstance(items, list):
+                non_misc = [it for it in items if isinstance(it, dict)
+                            and "misc" not in _norm(str(it.get("name", "")))]
+                misc = [it for it in items if isinstance(it, dict)
+                        and "misc" in _norm(str(it.get("name", "")))]
+                # In spatial mode items have no cubic_yards, so phantom check
+                # uses count instead of volume
+                if len(misc) > len(non_misc) and len(non_misc) > 0:
+                    for mi in misc:
+                        if mi in items:
+                            items.remove(mi)
+            return out
+
+    # ── Legacy branch: item-sum driven (backward compatibility) ──
     items = out.get("items")
     if not isinstance(items, list) or not items:
         return out
@@ -626,6 +652,63 @@ def apply_pile_adjustment(result_data: dict) -> tuple[dict, list[str]]:
         "[apply_pile_adjustment] pile=%.2f CY, items=%.2f CY, ratio=%.2f, "
         "blended=%.2f CY, conf_penalty=%d",
         pile_cy, item_sum, ratio, blended, penalty,
+    )
+
+    return result_data, notes
+
+
+# ---------------------------------------------------------------------------
+# Spatial-first estimation (new primary method)
+# ---------------------------------------------------------------------------
+
+def apply_spatial_estimate(result_data: dict) -> tuple[dict, list[str]]:
+    """Compute total CY from area_measurements (spatial-first approach).
+
+    Each area has width_in, depth_in, height_in, packing_factor, estimated_cy.
+    The total is the sum of all area estimated_cy values.
+
+    If area_measurements is absent or empty, falls back to item-sum behavior
+    by returning the result unchanged.
+
+    Returns (updated_result_data, notes_list).
+    """
+    areas = result_data.get("area_measurements")
+    if not isinstance(areas, list) or not areas:
+        return result_data, []
+
+    total_cy = 0.0
+    notes: list[str] = []
+    area_details: list[str] = []
+
+    for area in areas:
+        if not isinstance(area, dict):
+            continue
+        cy = float(area.get("estimated_cy", 0) or 0)
+        if cy <= 0:
+            continue
+        total_cy += cy
+        name = area.get("area_name", "unknown area")
+        w = area.get("width_in", 0)
+        d = area.get("depth_in", 0)
+        h = area.get("height_in", 0)
+        pf = float(area.get("packing_factor", 0.65) or 0.65)
+        area_details.append(
+            f"{name}: {int(w)}x{int(d)}x{int(h)} in @ {int(pf*100)}% = {cy:.2f} CY"
+        )
+
+    if total_cy <= 0:
+        return result_data, []
+
+    _sync_totals_from_target(result_data, round(total_cy, 2))
+
+    notes.append(
+        f"Spatial estimate from {len(area_details)} area(s): {total_cy:.2f} CY total."
+    )
+    notes.extend(area_details)
+
+    logger.info(
+        "[apply_spatial_estimate] %d areas, %.2f CY total",
+        len(area_details), total_cy
     )
 
     return result_data, notes

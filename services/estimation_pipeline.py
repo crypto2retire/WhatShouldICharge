@@ -356,6 +356,99 @@ def merge_results(results: list[VisionResult]) -> dict:
 
     primary = valid[0].data
     secondary = valid[1].data
+
+    # ── Spatial-first branch: area_measurements drive the total ──
+    primary_areas = primary.get("area_measurements", [])
+    secondary_areas = secondary.get("area_measurements", [])
+    if isinstance(primary_areas, list) and primary_areas:
+        return _merge_spatial_results(primary, secondary, valid)
+
+    # ── Legacy branch: item-sum driven ──
+    return _merge_legacy_results(primary, secondary, valid)
+
+
+def _merge_spatial_results(primary: dict, secondary: dict, valid: list) -> dict:
+    """Merge two spatial-first results (area_measurements drive total)."""
+    primary_areas = {a.get("area_name", ""): a for a in primary.get("area_measurements", []) if isinstance(a, dict)}
+    secondary_areas = {a.get("area_name", ""): a for a in secondary.get("area_measurements", []) if isinstance(a, dict)}
+    all_area_names = list(dict.fromkeys(list(primary_areas.keys()) + list(secondary_areas.keys())))
+
+    merged_areas = []
+    area_variance_flags = []
+    for name in all_area_names:
+        if not name:
+            continue
+        p_area = primary_areas.get(name)
+        s_area = secondary_areas.get(name)
+        if p_area and s_area:
+            p_cy = float(p_area.get("estimated_cy", 0) or 0)
+            s_cy = float(s_area.get("estimated_cy", 0) or 0)
+            merged_cy = max(p_cy, s_cy)
+            if p_cy > 0 and s_cy > 0:
+                variance = abs(p_cy - s_cy) / max(p_cy, s_cy)
+                if variance > VARIANCE_FLAG_THRESHOLD:
+                    area_variance_flags.append({
+                        "area": name, "primary_cy": round(p_cy, 2),
+                        "secondary_cy": round(s_cy, 2), "variance": round(variance, 2),
+                    })
+            merged = dict(p_area)
+            merged["estimated_cy"] = round(merged_cy, 2)
+            merged_areas.append(merged)
+        elif p_area:
+            merged_areas.append(dict(p_area))
+        elif s_area:
+            merged_areas.append(dict(s_area))
+
+    # Merge items (for tagging/special disposal only — no CY contribution)
+    primary_items = {item_key(it): it for it in primary.get("items", []) if item_key(it)}
+    secondary_items = {item_key(it): it for it in secondary.get("items", []) if item_key(it)}
+    all_item_keys = list(dict.fromkeys(list(primary_items.keys()) + list(secondary_items.keys())))
+
+    merged_items = []
+    for key in all_item_keys:
+        p_item = primary_items.get(key)
+        s_item = secondary_items.get(key)
+        if p_item and s_item:
+            merged = dict(p_item)
+            if s_item.get("is_special") or p_item.get("is_special"):
+                merged["is_special"] = True
+            merged_items.append(merged)
+        elif p_item:
+            merged_items.append(dict(p_item))
+        elif s_item:
+            merged_items.append(dict(s_item))
+
+    result = dict(primary)
+    result["area_measurements"] = merged_areas
+    result["items"] = merged_items
+
+    # Total from area measurements
+    total_cy = sum(a.get("estimated_cy", 0) for a in merged_areas)
+    totals = result.get("totals", {})
+    totals["cubic_yards_mid"] = round(total_cy, 1)
+    totals["cubic_yards_low"] = round(total_cy * 0.85, 1)
+    totals["cubic_yards_high"] = round(total_cy * 1.15, 1)
+    result["totals"] = totals
+    result["total_cubic_yards"] = round(total_cy, 1)
+
+    p_conf = int(primary.get("confidence", 75) or 75)
+    s_conf = int(secondary.get("confidence", 75) or 75)
+    result["confidence"] = min(p_conf, s_conf)
+
+    result["_meta"] = {
+        "providers_used": [r.provider_name for r in valid],
+        "provider_models": [r.model_used for r in valid],
+        "single_provider": False,
+        "variance_flagged": len(area_variance_flags) > 0,
+        "variance_details": area_variance_flags,
+        "spatial_mode": True,
+    }
+
+    return _finalize_merged(result, valid)
+
+
+def _merge_legacy_results(primary: dict, secondary: dict, valid: list) -> dict:
+    """Merge two legacy item-sum results."""
     primary_items = {item_key(it): it for it in primary.get("items", []) if item_key(it)}
     secondary_items = {item_key(it): it for it in secondary.get("items", []) if item_key(it)}
     all_keys = list(dict.fromkeys(list(primary_items.keys()) + list(secondary_items.keys())))

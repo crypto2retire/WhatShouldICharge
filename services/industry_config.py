@@ -13,266 +13,101 @@ INDUSTRIES = {
         "unit_abbrev": "CY",
         "description": "AI-powered junk removal volume estimation from photos",
 
-        "combined_prompt": """You are an expert junk removal estimator. Analyze the photos to identify every item staged for removal AND estimate its loaded volume in cubic yards. Return ONLY valid JSON — no markdown, no explanation, no code blocks.
+        "combined_prompt": """You are an expert junk removal estimator. Analyze the photos to estimate total volume by measuring the space occupied by ALL staged items, NOT by individually sizing every object. Return ONLY valid JSON — no markdown, no explanation, no code blocks.
 
-1 CUBIC YARD = 3ft x 3ft x 3ft = 27 cubic feet. A standard washing machine is ~1 CY. A pickup truck bed is ~2 CY.
+1 CUBIC YARD = 3ft x 3ft x 3ft = 27 cubic feet. A standard washing machine is ~1 CY. A pickup truck bed is ~2 CY. A standard junk truck holds 12-16 CY.
 
-IDENTIFICATION RULES:
-1. List every distinct item or group of same-type items you can see.
-2. Count quantities carefully — if you see 4 trash bags, list quantity: 4, not 1.
-3. Flag special disposal items (is_special: true): TVs, monitors, mattresses, box springs, tires, propane tanks, refrigerators/freezers, AC units, paint cans, chemicals, e-waste, batteries, fluorescent bulbs.
-4. Check for duplicates across multiple photos — same item from different angles should be counted once.
-5. Do NOT count installed or background fixtures (wall shelving, garage shelving, mounted items) unless clearly staged for removal.
-6. If you see a doorframe, window, or other FIXED background feature, note it as a reference_point for scale. Do NOT put staged/removable items (appliances, furniture, etc.) in reference_points — those go in the items list.
+YOUR PRIMARY TASK: SPATIAL MEASUREMENT
+For EACH distinct area or room shown in the photos (garage, living room, driveway, etc.), estimate the overall dimensions of ALL staged items in that area combined.
 
-VOLUME REFERENCE TABLE — USE THESE VALUES. DO NOT EXCEED THESE FOR SIMILAR ITEMS:
+STEP 1 — FIND SCALE REFERENCES
+Look for 2-3 objects with known real-world dimensions to establish scale:
+- Standard interior door frame: 80inH x 36inW
+- Standard kitchen counter: 36inH
+- Standard washing machine: ~27inW x 27inD x 39inH
+- Standard refrigerator: ~36inW x 30inD x 70inH
+- Standard 5-gallon bucket: 14.5inH x 12in diameter
+- Adult human: ~66inH
+- Wooden pallet: 48in x 40in x 6in
+- Cinder block: 16x8x8 in
+- Chain-link fence: 48in (4ft) or 72in (6ft) tall
 
-BAGS & SOFT GOODS:
-- Kitchen/trash bag (13 gal): 0.1 CY
-- Large trash bag (30-40 gal, yard/leaf bag): 0.2-0.33 CY
-- Contractor bag (full, heavy): 0.3-0.4 CY
-- Duffel bag / gym bag: 0.2 CY
-- Suitcase (carry-on): 0.15 CY
-- Suitcase (large/checked): 0.3 CY
-- Pillow: 0.1 CY
-- Sleeping bag: 0.15 CY
+Use these to determine pixels-to-inches conversion. A staged appliance or piece of furniture CAN be used as a scale reference AND tagged as an item.
 
-BOXES & CONTAINERS:
-- Small box (book box, ~1.5 cu ft): 0.06 CY
-- Medium box (~3 cu ft): 0.11 CY
-- Large box (~4.5 cu ft): 0.17 CY
-- Wardrobe box: 0.5 CY
-- Plastic storage tote (small): 0.1 CY
-- Plastic storage tote (large): 0.2 CY
-- Cardboard box (small): 0.05-0.08 CY
-- Cardboard box (medium): 0.1-0.15 CY
-- Cardboard box (large): 0.15-0.2 CY
+STEP 2 — MEASURE EACH AREA
+For each area/room, estimate the overall bounding box of ALL staged items:
+- width_in:  left-to-right span of all items
+- depth_in:  front-to-back depth (how far items extend from the wall/door)
+- height_in: tallest point of any item in the area
 
-FURNITURE — SEATING:
-- Office chair: 0.4 CY
-- Dining chair (wood): 0.15 CY
-- Folding chair: 0.1 CY
-- Armchair / recliner: 1.0-1.5 CY
-- Loveseat: 1.0-1.5 CY
-- Sofa / couch (3-seat): 1.5-2.0 CY
-- Sectional (per piece): 1.0 CY
-- Ottoman / footstool: 0.2-0.4 CY
+If items are spread across the floor in a single layer, depth might be 12-24in (just the item height). If items are stacked or piled, include the full stack height.
 
-FURNITURE — TABLES & SURFACES:
-- Side table / end table: 0.2-0.3 CY
-- Coffee table: 0.4-0.6 CY
-- Dining table: 1.0-1.5 CY
-- Desk (small): 0.6-0.8 CY
-- Desk (large / L-shaped): 1.0-1.5 CY
-- TV stand / media console: 0.5-0.8 CY
-- Dresser (small, 3-drawer): 0.6 CY
-- Dresser (large, 6-drawer): 1.0 CY
-- Nightstand: 0.2-0.3 CY
-- Bookshelf (small): 0.4-0.6 CY
-- Bookshelf (large): 0.8-1.0 CY
-- Filing cabinet (2-drawer): 0.4 CY
-- Filing cabinet (4-drawer): 0.6 CY
+STEP 3 — APPLY PACKING FACTOR
+Convert to cubic yards: (width_in × depth_in × height_in) / 46656
+Then multiply by packing factor:
+- 0.45: Very loose/soft (clothing, pillows, empty boxes — lots of air)
+- 0.55: Loose mixed (bags, soft goods, light cardboard)
+- 0.65: General mixed junk (furniture, boxes, some air gaps)
+- 0.75: Medium density (appliances, tools, moderate stacking)
+- 0.85: Dense/flat (shingles, plywood sheets, tightly packed boxes)
+- 0.90: Near-solid (dirt, gravel, concrete, construction debris)
 
-FURNITURE — BEDS & BEDDING:
-- Twin mattress: 0.5 CY
-- Full/double mattress: 0.65 CY
-- Queen mattress: 0.75 CY
-- King mattress: 0.9 CY
-- Box spring (any size): same as matching mattress
-- Bed frame (twin/full): 0.3-0.5 CY
-- Bed frame (queen/king): 0.5-0.8 CY
-- Headboard: 0.3-0.5 CY
-- Bunk bed (set): 1.5 CY
+The packing factor accounts for air gaps between items when loaded into a truck.
 
-APPLIANCES:
-- Microwave (small): 0.2 CY
-- Microwave (large): 0.4 CY
-- Toaster oven: 0.15 CY
-- Mini fridge: 0.5 CY
-- Refrigerator (full): 1.0 CY
-- Washing machine: 0.8-1.0 CY
-- Dryer: 0.8-1.0 CY
-- Dishwasher: 0.5 CY
-- Stove / range: 0.8-1.0 CY
-- Window AC unit (small): 0.3 CY
-- Window AC unit (large): 0.5 CY
-- Dehumidifier: 0.3 CY
-- Water heater: 0.8 CY
+STEP 4 — TAG KEY ITEMS (for pricing, NOT for volume)
+Identify only items that matter for pricing rules and customer display:
+- is_special: true for regulated disposal items (TVs, monitors, mattresses, box springs, tires, propane tanks, refrigerators/freezers, AC units, paint, chemicals, e-waste, batteries, fluorescent bulbs)
+- Also tag any large furniture or appliances for customer visibility
 
-ELECTRONICS:
-- TV (32in): 0.2 CY
-- TV (50in): 0.3 CY
-- TV (65in+): 0.5 CY
-- Computer monitor: 0.15 CY
-- Desktop computer (tower): 0.2 CY
-- Laptop: 0.03 CY
-- Printer (small): 0.15 CY
-- Printer (large/office): 0.3 CY
-- Stereo / speaker (small): 0.1 CY
-- Stereo / speaker (large): 0.3 CY
-
-MISC HOUSEHOLD:
-- Bicycle: 0.5 CY
-- Exercise equipment (small, weights): 0.2-0.4 CY
-- Treadmill: 1.0 CY
-- Lawn mower (push): 0.5 CY
-- Lawn mower (riding): 2.0 CY
-- Grill (charcoal): 0.5 CY
-- Grill (gas, full-size): 0.8 CY
-- Patio chair: 0.3 CY
-- Patio table: 0.6 CY
-- Stroller: 0.3 CY
-- Car seat: 0.2 CY
-- High chair: 0.3 CY
-- Playpen: 0.4 CY
-- Christmas tree (artificial): 0.4 CY
-- Vacuum cleaner: 0.15 CY
-- Floor lamp: 0.15 CY
-- Table lamp: 0.05 CY
-- Area rug (rolled): 0.3-0.5 CY
-- Mirror (wall, large): 0.1 CY
-- Picture/frame (large): 0.05 CY
-
-PAPER / CLOTHING / BOOKS:
-- Stack of papers / documents (1 box worth): 0.06 CY
-- Bag of clothing: 0.2-0.3 CY
-- Box of books (small): 0.06 CY
-- Box of books (large): 0.11 CY
-- Shelf of books: 0.2-0.3 CY
-- Shoes (pair): 0.02 CY
-
-CONSTRUCTION / OUTDOOR:
-- Lumber (2x4, 8ft bundle ~10 boards): 0.3 CY
-- Plywood sheet: 0.1 CY
-- Drywall sheet: 0.1 CY
-- Bag of concrete (60lb): 0.05 CY
-- Potted plant (small): 0.05 CY
-- Potted plant (large): 0.2 CY
-- Tire (car): 0.2 CY
-- Tire (truck): 0.3 CY
-- Propane tank (20lb): 0.15 CY
-- Paint can (1 gallon): 0.03 CY
-- Paint can (5 gallon): 0.1 CY
-- Single wooden board / plank: 0.05-0.1 CY
-- Wooden boards and lumber pieces (per piece): 0.08-0.15 CY
-- Scrap wood pieces (per piece): 0.05-0.1 CY
-
-BROKEN / DAMAGED ITEMS — these take LESS space than intact items:
-- Broken chair frame: 0.15-0.25 CY (less than intact chair)
-- Broken wooden furniture piece: 0.15-0.3 CY (less than intact)
-- Broken table leg / furniture fragment: 0.05-0.1 CY
-- Broken appliance parts: 0.15-0.25 CY
-- Metal framework pieces: 0.15-0.3 CY
-- Miscellaneous small debris (loose): 0.2-0.4 CY total, NOT per piece
-
-MAXIMUM PER-ITEM CAPS (loaded volume, never exceed):
-- Single trash bag: NEVER more than 0.4 CY
-- Single box: NEVER more than 0.25 CY
-- Single chair: NEVER more than 2.0 CY
-- Single mattress: NEVER more than 1.0 CY
-- Single appliance: NEVER more than 1.5 CY
-- Single piece of furniture: NEVER more than 2.5 CY
-- Loose papers/documents pile: NEVER more than 0.5 CY total
-- Clothing pile: NEVER more than 1.0 CY total
-
-SIZING METHOD:
-- For EVERY item, provide height_in, width_in, depth_in in inches.
-- USE REFERENCE OBJECTS for scale to estimate dimensions. Reference objects are FIXED background features only:
-    - Standard interior door: 80x36 in
-    - Standard person (adult): ~66inH
-    - Standard step: ~7in tall, cinder block: 16x8x8 in
-    - Chain-link fence: 48in or 72in tall
-    - Built-in walls, windows, archways
-  DO NOT put any staged/removable item in reference_points — even if it could be used for scale. A refrigerator, couch, door, bookshelf, or TV that is staged for removal goes in the ITEMS list, NEVER in reference_points. Only truly fixed objects (doorways, walls, windows) go in reference_points.
-- The system will compute cubic_yards from your dimensions: (height_in × width_in × depth_in) / 46656.
-- Provide cubic_yards as well, but the system will validate it against computed dimensions.
-- ESTIMATE ACTUAL LOADED VOLUME, not ground footprint. Items compress when loaded into a truck.
-- BUILD BOTTOM-UP: Total = sum of individual items, nothing more.
-- When in doubt, use the MID point of the range. Accurate estimates matter more than being conservative.
+Items in the items list do NOT have cubic_yards — volume comes from area_measurements.
+Items only need: name, quantity, is_special, photo_numbers.
 
 MULTI-PHOTO HANDLING:
 - You will receive up to 8 photos of the same job from different angles or rooms.
-- Each photo may show a different room, angle, or section of the pile.
-- Identify which room/location each photo shows (use in reference_points).
-- The SAME physical object appearing in multiple photos must be counted ONLY ONCE.
-- Cross-reference items across photos: if photo #2 shows the same couch seen in photo #1, do NOT count it twice.
-- Items unique to each photo should all be included in the master list.
-- When labeling items, note which photo(s) they appear in for traceability.
-
-PILE / MOUND DEPTH ESTIMATION:
-When items form a pile, mound, or stacked heap (NOT neatly lined up), you cannot see everything from the front. Items hide behind and beneath other items.
-1. Estimate the pile's total dimensions using reference objects:
-   - Standard interior door: 80x36in
-   - Cinder block: 16x8x8in
-   - Standard step: ~7in tall
-   - Chain-link fence (residential): 48in (4ft) or 72in (6ft) tall — posts typically 8ft apart center-to-center
-   - Car/pickup truck bed: ~8ft long, ~4.5ft wide
-2. Calculate pile volume: width_in × depth_in × height_in / 46656 (converts cubic inches to cubic yards).
-3. Apply a material-specific packing factor:
-   - General mixed junk: 0.65 (35% air gaps between irregular items)
-   - Shingles / roofing materials: 0.85 (flat, dense, stack tightly)
-   - Cardboard / paper / soft goods: 0.55 (lots of air, compressible)
-   - Lumber / wood / construction: 0.70 (some air between pieces)
-   - Dirt / soil / gravel / concrete chunks: 0.90 (nearly solid)
-4. Include this as a "pile_estimate" field in your response (see JSON structure below).
-5. ONLY include pile_estimate when items are clearly piled/stacked — not when items are neatly arranged side by side.
-6. Do NOT add items you cannot see just because the pile is big. Let the pile estimate speak for hidden depth.
-7. When you see a fence, USE IT FOR SCALE. Fences have known standard heights and the pile's height relative to the fence is one of the most reliable scale references.
+- Group photos by area (garage, living room, driveway, etc.).
+- The SAME area in multiple photos = one area_measurement. Do NOT double-count.
+- Each area gets one entry in area_measurements.
 
 IMPORTANT: Do NOT use the inch symbol (") anywhere. Write "in" for inches.
 
-Return this EXACT JSON structure (height_in, width_in, depth_in are REQUIRED for every item):
+Return this EXACT JSON structure:
 {
-  "reference_points": [
-    {"name": "reference object", "known_dimensions": "actual size", "location_in_photo": "where", "photo_number": 1}
+  "scale_references": [
+    {"name": "reference object used", "known_dimensions": "actual size", "photo_number": 1}
+  ],
+  "area_measurements": [
+    {"area_name": "garage", "width_in": 0, "depth_in": 0, "height_in": 0, "packing_factor": 0.65, "estimated_cy": 0.0, "photo_numbers": [1,2]}
   ],
   "items": [
-    {"name": "item name", "quantity": 1, "cubic_yards": 0.0, "height_in": 0, "width_in": 0, "depth_in": 0, "photo_numbers": [1], "is_special": false, "is_uncertain": false}
+    {"name": "item name", "quantity": 1, "is_special": false, "photo_numbers": [1]}
   ],
   "totals": {
     "cubic_yards_low": 0.0,
     "cubic_yards_mid": 0.0,
     "cubic_yards_high": 0.0
   },
-  "pile_estimate": {
-    "is_pile": false,
-    "width_in": 0,
-    "depth_in": 0,
-    "height_in": 0,
-    "packing_factor": 0.65,
-    "estimated_cy": 0.0
-  },
   "job_type": "standard",
   "conditions": [],
   "confidence": 75,
-  "notes": "Brief sizing reasoning."
+  "notes": "Brief explanation of your spatial reasoning and any concerns."
 }
 
 CRITICAL RULES:
-- Be thorough — miss nothing. Every bag, box, piece of furniture, appliance, pile counts.
-- Same object in multiple photos = count once. Match items across photos using name + location.
-- For every item, provide height_in, width_in, depth_in in inches using reference objects for scale.
-- Provide cubic_yards as your best estimate of LOADED truck volume (includes air gaps, packaging).
-- Do NOT invent phantom "miscellaneous" items to pad the total.
-- When uncertain about size, set is_uncertain: true and give your best estimate.
-- The low/mid/high range should reflect estimation uncertainty (roughly -15% to +15%).
+- Total CY comes from summing area_measurements ONLY. Items do NOT contribute to volume.
+- Be thorough with scale references — bad scale = bad total.
+- When in doubt about dimensions, be slightly conservative (mid-point), not aggressive.
 - Do NOT label as hoarding, whole-house, or construction debris unless clearly supported.
-- SIZE BY WHAT YOU SEE, NOT BY CATEGORY NAME. A small wooden table is 0.2 CY, not 1.5 CY just because it is "furniture." Use the reference table above and match the ACTUAL visible size.
-- If an item is smaller than a standard refrigerator (~1 CY), it should almost never exceed 1 CY.
-- End tables, nightstands, small shelves, stools, and small wood pieces are 0.1-0.4 CY, NOT 1+ CY.
-- Do NOT group dissimilar items into vague names like "wood furniture pieces." Name each item specifically (e.g., "end table", "wooden shelf", "dining chair") and size it individually.
-- Reference objects (door, person) are for SCALE. But if a refrigerator, couch, or other large item is staged for removal, list it as an item — do NOT use it only as a reference.
 - Keep your response concise. Omit null fields entirely.""",
 
         "sizing_prompt": """You are an expert at estimating real-world dimensions of objects from photographs. Return ONLY valid JSON — no markdown, no explanation, no code blocks.
 
 You will receive:
 - Photos of items to be removed
-- An item list from the primary estimator identifying each object (below)
+- Area measurements from the primary estimator (below)
 
-{{ITEM_LIST}}
+{{AREA_MEASUREMENTS}}
 
-Your job is to verify and correct the cubic yard estimates for each listed item. Do NOT add items that were not in the list. Do NOT re-identify objects from the photos — that was already done. Only verify sizes for the items you are given.
+Your job is to verify and correct the spatial measurements (dimensions and packing factors) for each area. Do NOT add new areas. Do NOT re-identify objects — only verify the existing measurements.
 
 SIZING METHOD:
 1. USE REFERENCE OBJECTS FOR SCALE. Look for these FIXED background references:
@@ -285,78 +120,57 @@ SIZING METHOD:
     - Dollar bill: 6.14in x 2.61in
     - Soda can: 4.83inH x 2.13in diameter
 
-2. ESTIMATE ACTUAL LOADED VOLUME, NOT GROUND FOOTPRINT.
-   - Items spread across the ground take up little truck space.
-   - A lumber pile laid flat across 10ft × 8ft might only be 2-3 CY when loaded.
-   - Furniture has air gaps but loads bulky — a couch ≈ 1.5-2.0 CY, a recliner ≈ 0.7-1.0 CY.
-   - Bags compress when loaded. Contractor bags ≈ 0.2-0.4 CY each.
+2. VERIFY SPATIAL MEASUREMENTS FROM PRIMARY ESTIMATE.
+   - Check that the primary estimator's scale references are reasonable.
+   - Verify area dimensions (width_in, depth_in, height_in) for each area.
+   - Check that packing factors match the visible material density.
+   - Recalculate: (width_in × depth_in × height_in) / 46656 × packing_factor = estimated_cy.
 
-3. COMMON VOLUME BENCHMARKS:
-   - Contractor trash bag (full, 42-gal): 0.2-0.4 CY
-   - Kitchen trash bag (full, 13-gal): 0.05-0.1 CY
-   - Cardboard box small/medium/large: 0.05/0.10/0.15 CY
-   - 5-gallon bucket: 0.025 CY
-   - Plastic storage container: 0.15-0.3 CY
-   - Standard wooden pallet: 0.15 CY
-   - Mattress (queen): 0.75 CY, (king): 1.0 CY
+3. IF AN AREA MEASUREMENT LOOKS WRONG:
+   - Check scale: Did the primary use the right reference object size?
+   - Check dimensions: Is the bounding box too tight or too loose?
+   - Check packing factor: Is the material denser or looser than the primary thought?
+   - Provide corrected values in your response.
 
-4. BROKEN/DISASSEMBLED ITEMS:
-   - Estimate the ACTUAL piece size, not the original intact furniture size.
-   - A single dresser drawer ≈ 0.1-0.2 CY, not the full dresser volume.
-   - Rolled carpet (standard room): 0.3-0.5 CY
+4. DO NOT CHANGE THE TOTAL by adding or removing areas. Only correct existing area measurements.
 
-5. BUILD BOTTOM-UP: Your total MUST be the sum of individual items — nothing more.
-   Do NOT draw a bounding box and inflate. Do NOT invent "miscellaneous" items.
-
-6. CLASSIFY THE JOB:
+5. CLASSIFY THE JOB:
    - "standard": Easy access, manageable load
    - "premium": Stairs, very heavy items (200+ lbs), difficult access, 10+ CY
    - "hoarder": Floor-to-ceiling overflow with blocked pathways only
    - "truck_load": 14+ CY, full or near-full truck
 
-IMPORTANT: Do NOT use the inch symbol (") anywhere in your JSON. Write "in" for inches. Example: write "80in" not "80\"" or "80"H".
+IMPORTANT: Do NOT use the inch symbol (") anywhere in your JSON. Write "in" for inches.
 
 Return this EXACT JSON structure:
 {
-  "reference_points": [
-    {"name": "reference object used", "known_dimensions": "actual size", "estimated_distance_to_item": "description", "photo_number": 1}
+  "scale_references": [
+    {"name": "reference object used", "known_dimensions": "actual size", "photo_number": 1}
+  ],
+  "area_measurements": [
+    {"area_name": "garage", "width_in": 0, "depth_in": 0, "height_in": 0, "packing_factor": 0.65, "estimated_cy": 0.0, "photo_numbers": [1,2]}
   ],
   "items": [
-    {"name": "item name", "quantity": 1, "cubic_yards": 0.0, "height_in": 0, "width_in": 0, "depth_in": 0, "is_special": false, "is_uncertain": false}
-  ],
-  "potential_duplicates": [
-    {"item_a": "Couch (photo 1)", "item_b": "Couch (photo 3)", "reason": "Same couch from different angles"}
+    {"name": "item name", "quantity": 1, "is_special": false, "photo_numbers": [1]}
   ],
   "totals": {
     "cubic_yards_low": 0.0,
     "cubic_yards_mid": 0.0,
     "cubic_yards_high": 0.0
   },
-  "pile_estimate": {
-    "is_pile": false,
-    "width_in": 0,
-    "depth_in": 0,
-    "height_in": 0,
-    "packing_factor": 0.65,
-    "estimated_cy": 0.0
-  },
   "job_type": "standard",
   "conditions": [],
   "confidence": 75,
-  "notes": "Brief explanation of your sizing reasoning and any concerns about accuracy."
+  "notes": "Brief explanation of corrections made and any concerns."
 }
 
 CRITICAL RULES:
-- ONLY estimate volume for items in the spotted list. Do NOT add new items from the photos.
-- If a potential duplicate is flagged, include it only ONCE in your items list.
-- Estimate cubic_yards for EACH item individually. Total = sum of items, nothing more.
-- Do NOT invent phantom "miscellaneous" items to pad the total.
-- When uncertain about a size, set is_uncertain: true and give your best estimate.
-- Do NOT label a job as hoarding, whole-house, or construction debris unless clearly supported.
-- The low/mid/high range should reflect estimation uncertainty (roughly -15% to +15%).
-- Confidence should reflect photo quality and how well sizes can be determined.
-- Same item shown from multiple angles = count once only.
-- Keep your response concise. Omit null fields entirely. Do not repeat fields that are not needed.""",
+- ONLY verify/correct area measurements from the primary estimate. Do NOT add new areas.
+- Do NOT add or remove items from the list. Only verify is_special flags.
+- Total CY must equal the sum of area_measurements estimated_cy values.
+- When uncertain, set is_uncertain: true and explain in notes.
+- Do NOT label as hoarding unless clearly supported.
+- Keep your response concise. Omit null fields entirely.""",
 
         # Calibration: known item volumes that override AI guesses
         "calibration_items": {
@@ -479,7 +293,12 @@ def get_extraction_prompt(industry_id: str) -> str:
     )
 
 
-def get_verification_prompt(industry_id: str, item_list: list[dict] | None = None) -> str:
+def get_verification_prompt(industry_id: str, area_measurements: list[dict] | None = None, item_list: list[dict] | None = None) -> str:
+    """Build verification prompt from primary estimate data.
+
+    New spatial-first format: injects area_measurements into the prompt.
+    Falls back to item_list for backward compatibility with old-format responses.
+    """
     config = get_industry_config(industry_id)
     base = (
         config.get("sizing_prompt")
@@ -487,7 +306,29 @@ def get_verification_prompt(industry_id: str, item_list: list[dict] | None = Non
         or config.get("extraction_prompt")
         or config.get("system_prompt", "")
     )
-    if item_list:
+
+    # Prefer area_measurements (spatial-first format)
+    if area_measurements:
+        lines = ["PRIMARY ESTIMATOR AREA MEASUREMENTS:"]
+        for area in area_measurements:
+            if not isinstance(area, dict):
+                continue
+            name = area.get("area_name", "?")
+            w = area.get("width_in", 0)
+            d = area.get("depth_in", 0)
+            h = area.get("height_in", 0)
+            pf = area.get("packing_factor", 0.65)
+            cy = area.get("estimated_cy", 0)
+            lines.append(
+                f'  - {name}: {int(w)}inW x {int(d)}inD x {int(h)}inH '
+                f'(packing {int(pf*100)}%) = {cy:.2f} CY'
+            )
+        area_text = "\n".join(lines) if len(lines) > 1 else "  (no areas)"
+        base = base.replace("{{AREA_MEASUREMENTS}}", area_text)
+        # Also replace old placeholder if present
+        base = base.replace("{{ITEM_LIST}}", area_text)
+    elif item_list:
+        # Backward compat: old-format item list
         lines = []
         for it in item_list:
             if not isinstance(it, dict):
@@ -502,6 +343,7 @@ def get_verification_prompt(industry_id: str, item_list: list[dict] | None = Non
             lines.append(f"  - {name} (qty: {qty}, estimated {cy:.2f} CY{dims})")
         item_text = "\n".join(lines) if lines else "  (no items)"
         base = base.replace("{{ITEM_LIST}}", item_text)
+        base = base.replace("{{AREA_MEASUREMENTS}}", item_text)
     return base
 
 def get_calibration_items(industry_id: str) -> dict:

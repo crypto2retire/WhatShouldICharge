@@ -49,7 +49,7 @@ from auth import get_current_user, require_user, require_admin, get_team_member,
 from sendgrid_email import send_email
 from billing import check_usage_limit, record_usage, PLAN_CALL_LIMITS, OVERAGE_RATE_CENTS
 from pricing import calculate_price
-from services.volume_lookup import validate_estimate, apply_pile_adjustment, detect_heavy_materials
+from services.volume_lookup import validate_estimate, apply_pile_adjustment, apply_spatial_estimate, detect_heavy_materials
 from services.industry_config import (
     get_industry_config,
     get_system_prompt,
@@ -2248,6 +2248,24 @@ def filter_actionable_duplicates(result_data: dict) -> list[dict]:
 
 
 def _sync_result_totals_to_items(result_data: dict) -> float:
+    """Sync totals to the authoritative source: area_measurements (spatial-first)
+    or item sum (legacy fallback)."""
+    # Spatial-first: area_measurements is the source of truth
+    areas = result_data.get("area_measurements")
+    if isinstance(areas, list) and areas:
+        total_cy = 0.0
+        for area in areas:
+            if isinstance(area, dict):
+                total_cy += float(area.get("estimated_cy", 0) or 0)
+        if total_cy > 0:
+            result_data.setdefault("totals", {})
+            result_data["totals"]["cubic_yards_mid"] = round(total_cy, 1)
+            result_data["totals"]["cubic_yards_low"] = round(total_cy * 0.85, 1)
+            result_data["totals"]["cubic_yards_high"] = round(total_cy * 1.15, 1)
+            result_data["total_cubic_yards"] = round(total_cy, 1)
+        return total_cy
+
+    # Legacy: item sum
     items = result_data.get("items", []) or []
     item_sum = 0.0
     for item in items:
@@ -5638,9 +5656,14 @@ async def run_estimate(
                     result_data["totals"] = totals
 
         result_data = validate_estimate(result_data)
-        result_data, pile_notes = apply_pile_adjustment(result_data)
-        if pile_notes:
-            confidence_reasons.extend(pile_notes)
+        result_data, spatial_notes = apply_spatial_estimate(result_data)
+        if not spatial_notes:
+            # Fallback to pile adjustment for legacy responses without area_measurements
+            result_data, pile_notes = apply_pile_adjustment(result_data)
+            if pile_notes:
+                confidence_reasons.extend(pile_notes)
+        else:
+            confidence_reasons.extend(spatial_notes)
         heavy_materials = detect_heavy_materials(result_data)
         if heavy_materials:
             confidence_reasons.append(
@@ -5808,9 +5831,14 @@ async def run_estimate(
 
         verifier_result = None
         try:
+            areas_for_verification = result_data.get("area_measurements", [])
             items_for_verification = result_data.get("items", [])
-            if items_for_verification:
-                v_prompt = get_verification_prompt(industry_id, item_list=items_for_verification)
+            if areas_for_verification or items_for_verification:
+                v_prompt = get_verification_prompt(
+                    industry_id,
+                    area_measurements=areas_for_verification,
+                    item_list=items_for_verification,
+                )
                 if library_context:
                     v_prompt += "\n" + library_context
                 if scene_prompt_hint:
@@ -5821,7 +5849,7 @@ async def run_estimate(
 
         if verifier_result:
             verifier_data = validate_estimate(verifier_result)
-            verifier_data, _verifier_pile_notes = apply_pile_adjustment(verifier_data)
+            verifier_data, _verifier_spatial_notes = apply_spatial_estimate(verifier_data)
             _sync_result_totals_to_items(verifier_data)
             verifier_data, _ = normalize_curbside_mixed_item_labels(verifier_data, room_labels)
             verifier_data, _ = normalize_special_fee_items(verifier_data)

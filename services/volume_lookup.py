@@ -64,10 +64,9 @@ _ITEM_SYNONYMS: dict[str, str] = {
     "elliptical": "exercise equipment",
     "bike": "bicycle",
     "bicycle": "bicycle",
-    "cabinet": "filing cabinet",
+    "entertainment center": "tv stand",
     "armoire": "wardrobe box",
     "recliner": "armchair",
-    "entertainment center": "tv stand",
 }
 
 # ── Per-item CY reference bounds (from industry_config.py prompt reference table) ──

@@ -23,7 +23,7 @@ IDENTIFICATION RULES:
 3. Flag special disposal items (is_special: true): TVs, monitors, mattresses, box springs, tires, propane tanks, refrigerators/freezers, AC units, paint cans, chemicals, e-waste, batteries, fluorescent bulbs.
 4. Check for duplicates across multiple photos — same item from different angles should be counted once.
 5. Do NOT count installed or background fixtures (wall shelving, garage shelving, mounted items) unless clearly staged for removal.
-6. If you see a person, doorframe, standard appliance, or other known-size object, note it as a reference_point for scale.
+6. If you see a doorframe, window, or other FIXED background feature, note it as a reference_point for scale. Do NOT put staged/removable items (appliances, furniture, etc.) in reference_points — those go in the items list.
 
 VOLUME REFERENCE TABLE — USE THESE VALUES. DO NOT EXCEED THESE FOR SIMILAR ITEMS:
 
@@ -176,13 +176,19 @@ MAXIMUM PER-ITEM CAPS (loaded volume, never exceed):
 - Clothing pile: NEVER more than 1.0 CY total
 
 SIZING METHOD:
-- For EVERY item, provide its height, width, and depth in inches (height_in, width_in, depth_in).
-- USE REFERENCE OBJECTS for scale to estimate dimensions (standard interior door: 80x36 in, adult: ~66inH, refrigerator: ~70x36x30 in, couch: ~84x36x34 in, cinder block: 16x8x8 in, standard step: ~7in tall, chain-link fence: 48in or 72in tall).
+- For EVERY item, provide height_in, width_in, depth_in in inches.
+- USE REFERENCE OBJECTS for scale to estimate dimensions. Reference objects are FIXED background features only:
+    - Standard interior door: 80x36 in
+    - Standard person (adult): ~66inH
+    - Standard step: ~7in tall, cinder block: 16x8x8 in
+    - Chain-link fence: 48in or 72in tall
+    - Built-in walls, windows, archways
+  DO NOT put any staged/removable item in reference_points — even if it could be used for scale. A refrigerator, couch, door, bookshelf, or TV that is staged for removal goes in the ITEMS list, NEVER in reference_points. Only truly fixed objects (doorways, walls, windows) go in reference_points.
 - The system will compute cubic_yards from your dimensions: (height_in × width_in × depth_in) / 46656.
 - Provide cubic_yards as well, but the system will validate it against computed dimensions.
 - ESTIMATE ACTUAL LOADED VOLUME, not ground footprint. Items compress when loaded into a truck.
 - BUILD BOTTOM-UP: Total = sum of individual items, nothing more.
-- When in doubt, use the LOWER end of the range. Overestimating is worse than underestimating.
+- When in doubt, use the MID point of the range. Accurate estimates matter more than being conservative.
 
 MULTI-PHOTO HANDLING:
 - You will receive up to 8 photos of the same job from different angles or rooms.
@@ -245,9 +251,8 @@ Return this EXACT JSON structure (height_in, width_in, depth_in are REQUIRED for
 CRITICAL RULES:
 - Be thorough — miss nothing. Every bag, box, piece of furniture, appliance, pile counts.
 - Same object in multiple photos = count once. Match items across photos using name + location.
-- height_in, width_in, depth_in are REQUIRED for every item. Estimate using reference objects.
-- Provide cubic_yards as well; the system will cross-validate against computed dimensions.
-- Do NOT invent phantom "miscellaneous" items to pad the total.
+- For every item, provide height_in, width_in, depth_in in inches using reference objects for scale.
+- Provide cubic_yards as your best estimate of LOADED truck volume (includes air gaps, packaging).
 - Do NOT invent phantom "miscellaneous" items to pad the total.
 - When uncertain about size, set is_uncertain: true and give your best estimate.
 - The low/mid/high range should reflect estimation uncertainty (roughly -15% to +15%).
@@ -256,6 +261,7 @@ CRITICAL RULES:
 - If an item is smaller than a standard refrigerator (~1 CY), it should almost never exceed 1 CY.
 - End tables, nightstands, small shelves, stools, and small wood pieces are 0.1-0.4 CY, NOT 1+ CY.
 - Do NOT group dissimilar items into vague names like "wood furniture pieces." Name each item specifically (e.g., "end table", "wooden shelf", "dining chair") and size it individually.
+- Reference objects (door, person) are for SCALE. But if a refrigerator, couch, or other large item is staged for removal, list it as an item — do NOT use it only as a reference.
 - Keep your response concise. Omit null fields entirely.""",
 
         "sizing_prompt": """You are an expert at estimating real-world dimensions of objects from photographs. Return ONLY valid JSON — no markdown, no explanation, no code blocks.
@@ -269,17 +275,15 @@ You will receive:
 Your job is to verify and correct the cubic yard estimates for each listed item. Do NOT add items that were not in the list. Do NOT re-identify objects from the photos — that was already done. Only verify sizes for the items you are given.
 
 SIZING METHOD:
-1. USE REFERENCE OBJECTS FOR SCALE. Look for these common references:
-   - Standard interior door: 80inH x 36inW
-   - Standard person (adult): ~66inH
-   - Refrigerator: ~70inH x 36inW x 30inD
-   - Standard couch: ~84inL x 36inD x 34inH
-   - Wooden pallet: 48in x 40in x 6in
-   - Railroad tie: 7in x 9in x 8.5ft
-   - 5-gallon bucket: 14.5inH x 12in diameter
-   - 32-gallon trash can: 22in diameter x 27inH
-   - Dollar bill: 6.14in x 2.61in
-   - Soda can: 4.83inH x 2.13in diameter
+1. USE REFERENCE OBJECTS FOR SCALE. Look for these FIXED background references:
+    - Standard interior door: 80inH x 36inW
+    - Standard person (adult): ~66inH
+    - Wooden pallet: 48in x 40in x 6in
+    - Railroad tie: 7in x 9in x 8.5ft
+    - 5-gallon bucket: 14.5inH x 12in diameter
+    - 32-gallon trash can: 22in diameter x 27inH
+    - Dollar bill: 6.14in x 2.61in
+    - Soda can: 4.83inH x 2.13in diameter
 
 2. ESTIMATE ACTUAL LOADED VOLUME, NOT GROUND FOOTPRINT.
    - Items spread across the ground take up little truck space.

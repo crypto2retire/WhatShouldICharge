@@ -272,7 +272,7 @@ def _merge_two_items(item_a: dict, item_b: dict) -> dict:
 
     cy_a = float(item_a.get("cubic_yards", 0) or 0)
     cy_b = float(item_b.get("cubic_yards", 0) or 0)
-    merged["cubic_yards"] = round((cy_a + cy_b) / 2.0, 3)
+    merged["cubic_yards"] = round(max(cy_a, cy_b), 3)
 
     # Keep longer / more descriptive name.
     if len(str(item_b.get("name", ""))) > len(str(item_a.get("name", ""))):
@@ -368,7 +368,7 @@ def merge_results(results: list[VisionResult]) -> dict:
         if p_item and s_item:
             p_cy = float(p_item.get("cubic_yards", 0))
             s_cy = float(s_item.get("cubic_yards", 0))
-            avg_cy = (p_cy + s_cy) / 2.0
+            merged_cy = max(p_cy, s_cy)
             if p_cy > 0 and s_cy > 0:
                 variance = abs(p_cy - s_cy) / max(p_cy, s_cy)
                 if variance > VARIANCE_FLAG_THRESHOLD:
@@ -377,7 +377,7 @@ def merge_results(results: list[VisionResult]) -> dict:
                         "secondary_cy": round(s_cy, 2), "variance": round(variance, 2),
                     })
             merged = dict(p_item)
-            merged["cubic_yards"] = round(avg_cy, 2)
+            merged["cubic_yards"] = round(merged_cy, 2)
             if s_item.get("is_special") or p_item.get("is_special"):
                 merged["is_special"] = True
             if s_item.get("is_uncertain") or p_item.get("is_uncertain"):

@@ -308,10 +308,16 @@ def _lookup_item_bounds(norm_name: str) -> Optional[tuple[float, float]]:
 
 
 def _apply_item_bounds(items: list) -> int:
-    """Clamp each item's cubic_yards into [min_cy, max_cy] reference range.
-    Returns count of items that were clamped.
+    """Apply reference table bounds as a FLOOR only — never cap the AI's estimate downward.
+
+    Loaded truck volume is always >= physical geometric volume due to air gaps,
+    packaging, and handling.  The AI estimates loaded volume.  If the AI's estimate
+    falls below the reference minimum, lift it.  If it's above the reference maximum,
+    trust the AI — it may be seeing something the reference table doesn't account for.
+
+    Returns count of items that were lifted.
     """
-    clamped = 0
+    lifted = 0
     for item in items:
         if not isinstance(item, dict):
             continue
@@ -325,13 +331,10 @@ def _apply_item_bounds(items: list) -> int:
             logger.info("[item_bounds] Lifting '%s' from %.3f to min %.3f CY", name, ai_cy, min_cy)
             item["cubic_yards"] = round(min_cy, 4)
             item["volume_reference_clamped"] = True
-            clamped += 1
-        elif ai_cy > max_cy:
-            logger.info("[item_bounds] Capping '%s' from %.3f to max %.3f CY", name, ai_cy, max_cy)
-            item["cubic_yards"] = round(max_cy, 4)
-            item["volume_reference_clamped"] = True
-            clamped += 1
-    return clamped
+            lifted += 1
+        # Do NOT cap items that exceed max_cy — the AI's loaded-volume estimate
+        # may be correct even when above the reference table maximum.
+    return lifted
 
 
 def _parse_spatial_total_cy(notes: str) -> Optional[float]:

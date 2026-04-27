@@ -451,16 +451,19 @@ def _finalize_merged(result: dict, results: list[VisionResult]) -> dict:
 
 
 def _compute_item_cy_from_dimensions(items: list) -> int:
-    """For each item with width_in, height_in, depth_in, compute cubic_yards from dimensions.
+    """Use dimensions as a sanity floor, not a replacement.
 
-    CY = (height_in * width_in * depth_in) / 46656 (cubic inches → cubic yards).
+    Loaded truck volume is always >= physical geometric volume due to air gaps,
+    packaging, and imperfect stacking.  The AI estimates loaded volume correctly.
 
-    If computed CY differs from AI-guessed CY by >30%, use the computed value and set
-    is_uncertain=True.  If dimensions are missing, leave AI guess as-is.
+    Strategy:
+    - If AI's CY < computed geometric CY: AI undercounted → lift to computed value
+    - If AI's CY >= computed geometric CY: AI is fine → leave alone
+    - If AI's CY is zero: use computed value as a starting point
 
-    Returns count of items where computed CY replaced AI guess.
+    Returns count of items where CY was adjusted.
     """
-    replaced = 0
+    adjusted = 0
     for item in items:
         if not isinstance(item, dict):
             continue
@@ -472,17 +475,7 @@ def _compute_item_cy_from_dimensions(items: list) -> int:
             continue
 
         if h <= 0 or w <= 0 or d <= 0:
-            # If only 2 of 3 dimensions present, try to infer the third from item type
-            present_count = (1 if h > 0 else 0) + (1 if w > 0 else 0) + (1 if d > 0 else 0)
-            if present_count < 2:
-                continue
-            # Rough default for missing dimension based on typical item depth/height ratios
-            if h <= 0 and w > 0 and d > 0:
-                h = max(w, d) * 0.6
-            elif w <= 0 and h > 0 and d > 0:
-                w = max(h, d) * 0.6
-            elif d <= 0 and h > 0 and w > 0:
-                d = min(h, w) * 0.5
+            continue
 
         computed_cy = (h * w * d) / 46656.0
         if computed_cy <= 0.001:
@@ -492,22 +485,19 @@ def _compute_item_cy_from_dimensions(items: list) -> int:
         if ai_cy <= 0:
             item["cubic_yards"] = round(computed_cy, 4)
             item["cy_computed_from_dimensions"] = True
-            replaced += 1
-        else:
-            divergence = abs(computed_cy - ai_cy) / ai_cy if ai_cy > 0 else 0
-            if divergence > 0.30:
-                logger.info(
-                    "[dimension_cy] '%s': computed %.3f CY (%sx%sx%s in) vs AI guess %.3f CY — "
-                    "divergence %.0f%%. Using computed CY.",
-                    item.get("name", "?"), computed_cy, int(w), int(h), int(d),
-                    ai_cy, divergence * 100,
-                )
-                item["cubic_yards"] = round(computed_cy, 4)
-                item["cy_computed_from_dimensions"] = True
-                item["is_uncertain"] = True
-                replaced += 1
+            adjusted += 1
+        elif computed_cy > ai_cy:
+            logger.info(
+                "[dimension_floor] '%s': AI gave %.3f CY but dimensions (%sx%sx%s in) "
+                "compute to %.3f CY. Lifting to computed floor.",
+                item.get("name", "?"), ai_cy, int(w), int(h), int(d), computed_cy,
+            )
+            item["cubic_yards"] = round(computed_cy, 4)
+            item["cy_computed_from_dimensions"] = True
+            item["is_uncertain"] = True
+            adjusted += 1
 
-    return replaced
+    return adjusted
 
 
 async def run_verification_pass(images: list, verification_prompt: str) -> Optional[dict]:

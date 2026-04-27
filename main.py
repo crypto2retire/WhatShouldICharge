@@ -5492,41 +5492,8 @@ async def run_estimate(
             result_data["totals"]["cubic_yards_low"] = round(item_sum * 0.85, 1)
             result_data["totals"]["cubic_yards_high"] = round(item_sum * 1.15, 1)
 
-        # Sanity check: cap single items and enforce per-category maximums
-        PER_ITEM_MAX_CY = {
-            "trash bag": 0.4, "garbage bag": 0.4, "yard bag": 0.4, "leaf bag": 0.4,
-            "contractor bag": 0.5, "duffel": 0.25, "suitcase": 0.35,
-            "box": 0.25, "cardboard box": 0.25,
-            "papers": 0.5, "documents": 0.5, "loose paper": 0.5,
-            "clothing": 0.4, "clothes": 0.4, "textiles": 0.4,
-            "books": 0.15, "magazines": 0.1,
-            "shoes": 0.05, "lamp": 0.2, "pillow": 0.15,
-            "end table": 0.4, "side table": 0.4, "nightstand": 0.4, "night stand": 0.4,
-            "shelf": 0.5, "shelv": 0.5, "stool": 0.2, "footstool": 0.2,
-            "small table": 0.4, "plant": 0.25, "pot": 0.15,
-            "wood piece": 0.5, "wood furniture": 0.5, "wooden piece": 0.5,
-            "wooden furniture": 0.35, "broken furniture": 0.35, "furniture pieces": 0.35,
-            "wooden boards": 0.15, "lumber pieces": 0.15, "wood scraps": 0.15,
-            "scrap wood": 0.15, "boards and lumber": 0.15, "wood pieces": 0.2,
-            "broken wood": 0.2, "wood debris": 0.2,
-            "miscellaneous": 0.5, "misc items": 0.5, "small items": 0.3,
-            "household items": 0.5, "small appliance": 0.4,
-            "small debris": 0.3, "debris": 0.4,
-            "plastic bags": 0.35, "black bags": 0.35, "garbage bags": 0.35,
-            "chair frame": 0.25, "metal framework": 0.3, "metal pieces": 0.3,
-            "appliance parts": 0.25, "frame": 0.3,
-        }
-        CATEGORY_MAX_TOTAL_CY = {
-            "paper": 0.5, "document": 0.5, "clothing": 1.0, "clothes": 1.0, "book": 1.0,
-        }
+        # Per-item absolute cap — no single line item should exceed 16 CY
         for it in items:
-            name_lower = (it.get("name") or "").lower()
-            cy = it.get("cubic_yards", 0)
-            for keyword, max_cy in PER_ITEM_MAX_CY.items():
-                if keyword in name_lower and cy > max_cy:
-                    logger.info(f"[run_estimate] Capping '{name_lower}' from {cy} to {max_cy} CY")
-                    it["cubic_yards"] = max_cy
-                    break
             if it.get("cubic_yards", 0) > 16.0:
                 it["cubic_yards"] = min(it["cubic_yards"], 16.0)
 

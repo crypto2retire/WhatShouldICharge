@@ -450,21 +450,87 @@ def _finalize_merged(result: dict, results: list[VisionResult]) -> dict:
     return result
 
 
+def _compute_item_cy_from_dimensions(items: list) -> int:
+    """For each item with width_in, height_in, depth_in, compute cubic_yards from dimensions.
+
+    CY = (height_in * width_in * depth_in) / 46656 (cubic inches → cubic yards).
+
+    If computed CY differs from AI-guessed CY by >30%, use the computed value and set
+    is_uncertain=True.  If dimensions are missing, leave AI guess as-is.
+
+    Returns count of items where computed CY replaced AI guess.
+    """
+    replaced = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        try:
+            h = float(item.get("height_in", 0) or 0)
+            w = float(item.get("width_in", 0) or 0)
+            d = float(item.get("depth_in", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+
+        if h <= 0 or w <= 0 or d <= 0:
+            # If only 2 of 3 dimensions present, try to infer the third from item type
+            present_count = (1 if h > 0 else 0) + (1 if w > 0 else 0) + (1 if d > 0 else 0)
+            if present_count < 2:
+                continue
+            # Rough default for missing dimension based on typical item depth/height ratios
+            if h <= 0 and w > 0 and d > 0:
+                h = max(w, d) * 0.6
+            elif w <= 0 and h > 0 and d > 0:
+                w = max(h, d) * 0.6
+            elif d <= 0 and h > 0 and w > 0:
+                d = min(h, w) * 0.5
+
+        computed_cy = (h * w * d) / 46656.0
+        if computed_cy <= 0.001:
+            continue
+
+        ai_cy = float(item.get("cubic_yards", 0) or 0)
+        if ai_cy <= 0:
+            item["cubic_yards"] = round(computed_cy, 4)
+            item["cy_computed_from_dimensions"] = True
+            replaced += 1
+        else:
+            divergence = abs(computed_cy - ai_cy) / ai_cy if ai_cy > 0 else 0
+            if divergence > 0.30:
+                logger.info(
+                    "[dimension_cy] '%s': computed %.3f CY (%sx%sx%s in) vs AI guess %.3f CY — "
+                    "divergence %.0f%%. Using computed CY.",
+                    item.get("name", "?"), computed_cy, int(w), int(h), int(d),
+                    ai_cy, divergence * 100,
+                )
+                item["cubic_yards"] = round(computed_cy, 4)
+                item["cy_computed_from_dimensions"] = True
+                item["is_uncertain"] = True
+                replaced += 1
+
+    return replaced
+
+
 async def run_parallel_estimate(images: list, prompt: str) -> tuple[dict, dict]:
     providers = await _build_providers()
     if not providers:
         raise RuntimeError("No vision providers configured. Set GEMINI_API_KEY, VENICE_API_KEY, or OPENROUTER_API_KEY.")
 
-    max_photos = 4
+    max_photos = 8
     img_blocks = [b for b in images if isinstance(b, dict) and b.get("type") == "image"]
     if len(img_blocks) > max_photos:
         text_blocks = [b for b in images if isinstance(b, dict) and b.get("type") == "text"]
-        images = text_blocks[:4] + img_blocks[:max_photos]
+        images = text_blocks[:8] + img_blocks[:max_photos]
 
     tasks = [_run_single(p, images, prompt) for p in providers]
     provider_results = await asyncio.gather(*tasks)
 
     merged = merge_results(list(provider_results))
+
+    # Compute CY from AI-provided dimensions where available
+    dimension_replaced = _compute_item_cy_from_dimensions(merged.get("items") or [])
+    if dimension_replaced > 0:
+        merged.setdefault("_meta", {})["dimension_cy_replacements"] = dimension_replaced
+
     merged, fuzzy_dedup_count = deduplicate_merged_items(merged)
     meta = merged.pop("_meta", {})
     if fuzzy_dedup_count > 0:

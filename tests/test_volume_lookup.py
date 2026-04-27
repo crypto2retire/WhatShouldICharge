@@ -67,9 +67,11 @@ class TestValidateEstimate:
             "totals": {"cubic_yards_mid": 100.0, "cubic_yards_low": 80.0, "cubic_yards_high": 120.0},
         }
         result = validate_estimate(data)
-        assert result["totals"]["cubic_yards_mid"] == 5.0  # 3*1 + 1*2
-        assert result["totals"]["cubic_yards_low"] < 5.0
-        assert result["totals"]["cubic_yards_high"] > 5.0
+        # Couch clamped to 2.0 CY (sofa bounds: 1.2–2.0), Chair stays at 1.0 CY.
+        # Total = 2.0*1 + 1.0*2 = 4.0
+        assert result["totals"]["cubic_yards_mid"] == 4.0
+        assert result["totals"]["cubic_yards_low"] < 4.0
+        assert result["totals"]["cubic_yards_high"] > 4.0
 
     def test_deep_copy_no_mutation(self):
         original = {
@@ -99,7 +101,8 @@ class TestValidateEstimate:
             "totals": {"cubic_yards_mid": 6.5, "cubic_yards_low": 5.0, "cubic_yards_high": 8.0},
         }
         result = validate_estimate(data)
-        expected_sum = 0.025 * 10 + 1.5 * 1
+        # 5-gallon bucket lookup → 0.025 each, box spring clamped to 1.0 CY (bounds: 0.4–1.0)
+        expected_sum = 0.025 * 10 + 1.0 * 1
         assert abs(result["totals"]["cubic_yards_mid"] - expected_sum) < 0.1
 
 

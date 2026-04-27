@@ -1,7 +1,7 @@
 """
-Post-AI volume reconciliation: correct known small items from a lookup table,
-then distribute remaining cubic yards (from spatial math in notes) across
-bulk/debris line items so totals stay honest.
+Post-AI volume reconciliation: apply precise lookup values for standard items,
+clamp AI estimates against a reference table of known CY ranges, remove phantom
+misc items, and sync totals to the final bottom-up item sum.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
-# Per-unit cubic yards for standardized items (calibrated to field / lookup values).
+# ── Precise per-unit CY values for standardized items ──
 def _is_five_gallon_bucket(n: str) -> bool:
     if "bucket" not in n:
         return False
@@ -38,12 +38,169 @@ _LOOKUP_RULES: list[tuple[Callable[[str], bool], float]] = [
         or ("plastic" in n and "sheet" in n),
         0.03,
     ),
-    # Railroad ties / landscape timbers — standard dimensions, per-unit volumes
     (lambda n: "railroad tie" in n or "railroad ties" in n, 0.17),
     (
         lambda n: "landscape timber" in n or "landscape timbers" in n,
-        0.11,  # 6x6 default; 4x4 is 0.05 but 6x6 is more common in removal
+        0.11,
     ),
+]
+
+# ── Synonyms for item matching (AI may use different names) ──
+_ITEM_SYNONYMS: dict[str, str] = {
+    "couch": "sofa",
+    "fridge": "refrigerator",
+    "freezer": "refrigerator",
+    "clothes": "clothing",
+    "wardrobe": "wardrobe box",
+    "television": "tv",
+    "flat screen": "tv",
+    "ottoman": "footstool",
+    "bookcase": "bookshelf",
+    "washing machine": "washer",
+    "stove": "range",
+    "oven": "range",
+    "bed frame": "bedframe",
+    "treadmill": "exercise equipment",
+    "elliptical": "exercise equipment",
+    "bike": "bicycle",
+    "bicycle": "bicycle",
+    "cabinet": "filing cabinet",
+    "armoire": "wardrobe box",
+    "recliner": "armchair",
+    "entertainment center": "tv stand",
+}
+
+# ── Per-item CY reference bounds (from industry_config.py prompt reference table) ──
+# Each entry: (predicate_fn, min_cy, max_cy).  AI estimate is clamped into [min, max].
+def _match_any(*keywords: str) -> Callable[[str], bool]:
+    return lambda n: any(k in n for k in keywords)
+
+
+_ITEM_BOUNDS: list[tuple[Callable[[str], bool], float, float]] = [
+    # ── Bags & Soft Goods ──
+    (_match_any("contractor bag"), 0.3, 0.5),
+    (_match_any("trash bag", "garbage bag", "kitchen bag", "plastic bag", "black bag"), 0.05, 0.4),
+    (_match_any("yard bag", "leaf bag"), 0.2, 0.35),
+    (_match_any("duffel bag", "gym bag"), 0.1, 0.25),
+    (_match_any("suitcase"), 0.1, 0.35),
+    (_match_any("pillow"), 0.05, 0.15),
+    (_match_any("sleeping bag"), 0.1, 0.2),
+    # ── Boxes & Containers ──
+    (_match_any("wardrobe box"), 0.35, 0.6),
+    (_match_any("book box"), 0.04, 0.08),
+    (_match_any("small box"), 0.04, 0.08),
+    (_match_any("medium box"), 0.08, 0.13),
+    (_match_any("large box"), 0.13, 0.25),
+    (_match_any("cardboard box", "card board box"), 0.05, 0.25),
+    (_match_any("plastic tote", "storage tote", "plastic bin"), 0.05, 0.2),
+    # ── Furniture — Seating ──
+    (_match_any("office chair", "desk chair"), 0.3, 0.5),
+    (_match_any("dining chair"), 0.1, 0.2),
+    (_match_any("folding chair", "lawn chair"), 0.05, 0.15),
+    (_match_any("armchair", "recliner"), 0.8, 1.5),
+    (_match_any("loveseat"), 0.8, 1.5),
+    (_match_any("sofa", "couch"), 1.2, 2.0),
+    (_match_any("sectional"), 0.8, 1.2),
+    (_match_any("footstool", "ottoman"), 0.15, 0.4),
+    # ── Furniture — Tables & Surfaces ──
+    (_match_any("end table", "side table"), 0.15, 0.4),
+    (_match_any("coffee table"), 0.3, 0.6),
+    (_match_any("dining table"), 0.8, 1.5),
+    (_match_any("desk"), 0.5, 1.5),
+    (_match_any("tv stand", "media console", "entertainment center"), 0.4, 0.8),
+    (_match_any("dresser"), 0.5, 1.0),
+    (_match_any("nightstand", "night stand"), 0.15, 0.4),
+    (_match_any("bookshelf", "bookcase", "shelv"), 0.3, 1.0),
+    (_match_any("filing cabinet"), 0.3, 0.6),
+    # ── Beds & Bedding ──
+    (_match_any("twin mattress"), 0.4, 0.6),
+    (_match_any("full mattress", "double mattress"), 0.55, 0.75),
+    (_match_any("queen mattress"), 0.65, 0.85),
+    (_match_any("king mattress"), 0.75, 1.0),
+    (_match_any("mattress"), 0.4, 1.0),
+    (_match_any("box spring"), 0.4, 1.0),
+    (_match_any("bedframe", "bed frame"), 0.3, 0.8),
+    (_match_any("headboard"), 0.2, 0.5),
+    (_match_any("bunk bed"), 1.2, 1.8),
+    # ── Appliances ──
+    (_match_any("microwave"), 0.15, 0.4),
+    (_match_any("toaster oven", "toaster"), 0.1, 0.2),
+    (_match_any("mini fridge"), 0.35, 0.6),
+    (_match_any("refrigerator", "fridge", "freezer"), 0.8, 1.2),
+    (_match_any("washing machine", "washer"), 0.6, 1.0),
+    (_match_any("dryer"), 0.6, 1.0),
+    (_match_any("dishwasher"), 0.4, 0.6),
+    (_match_any("stove", "range", "oven"), 0.6, 1.0),
+    (_match_any("window ac", "air conditioner"), 0.2, 0.5),
+    (_match_any("dehumidifier"), 0.2, 0.4),
+    (_match_any("water heater"), 0.6, 1.0),
+    (_match_any("vacuum cleaner", "vacuum"), 0.1, 0.2),
+    # ── Electronics ──
+    (_match_any("tv", "television", "flat screen"), 0.15, 0.5),
+    (_match_any("computer monitor", "monitor"), 0.1, 0.2),
+    (_match_any("desktop computer", "computer tower"), 0.15, 0.3),
+    (_match_any("laptop"), 0.02, 0.05),
+    (_match_any("printer"), 0.1, 0.3),
+    (_match_any("speaker", "stereo"), 0.05, 0.3),
+    # ── Misc Household ──
+    (_match_any("bicycle", "bike"), 0.35, 0.6),
+    (_match_any("treadmill", "elliptical"), 0.8, 1.2),
+    (_match_any("exercise equipment"), 0.2, 0.5),
+    (_match_any("lawn mower"), 0.4, 0.6),
+    (_match_any("riding mower", "riding lawn mower"), 1.5, 2.5),
+    (_match_any("grill"), 0.4, 0.8),
+    (_match_any("patio chair"), 0.2, 0.4),
+    (_match_any("patio table"), 0.4, 0.7),
+    (_match_any("stroller"), 0.2, 0.4),
+    (_match_any("car seat"), 0.15, 0.25),
+    (_match_any("high chair"), 0.2, 0.4),
+    (_match_any("playpen", "play pen"), 0.3, 0.5),
+    (_match_any("christmas tree"), 0.3, 0.5),
+    (_match_any("floor lamp", "standing lamp"), 0.1, 0.2),
+    (_match_any("table lamp"), 0.03, 0.08),
+    (_match_any("area rug", "rug rolled"), 0.2, 0.5),
+    (_match_any("mirror"), 0.05, 0.15),
+    (_match_any("picture", "frame"), 0.03, 0.08),
+    (_match_any("pet crate", "dog crate", "cat crate"), 0.15, 0.35),
+    # ── Paper / Clothing / Books ──
+    (_match_any("papers", "documents", "stack of paper", "paper pile"), 0.03, 0.5),
+    (_match_any("clothing", "clothes", "textile", "fabric"), 0.1, 1.0),
+    (_match_any("bag of clothing", "clothing bag"), 0.2, 0.35),
+    (_match_any("box of books", "book box"), 0.04, 0.08),
+    (_match_any("books", "magazines"), 0.05, 1.0),
+    (_match_any("shoes"), 0.01, 0.03),
+    # ── Construction / Outdoor ──
+    (_match_any("lumber", "wood pile", "wood bundle"), 0.05, 0.3),
+    (_match_any("plywood sheet"), 0.05, 0.12),
+    (_match_any("drywall sheet"), 0.05, 0.12),
+    (_match_any("bag of concrete", "concrete bag"), 0.03, 0.06),
+    (_match_any("potted plant"), 0.03, 0.2),
+    (_match_any("tire"), 0.15, 0.35),
+    (_match_any("propane tank"), 0.1, 0.2),
+    (_match_any("paint can"), 0.02, 0.12),
+    (_match_any("wooden board", "plank", "wood board", "wood piece", "scrap wood"), 0.03, 0.15),
+    # ── Broken / Damaged Items ──
+    (_match_any("broken chair"), 0.1, 0.25),
+    (_match_any("broken furniture", "broken wooden", "furniture fragment", "furniture piece"), 0.1, 0.35),
+    (_match_any("broken table leg"), 0.03, 0.1),
+    (_match_any("broken appliance", "appliance part"), 0.1, 0.3),
+    (_match_any("metal framework", "metal piece"), 0.1, 0.3),
+    (_match_any("small debris", "loose debris"), 0.05, 0.4),
+    # ── Miscellaneous ──
+    (_match_any("misc", "miscellaneous", "assorted", "mixed items", "household items", "small items"), 0.1, 0.5),
+    # ── Per-item hard caps (anything not matched above but commonly overestimated) ──
+    (_match_any("trash", "garbage", "waste", "junk"), 0.05, 0.5),
+    (_match_any("bag"), 0.02, 0.5),
+    (_match_any("box"), 0.02, 0.6),
+    (_match_any("chair"), 0.05, 2.0),
+    (_match_any("table"), 0.1, 2.0),
+    (_match_any("cabinet"), 0.2, 1.0),
+    (_match_any("fan"), 0.05, 0.15),
+    (_match_any("curtain", "drape", "blind"), 0.02, 0.08),
+    (_match_any("carpet", "rug"), 0.1, 0.6),
+    (_match_any("foam", "cushion", "pad"), 0.05, 0.3),
+    (_match_any("blanket", "comforter", "quilt"), 0.05, 0.2),
+    (_match_any("towel"), 0.01, 0.05),
 ]
 
 # Do not reallocate volume onto named furniture / fixtures.
@@ -126,6 +283,55 @@ def _lookup_cy_per_unit(norm_name: str) -> Optional[float]:
         except Exception:
             continue
     return None
+
+
+def _normalize_item_name(name: str) -> str:
+    """Apply synonyms to normalize AI item names for matching against reference tables."""
+    name = _norm(name)
+    for syn, canonical in _ITEM_SYNONYMS.items():
+        if syn in name:
+            name = name.replace(syn, canonical, 1)
+            break
+    return name
+
+
+def _lookup_item_bounds(norm_name: str) -> Optional[tuple[float, float]]:
+    """Return (min_cy, max_cy) for a normalized item name, or None if no bounds defined."""
+    normalized = _normalize_item_name(norm_name)
+    for pred, min_cy, max_cy in _ITEM_BOUNDS:
+        try:
+            if pred(normalized):
+                return (min_cy, max_cy)
+        except Exception:
+            continue
+    return None
+
+
+def _apply_item_bounds(items: list) -> int:
+    """Clamp each item's cubic_yards into [min_cy, max_cy] reference range.
+    Returns count of items that were clamped.
+    """
+    clamped = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = _norm(str(item.get("name", "")))
+        bounds = _lookup_item_bounds(name)
+        if bounds is None:
+            continue
+        min_cy, max_cy = bounds
+        ai_cy = float(item.get("cubic_yards", 0) or 0)
+        if ai_cy < min_cy:
+            logger.info("[item_bounds] Lifting '%s' from %.3f to min %.3f CY", name, ai_cy, min_cy)
+            item["cubic_yards"] = round(min_cy, 4)
+            item["volume_reference_clamped"] = True
+            clamped += 1
+        elif ai_cy > max_cy:
+            logger.info("[item_bounds] Capping '%s' from %.3f to max %.3f CY", name, ai_cy, max_cy)
+            item["cubic_yards"] = round(max_cy, 4)
+            item["volume_reference_clamped"] = True
+            clamped += 1
+    return clamped
 
 
 def _parse_spatial_total_cy(notes: str) -> Optional[float]:
@@ -226,7 +432,7 @@ def validate_estimate(result_data: dict) -> dict:
             return 0.0
         return max(0.0, cy) * max(1, qty)
 
-    # Apply lookup volumes
+    # Apply lookup volumes (precise per-unit values)
     for i, item in enumerate(items):
         if not isinstance(item, dict):
             continue
@@ -282,6 +488,9 @@ def validate_estimate(result_data: dict) -> dict:
     for mi in items_to_remove:
         if mi in items:
             items.remove(mi)
+
+    # Apply reference table clamping (from AI prompt's reference table)
+    _apply_item_bounds(items)
 
     # Final total = sum of remaining items (bottom-up)
     final_sum = sum(line_volume(it) for it in items if isinstance(it, dict))

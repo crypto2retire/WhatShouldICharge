@@ -176,10 +176,22 @@ MAXIMUM PER-ITEM CAPS (loaded volume, never exceed):
 - Clothing pile: NEVER more than 1.0 CY total
 
 SIZING METHOD:
-- USE REFERENCE OBJECTS for scale (standard interior door: 80x36 in, adult: ~66inH, refrigerator: ~70x36x30 in, couch: ~84x36x34 in).
+- For EVERY item, provide its height, width, and depth in inches (height_in, width_in, depth_in).
+- USE REFERENCE OBJECTS for scale to estimate dimensions (standard interior door: 80x36 in, adult: ~66inH, refrigerator: ~70x36x30 in, couch: ~84x36x34 in, cinder block: 16x8x8 in, standard step: ~7in tall, chain-link fence: 48in or 72in tall).
+- The system will compute cubic_yards from your dimensions: (height_in × width_in × depth_in) / 46656.
+- Provide cubic_yards as well, but the system will validate it against computed dimensions.
 - ESTIMATE ACTUAL LOADED VOLUME, not ground footprint. Items compress when loaded into a truck.
 - BUILD BOTTOM-UP: Total = sum of individual items, nothing more.
 - When in doubt, use the LOWER end of the range. Overestimating is worse than underestimating.
+
+MULTI-PHOTO HANDLING:
+- You will receive up to 8 photos of the same job from different angles or rooms.
+- Each photo may show a different room, angle, or section of the pile.
+- Identify which room/location each photo shows (use in reference_points).
+- The SAME physical object appearing in multiple photos must be counted ONLY ONCE.
+- Cross-reference items across photos: if photo #2 shows the same couch seen in photo #1, do NOT count it twice.
+- Items unique to each photo should all be included in the master list.
+- When labeling items, note which photo(s) they appear in for traceability.
 
 PILE / MOUND DEPTH ESTIMATION:
 When items form a pile, mound, or stacked heap (NOT neatly lined up), you cannot see everything from the front. Items hide behind and beneath other items.
@@ -203,13 +215,13 @@ When items form a pile, mound, or stacked heap (NOT neatly lined up), you cannot
 
 IMPORTANT: Do NOT use the inch symbol (") anywhere. Write "in" for inches.
 
-Return this EXACT JSON structure:
+Return this EXACT JSON structure (height_in, width_in, depth_in are REQUIRED for every item):
 {
   "reference_points": [
     {"name": "reference object", "known_dimensions": "actual size", "location_in_photo": "where", "photo_number": 1}
   ],
   "items": [
-    {"name": "item name", "quantity": 1, "cubic_yards": 0.0, "height_in": 0, "width_in": 0, "depth_in": 0, "is_special": false, "is_uncertain": false}
+    {"name": "item name", "quantity": 1, "cubic_yards": 0.0, "height_in": 0, "width_in": 0, "depth_in": 0, "photo_numbers": [1], "is_special": false, "is_uncertain": false}
   ],
   "totals": {
     "cubic_yards_low": 0.0,
@@ -232,7 +244,10 @@ Return this EXACT JSON structure:
 
 CRITICAL RULES:
 - Be thorough — miss nothing. Every bag, box, piece of furniture, appliance, pile counts.
-- Same object in multiple photos = count once.
+- Same object in multiple photos = count once. Match items across photos using name + location.
+- height_in, width_in, depth_in are REQUIRED for every item. Estimate using reference objects.
+- Provide cubic_yards as well; the system will cross-validate against computed dimensions.
+- Do NOT invent phantom "miscellaneous" items to pad the total.
 - Do NOT invent phantom "miscellaneous" items to pad the total.
 - When uncertain about size, set is_uncertain: true and give your best estimate.
 - The low/mid/high range should reflect estimation uncertainty (roughly -15% to +15%).

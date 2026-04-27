@@ -2668,6 +2668,17 @@ def _price_overlap(a_low: float, a_high: float, b_low: float, b_high: float) -> 
 
 
 async def _get_lightweight_price_calibration(scene_type: str, capture_mode: str) -> Optional[dict]:
+    """Query historical (estimated, actual) pairs for this scene type.
+
+    Computes two calibration factors from completed jobs:
+      - cy_factor:  actual_cy / cy_estimate  (direct volume correction)
+      - price_factor: actual_price / midpoint(price_low, price_high) (price correction)
+
+    Requires ≥10 completed jobs within 180 days.  Trims outliers outside [0.60, 2.00]
+    for CY and [0.70, 1.80] for price.  Factors clamped to [0.85, 1.20] CY / [1.03, 1.15] price.
+
+    Returns None if insufficient data or no significant drift detected.
+    """
     st = str(scene_type or "").strip().lower()
     if not st:
         return None
@@ -2675,7 +2686,10 @@ async def _get_lightweight_price_calibration(scene_type: str, capture_mode: str)
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=180)
     async with AsyncSessionLocal() as db:
         query = (
-            select(Estimate.price_low, Estimate.price_high, Estimate.actual_price)
+            select(
+                Estimate.price_low, Estimate.price_high, Estimate.actual_price,
+                Estimate.cy_estimate, Estimate.actual_cy,
+            )
             .where(
                 Estimate.scene_type == st,
                 Estimate.actual_price.isnot(None),
@@ -2690,30 +2704,44 @@ async def _get_lightweight_price_calibration(scene_type: str, capture_mode: str)
             query = query.where(Estimate.capture_mode == cm)
         rows = (await db.execute(query)).all()
 
-    ratios = []
-    for low, high, actual in rows:
+    price_ratios: list[float] = []
+    cy_ratios: list[float] = []
+    for low, high, actual_price, cy_est, actual_cy in rows:
         try:
-            mid = (float(low or 0) + float(high or 0)) / 2.0
-            act = float(actual or 0)
-        except Exception as e:
+            price_mid = (float(low or 0) + float(high or 0)) / 2.0
+            act_price = float(actual_price or 0)
+            cy_est_val = float(cy_est or 0)
+            act_cy_val = float(actual_cy or 0)
+        except Exception:
             continue
-        if mid <= 0 or act <= 0:
-            continue
-        ratio = act / mid
-        # Trim severe outliers to keep this lightweight and stable.
-        if 0.70 <= ratio <= 1.80:
-            ratios.append(ratio)
-    if len(ratios) < 10:
+
+        if price_mid > 0 and act_price > 0:
+            ratio = act_price / price_mid
+            if 0.70 <= ratio <= 1.80:
+                price_ratios.append(ratio)
+
+        if cy_est_val > 0 and act_cy_val > 0:
+            ratio = act_cy_val / cy_est_val
+            if 0.60 <= ratio <= 2.00:
+                cy_ratios.append(ratio)
+
+    result: dict[str, float | int] = {"sample_size": max(len(price_ratios), len(cy_ratios))}
+
+    if len(price_ratios) >= 10:
+        med = float(statistics.median(price_ratios))
+        if med > 1.05:
+            result["price_factor"] = round(min(1.15, max(1.03, med)), 3)
+            result["price_median_ratio"] = round(med, 3)
+
+    if len(cy_ratios) >= 10:
+        med = float(statistics.median(cy_ratios))
+        if med < 0.95 or med > 1.05:
+            result["cy_factor"] = round(min(1.20, max(0.85, med)), 3)
+            result["cy_median_ratio"] = round(med, 3)
+
+    if len(result) <= 1:  # only sample_size, no actual factors
         return None
-    med = float(statistics.median(ratios))
-    if med <= 1.05:
-        return None
-    factor = min(1.15, max(1.03, med))
-    return {
-        "factor": round(factor, 3),
-        "sample_size": len(ratios),
-        "median_ratio": round(med, 3),
-    }
+    return result
 
 
 def _parse_spatial_total_from_notes(notes: str) -> Optional[float]:
@@ -5423,9 +5451,9 @@ async def run_estimate(
         model_name = "parallel_pipeline"
 
         try:
-            from services.estimation_pipeline import run_parallel_estimate, run_verification_pass, VARIANCE_FLAG_THRESHOLD
+            from services.estimation_pipeline import run_batched_estimate, run_verification_pass, VARIANCE_FLAG_THRESHOLD
             job["message"] = "Identifying items and estimating sizes..."
-            result_data, pipeline_meta = await run_parallel_estimate(image_content, extraction_prompt)
+            result_data, pipeline_meta = await run_batched_estimate(image_content, extraction_prompt)
 
             total_input_tokens = int(pipeline_meta.get("input_tokens", 0) or 0)
             total_output_tokens = int(pipeline_meta.get("output_tokens", 0) or 0)
@@ -5701,6 +5729,21 @@ async def run_estimate(
             if q.get("id") and not _has_truthy_answer(clarification_answers.get(q.get("id", "")))
         ]
 
+        # --- CY calibration from historical actuals (correct volume before pricing) ---
+        calibration = await _get_lightweight_price_calibration(scene_type, job.get("capture_mode", "remote"))
+        if calibration and "cy_factor" in calibration:
+            cy_factor = float(calibration["cy_factor"])
+            totals = result_data.get("totals", {})
+            for key in ("cubic_yards_mid", "cubic_yards_low", "cubic_yards_high"):
+                if key in totals and isinstance(totals.get(key), (int, float)):
+                    totals[key] = round(float(totals[key]) * cy_factor, 2)
+            result_data["totals"] = totals
+            if "total_cubic_yards" in result_data:
+                result_data["total_cubic_yards"] = round(float(result_data["total_cubic_yards"]) * cy_factor, 2)
+            confidence_reasons.append(
+                f"CY calibrated ×{cy_factor} from {int(calibration['sample_size'])} completed jobs in this scene."
+            )
+
         # --- Custom per-company pricing (skip Tavily when rates are set) ---
         custom_standard = getattr(user, 'price_per_cy_standard', None)
         custom_heavy = getattr(user, 'price_per_cy_heavy', None)
@@ -5859,14 +5902,13 @@ async def run_estimate(
                 confidence_reasons.append("Price range widened slightly because this scene type carries more uncertainty.")
 
         calibration = await _get_lightweight_price_calibration(scene_type, job.get("capture_mode", "remote"))
-        if calibration:
-            factor = float(calibration.get("factor", 1.0) or 1.0)
-            if factor > 1.0:
-                price_low = max(min_charge, round(price_low * factor, 2))
-                price_high = max(price_low, round(price_high * factor, 2))
-                confidence_reasons.append(
-                    f"Calibrated +{int(round((factor - 1.0) * 100))}% from recent actuals for this scene ({int(calibration.get('sample_size', 0) or 0)} jobs)."
-                )
+        if calibration and "price_factor" in calibration:
+            factor = float(calibration["price_factor"])
+            price_low = max(min_charge, round(price_low * factor, 2))
+            price_high = max(price_low, round(price_high * factor, 2))
+            confidence_reasons.append(
+                f"Calibrated +{int(round((factor - 1.0) * 100))}% from recent actuals for this scene ({int(calibration.get('sample_size', 0) or 0)} jobs)."
+            )
 
         severe_sanity = any(
             flag in sanity_flags for flag in ("spatial_above_items", "items_above_spatial", "items_below_truck_hint", "items_above_truck_hint")

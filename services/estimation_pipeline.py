@@ -538,6 +538,223 @@ async def run_verification_pass(images: list, verification_prompt: str) -> Optio
     return result.data
 
 
+async def _process_single_batch(providers: list, images: list, prompt: str) -> Optional[dict]:
+    """Run a single batch through all providers, merge, dedup, and compute dimensions."""
+    tasks = [_run_single(p, images, prompt) for p in providers]
+    provider_results = await asyncio.gather(*tasks)
+    valid = list(provider_results)
+    if not valid:
+        return None
+
+    merged = merge_results(valid)
+
+    dimension_replaced = _compute_item_cy_from_dimensions(merged.get("items") or [])
+    if dimension_replaced > 0:
+        merged.setdefault("_meta", {})["dimension_cy_replacements"] = dimension_replaced
+
+    merged, _ = deduplicate_merged_items(merged)
+    merged.pop("_meta", None)
+    return merged
+
+
+def _cross_batch_deduplicate(items: list[dict]) -> list[dict]:
+    """Deduplicate items from different batches using fuzzy name matching + dimension check.
+
+    When two items from different photo batches share a fuzzy-matched name AND similar
+    dimensions (within 40% volume), they're likely the same object.  Merge by averaging CY
+    and summing quantities.
+    """
+    if len(items) <= 1:
+        return items
+
+    consumed: set[int] = set()
+    result: list[dict] = []
+
+    for i in range(len(items)):
+        if i in consumed:
+            continue
+        partner = None
+        for j in range(i + 1, len(items)):
+            if j in consumed:
+                continue
+            if not _is_fuzzy_duplicate(items[i], items[j]):
+                continue
+
+            # Cross-batch extra check: dimension compatibility
+            if _dimensions_compatible(items[i], items[j]):
+                partner = j
+                break
+
+        if partner is not None:
+            merged = _merge_two_items(items[i], items[partner])
+            merged["cross_batch_merged"] = True
+            result.append(merged)
+            consumed.add(partner)
+        else:
+            result.append(items[i])
+
+    return result
+
+
+def _dimensions_compatible(item_a: dict, item_b: dict) -> bool:
+    """True if two items have compatible dimensions (within 40% volume), or one lacks dims."""
+    try:
+        h_a = float(item_a.get("height_in", 0) or 0)
+        w_a = float(item_a.get("width_in", 0) or 0)
+        d_a = float(item_a.get("depth_in", 0) or 0)
+        h_b = float(item_b.get("height_in", 0) or 0)
+        w_b = float(item_b.get("width_in", 0) or 0)
+        d_b = float(item_b.get("depth_in", 0) or 0)
+    except (TypeError, ValueError):
+        return True  # can't compare, trust fuzzy name match
+
+    dims_a = h_a > 0 and w_a > 0 and d_a > 0
+    dims_b = h_b > 0 and w_b > 0 and d_b > 0
+
+    if dims_a and dims_b:
+        vol_a = h_a * w_a * d_a
+        vol_b = h_b * w_b * d_b
+        if vol_a > 0 and vol_b > 0:
+            ratio = max(vol_a, vol_b) / min(vol_a, vol_b)
+            return ratio <= 1.4
+    return True
+
+
+def _split_image_content_into_batches(image_content: list, max_per_batch: int = 8) -> list[list]:
+    """Split interleaved text+image blocks into batches by room markers.
+
+    Room markers are text blocks starting with '\n--- ROOM:'.  Each batch gets its own
+    room context header.  If a single room has more than max_per_batch photos, it's
+    split further.
+    """
+    batches: list[list] = []
+    current: list = []
+
+    for block in image_content:
+        if not isinstance(block, dict):
+            continue
+        is_room_header = (
+            block.get("type") == "text"
+            and isinstance(block.get("text", ""), str)
+            and block["text"].startswith("\n--- ROOM:")
+        )
+        if is_room_header and current:
+            batches.append(current)
+            current = []
+        current.append(block)
+
+    if current:
+        batches.append(current)
+
+    # Tighten batches that exceed max_per_batch photos
+    final_batches: list[list] = []
+    for batch in batches:
+        img_count = sum(1 for b in batch if isinstance(b, dict) and b.get("type") == "image")
+        if img_count <= max_per_batch:
+            final_batches.append(batch)
+        else:
+            # Split oversized batch into sub-batches
+            sub: list = []
+            sub_img = 0
+            room_header = None
+            for block in batch:
+                is_header = (
+                    block.get("type") == "text"
+                    and isinstance(block.get("text", ""), str)
+                    and block["text"].startswith("\n--- ROOM:")
+                )
+                if is_header:
+                    room_header = block
+                    sub.append(block)
+                    continue
+                if block.get("type") == "image":
+                    if sub_img >= max_per_batch and sub:
+                        final_batches.append(list(sub))
+                        sub = [room_header] if room_header else []
+                        sub_img = 0
+                    sub_img += 1
+                sub.append(block)
+            if sub:
+                final_batches.append(sub)
+
+    return final_batches if final_batches else [image_content]
+
+
+async def run_batched_estimate(image_content: list, extraction_prompt: str) -> tuple[dict, dict]:
+    """Process photos in batches when there are more than 8 across multiple rooms.
+
+    Each room batch gets its own independent estimate.  Results are merged across
+    batches with cross-batch dedup to avoid double-counting items visible in multiple
+    rooms/angles.
+    """
+    providers = await _build_providers()
+    if not providers:
+        raise RuntimeError("No vision providers configured.")
+
+    img_blocks = [b for b in image_content if isinstance(b, dict) and b.get("type") == "image"]
+    if len(img_blocks) <= 8:
+        # Single batch — pass through to original pipeline
+        tasks = [_run_single(p, image_content, extraction_prompt) for p in providers]
+        provider_results = await asyncio.gather(*tasks)
+        merged = merge_results(list(provider_results))
+        dimension_replaced = _compute_item_cy_from_dimensions(merged.get("items") or [])
+        if dimension_replaced > 0:
+            merged.setdefault("_meta", {})["dimension_cy_replacements"] = dimension_replaced
+        merged, dedup_count = deduplicate_merged_items(merged)
+        meta = merged.pop("_meta", {})
+        if dedup_count > 0:
+            meta["fuzzy_dedup_count"] = dedup_count
+        meta["batched"] = False
+        return merged, meta
+
+    batches = _split_image_content_into_batches(image_content)
+    logger.info("[batched] Processing %d batches (%d total photos)", len(batches), len(img_blocks))
+
+    batch_results = await asyncio.gather(
+        *[_process_single_batch(providers, batch, extraction_prompt) for batch in batches],
+        return_exceptions=True,
+    )
+
+    all_items: list[dict] = []
+    batch_count = 0
+    for res in batch_results:
+        if isinstance(res, Exception):
+            logger.warning("[batched] Batch %d failed: %s", batch_count, res)
+            continue
+        if isinstance(res, dict):
+            items = res.get("items", [])
+            if isinstance(items, list):
+                all_items.extend(items)
+        batch_count += 1
+
+    if not all_items:
+        return {"items": [], "totals": {"cubic_yards_mid": 0, "cubic_yards_low": 0, "cubic_yards_high": 0}}, {"batched": True, "batches_succeeded": 0}
+
+    # Cross-batch dedup
+    final_items = _cross_batch_deduplicate(all_items)
+    cross_dedup = len(all_items) - len(final_items)
+
+    # Sum totals
+    total_cy = sum(
+        float(it.get("cubic_yards", 0) or 0) * max(1, int(it.get("quantity", 1) or 1))
+        for it in final_items
+    )
+    merged = {
+        "items": final_items,
+        "totals": {
+            "cubic_yards_mid": round(total_cy, 2),
+            "cubic_yards_low": round(total_cy * 0.85, 2),
+            "cubic_yards_high": round(total_cy * 1.15, 2),
+        },
+        "job_type": "standard",
+        "conditions": [],
+        "confidence": 70,
+        "notes": f"Batched estimate from {len(batches)} rooms, {cross_dedup} cross-batch duplicates merged.",
+    }
+    meta = {"batched": True, "batches_used": len(batches), "cross_batch_dedup_count": cross_dedup}
+    return merged, meta
+
+
 async def run_parallel_estimate(images: list, prompt: str) -> tuple[dict, dict]:
     providers = await _build_providers()
     if not providers:

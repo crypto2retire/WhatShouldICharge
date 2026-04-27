@@ -930,7 +930,9 @@ async function loadEstimates(page) {
 }
 
 // ── Estimate Detail Modal ──
+var _modalLastFocus = null;
 async function openEstimate(id) {
+  _modalLastFocus = document.activeElement;
   const overlay = $('#estimate-modal');
   const body = $('#modal-body');
   overlay.classList.add('open');
@@ -938,6 +940,7 @@ async function openEstimate(id) {
   $('#modal-title').textContent = `Estimate #${id}`;
   $('#modal-meta').textContent = 'Loading...';
   body.innerHTML = '<div class="loading">Loading...</div>';
+  setTimeout(() => { const closeBtn = $('.modal-close'); if (closeBtn) closeBtn.focus(); }, 100);
   try {
     const d = await apiFetch(`/api/admin/estimates/${id}`);
     $('#modal-meta').textContent = `${fmtDate(d.created_at)} \u00b7 ${esc(d.user_email)}${d.company_name?' \u00b7 '+esc(d.company_name):''}${d.company_city?', '+esc(d.company_city):''}${d.company_state?' '+esc(d.company_state):''}`;
@@ -1072,25 +1075,6 @@ async function saveActualData(estId) {
   } catch(e) { toast(e.message, 'error'); }
 }
 
-var _modalLastFocus = null;
-function openEstimate(id) {
-  _modalLastFocus = document.activeElement;
-  const overlay = $('#estimate-modal');
-  const body = $('#modal-body');
-  overlay.classList.add('open');
-  document.body.style.overflow = 'hidden';
-  $('#modal-title').textContent = `Estimate #${id}`;
-  $('#modal-meta').textContent = 'Loading...';
-  body.innerHTML = '<div class="loading">Loading...</div>';
-  // Focus the close button after a short delay for screen readers
-  setTimeout(() => { const closeBtn = $('.modal-close'); if (closeBtn) closeBtn.focus(); }, 100);
-  try {
-    const d = await apiFetch(`/api/admin/estimates/${id}`);
-    $('#modal-meta').textContent = `${fmtDate(d.created_at)} \u00b7 ${esc(d.user_email)}${d.company_name?' \u00b7 '+esc(d.company_name):''}${d.company_city?', '+esc(d.company_city):''}${d.company_state?' '+esc(d.company_state):''}`;
-    const result = d.result||{}, items = result.items||[], totals = result.totals||{}, notes = result.notes||'';
-    // ... rest of function continues ...
-  } catch(e) { body.innerHTML = '<div class="error">Error loading estimate</div>'; }
-}
 function closeModal() {
   $('#estimate-modal').classList.remove('open');
   document.body.style.overflow = '';

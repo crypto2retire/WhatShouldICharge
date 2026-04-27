@@ -5510,150 +5510,150 @@ async def run_estimate(
         result_data, _guardrail_notes = apply_visual_estimate_guardrails(result_data, room_labels)
 
         # ── Post-processing: use item-based total (bottom-up), not spatial bounding box ──
-        # The new prompt generates bottom-up estimates (sum of items = total).
-        # We trust the item sum and update totals to match, rather than scaling items
-        # to match a spatial bounding box that often overestimates.
-        totals = result_data.get("totals", {})
-        spatial_mid = totals.get("cubic_yards_mid", 0)
-        items = result_data.get("items", [])
-        item_sum = sum((it.get("cubic_yards", 0) * it.get("quantity", 1)) for it in items)
+        # In spatial-first mode (area_measurements present), the spatial total IS the truth.
+        # Only override with item sums for legacy responses without area_measurements.
+        areas = result_data.get("area_measurements", [])
+        is_spatial_mode = isinstance(areas, list) and len(areas) > 0
 
-        if item_sum > 0 and spatial_mid > 0 and spatial_mid > item_sum * 1.5:
-            # Spatial total is significantly larger than items — trust items (bottom-up)
-            logger.info(
-                f"[run_estimate] Job {job_id}: spatial ({spatial_mid:.1f} CY) > 1.5x items "
-                f"({item_sum:.1f} CY). Using item total instead of inflating."
-            )
-            result_data["totals"]["cubic_yards_mid"] = round(item_sum, 1)
-            result_data["totals"]["cubic_yards_low"] = round(item_sum * 0.85, 1)
-            result_data["totals"]["cubic_yards_high"] = round(item_sum * 1.15, 1)
-        elif item_sum > 0 and abs(item_sum - spatial_mid) > 0.5:
-            # Items and spatial are close-ish — use item sum as the truth
-            logger.info(
-                f"[run_estimate] Job {job_id}: syncing totals to item sum "
-                f"({item_sum:.1f} CY) instead of spatial ({spatial_mid:.1f} CY)"
-            )
-            result_data["totals"]["cubic_yards_mid"] = round(item_sum, 1)
-            result_data["totals"]["cubic_yards_low"] = round(item_sum * 0.85, 1)
-            result_data["totals"]["cubic_yards_high"] = round(item_sum * 1.15, 1)
-
-        # Per-item absolute cap — no single line item should exceed 16 CY
-        for it in items:
-            if it.get("cubic_yards", 0) > 16.0:
-                it["cubic_yards"] = min(it["cubic_yards"], 16.0)
-
-        # ── Pile compression/expansion adjustment ──
-        # Rigid items (wood, metal, furniture) nest in piles — sum overestimates truck volume
-        # Compressible items (clothes, bags, bedding) fluff out when loaded — sum underestimates
-        RIGID_KEYWORDS = {
-            "wood", "wooden", "lumber", "board", "plank", "plywood", "drywall",
-            "furniture", "frame", "metal", "iron", "steel", "appliance", "cabinet",
-            "door", "window", "concrete", "brick", "tile", "stone", "glass",
-            "shelf", "shelving", "table", "desk", "dresser", "chest", "drawer",
-            "chair", "couch", "sofa", "mattress", "box spring", "bed frame",
-            "refrigerator", "freezer", "washer", "dryer", "stove", "dishwasher",
-            "tv", "television", "monitor", "lumber", "railroad", "tire",
-        }
-        COMPRESSIBLE_KEYWORDS = {
-            "cloth", "clothes", "clothing", "fabric", "textile", "linen",
-            "bag", "trash", "garbage", "waste", "bedding", "pillow", "blanket",
-            "quilt", "comforter", "carpet", "rug", "pad", "foam", "cushion",
-            "stuffed", "soft", "towel", "curtain", "drape", "sleeping bag",
-            "duffel", "suitcase", "backpack", "diaper",
-        }
-        rigid_total = 0.0
-        compressible_total = 0.0
-        neutral_total = 0.0
-        for it in items:
-            cy = float(it.get("cubic_yards", 0) or 0) * int(it.get("quantity", 1) or 1)
-            if cy <= 0:
-                continue
-            name_lower = (it.get("name") or "").lower()
-            is_rigid = any(kw in name_lower for kw in RIGID_KEYWORDS)
-            is_compressible = any(kw in name_lower for kw in COMPRESSIBLE_KEYWORDS)
-            if is_rigid and not is_compressible:
-                rigid_total += cy
-            elif is_compressible and not is_rigid:
-                compressible_total += cy
-            else:
-                neutral_total += cy
-
-        RIGID_FACTOR = 0.85
-        COMPRESSIBLE_FACTOR = 1.15
-        adjusted_total = round(
-            rigid_total * RIGID_FACTOR
-            + compressible_total * COMPRESSIBLE_FACTOR
-            + neutral_total,
-            1,
-        )
-        raw_item_sum = round(rigid_total + compressible_total + neutral_total, 1)
-        if raw_item_sum > 0 and abs(adjusted_total - raw_item_sum) >= 0.2:
-            logger.info(
-                f"[run_estimate] Job {job_id}: pile adjustment "
-                f"rigid={rigid_total:.1f}×{RIGID_FACTOR} "
-                f"compressible={compressible_total:.1f}×{COMPRESSIBLE_FACTOR} "
-                f"neutral={neutral_total:.1f} => "
-                f"{raw_item_sum:.1f} CY → {adjusted_total:.1f} CY"
-            )
+        if not is_spatial_mode:
+            # Legacy branch: item-sum driven
             totals = result_data.get("totals", {})
-            totals["cubic_yards_mid"] = adjusted_total
-            totals["cubic_yards_low"] = round(adjusted_total * 0.85, 1)
-            totals["cubic_yards_high"] = round(adjusted_total * 1.15, 1)
-            result_data["totals"] = totals
-            result_data["total_cubic_yards"] = adjusted_total
+            spatial_mid = totals.get("cubic_yards_mid", 0)
+            items = result_data.get("items", [])
+            item_sum = sum((it.get("cubic_yards", 0) * it.get("quantity", 1)) for it in items)
 
-        items_needing_lookup = result_data.get("items_needing_lookup", [])
-        lookups_done = []
-        if items_needing_lookup:
-            job["status"] = "looking_up"
-            job["message"] = f"Looking up {len(items_needing_lookup)} unknown items..."
-
-            lookup_tasks = [
-                lookup_item_dimensions(item_name, os.environ.get("ANTHROPIC_API_KEY", ""))
-                for item_name in items_needing_lookup[:5]
-            ]
-            lookup_results = await asyncio.gather(*lookup_tasks, return_exceptions=True)
-
-            for lr in lookup_results:
-                if isinstance(lr, dict):
-                    tu = lr.pop("_token_usage", None)
-                    if isinstance(tu, dict):
-                        total_input_tokens += int(tu.get("input", 0) or 0)
-                        total_output_tokens += int(tu.get("output", 0) or 0)
-                        if tu.get("model"):
-                            model_name = str(tu["model"])
-                            total_api_cost_cents += estimate_anthropic_cost_cents(
-                                int(tu.get("input", 0) or 0),
-                                int(tu.get("output", 0) or 0),
-                                str(tu.get("model") or ""),
-                            )
-
-            for i, item_name in enumerate(items_needing_lookup[:5]):
-                lr = lookup_results[i]
-                if isinstance(lr, dict) and lr.get("cubic_yards", 0) > 0:
-                    lookups_done.append({
-                        "item_name": item_name,
-                        "cubic_yards": lr["cubic_yards"],
-                        "source_note": lr.get("source_note", ""),
-                    })
-                    for item in result_data.get("items", []):
-                        if item.get("name", "").lower().strip() == item_name.lower().strip():
-                            item["cubic_yards"] = lr["cubic_yards"]
-                            item["looked_up"] = True
-                            break
-
-            if lookups_done:
-                lookups_json_str = json.dumps(lookups_done)
-                totals = result_data.get("totals", {})
-                item_sum = sum(
-                    it.get("cubic_yards", 0) * it.get("quantity", 1)
-                    for it in result_data.get("items", [])
+            if item_sum > 0 and spatial_mid > 0 and spatial_mid > item_sum * 1.5:
+                logger.info(
+                    f"[run_estimate] Job {job_id}: spatial ({spatial_mid:.1f} CY) > 1.5x items "
+                    f"({item_sum:.1f} CY). Using item total instead of inflating."
                 )
-                if item_sum > 0:
-                    totals["cubic_yards_mid"] = round(item_sum, 1)
-                    totals["cubic_yards_low"] = round(item_sum * 0.85, 1)
-                    totals["cubic_yards_high"] = round(item_sum * 1.15, 1)
-                    result_data["totals"] = totals
+                result_data["totals"]["cubic_yards_mid"] = round(item_sum, 1)
+                result_data["totals"]["cubic_yards_low"] = round(item_sum * 0.85, 1)
+                result_data["totals"]["cubic_yards_high"] = round(item_sum * 1.15, 1)
+            elif item_sum > 0 and abs(item_sum - spatial_mid) > 0.5:
+                logger.info(
+                    f"[run_estimate] Job {job_id}: syncing totals to item sum "
+                    f"({item_sum:.1f} CY) instead of spatial ({spatial_mid:.1f} CY)"
+                )
+                result_data["totals"]["cubic_yards_mid"] = round(item_sum, 1)
+                result_data["totals"]["cubic_yards_low"] = round(item_sum * 0.85, 1)
+                result_data["totals"]["cubic_yards_high"] = round(item_sum * 1.15, 1)
+
+            # Per-item absolute cap — no single line item should exceed 16 CY
+            for it in items:
+                if it.get("cubic_yards", 0) > 16.0:
+                    it["cubic_yards"] = min(it["cubic_yards"], 16.0)
+
+            # ── Pile compression/expansion adjustment ──
+            RIGID_KEYWORDS = {
+                "wood", "wooden", "lumber", "board", "plank", "plywood", "drywall",
+                "furniture", "frame", "metal", "iron", "steel", "appliance", "cabinet",
+                "door", "window", "concrete", "brick", "tile", "stone", "glass",
+                "shelf", "shelving", "table", "desk", "dresser", "chest", "drawer",
+                "chair", "couch", "sofa", "mattress", "box spring", "bed frame",
+                "refrigerator", "freezer", "washer", "dryer", "stove", "dishwasher",
+                "tv", "television", "monitor", "lumber", "railroad", "tire",
+            }
+            COMPRESSIBLE_KEYWORDS = {
+                "cloth", "clothes", "clothing", "fabric", "textile", "linen",
+                "bag", "trash", "garbage", "waste", "bedding", "pillow", "blanket",
+                "quilt", "comforter", "carpet", "rug", "pad", "foam", "cushion",
+                "stuffed", "soft", "towel", "curtain", "drape", "sleeping bag",
+                "duffel", "suitcase", "backpack", "diaper",
+            }
+            rigid_total = 0.0
+            compressible_total = 0.0
+            neutral_total = 0.0
+            for it in items:
+                cy = float(it.get("cubic_yards", 0) or 0) * int(it.get("quantity", 1) or 1)
+                if cy <= 0:
+                    continue
+                name_lower = (it.get("name") or "").lower()
+                is_rigid = any(kw in name_lower for kw in RIGID_KEYWORDS)
+                is_compressible = any(kw in name_lower for kw in COMPRESSIBLE_KEYWORDS)
+                if is_rigid and not is_compressible:
+                    rigid_total += cy
+                elif is_compressible and not is_rigid:
+                    compressible_total += cy
+                else:
+                    neutral_total += cy
+
+            RIGID_FACTOR = 0.85
+            COMPRESSIBLE_FACTOR = 1.15
+            adjusted_total = round(
+                rigid_total * RIGID_FACTOR
+                + compressible_total * COMPRESSIBLE_FACTOR
+                + neutral_total,
+                1,
+            )
+            raw_item_sum = round(rigid_total + compressible_total + neutral_total, 1)
+            if raw_item_sum > 0 and abs(adjusted_total - raw_item_sum) >= 0.2:
+                logger.info(
+                    f"[run_estimate] Job {job_id}: pile adjustment "
+                    f"rigid={rigid_total:.1f}×{RIGID_FACTOR} "
+                    f"compressible={compressible_total:.1f}×{COMPRESSIBLE_FACTOR} "
+                    f"neutral={neutral_total:.1f} => "
+                    f"{raw_item_sum:.1f} CY → {adjusted_total:.1f} CY"
+                )
+                totals = result_data.get("totals", {})
+                totals["cubic_yards_mid"] = adjusted_total
+                totals["cubic_yards_low"] = round(adjusted_total * 0.85, 1)
+                totals["cubic_yards_high"] = round(adjusted_total * 1.15, 1)
+                result_data["totals"] = totals
+                result_data["total_cubic_yards"] = adjusted_total
+
+            items_needing_lookup = result_data.get("items_needing_lookup", [])
+            lookups_done = []
+            if items_needing_lookup:
+                job["status"] = "looking_up"
+                job["message"] = f"Looking up {len(items_needing_lookup)} unknown items..."
+
+                lookup_tasks = [
+                    lookup_item_dimensions(item_name, os.environ.get("ANTHROPIC_API_KEY", ""))
+                    for item_name in items_needing_lookup[:5]
+                ]
+                lookup_results = await asyncio.gather(*lookup_tasks, return_exceptions=True)
+
+                for lr in lookup_results:
+                    if isinstance(lr, dict):
+                        tu = lr.pop("_token_usage", None)
+                        if isinstance(tu, dict):
+                            total_input_tokens += int(tu.get("input", 0) or 0)
+                            total_output_tokens += int(tu.get("output", 0) or 0)
+                            if tu.get("model"):
+                                model_name = str(tu["model"])
+                                total_api_cost_cents += estimate_anthropic_cost_cents(
+                                    int(tu.get("input", 0) or 0),
+                                    int(tu.get("output", 0) or 0),
+                                    str(tu.get("model") or ""),
+                                )
+
+                for i, item_name in enumerate(items_needing_lookup[:5]):
+                    lr = lookup_results[i]
+                    if isinstance(lr, dict) and lr.get("cubic_yards", 0) > 0:
+                        lookups_done.append({
+                            "item_name": item_name,
+                            "cubic_yards": lr["cubic_yards"],
+                            "source_note": lr.get("source_note", ""),
+                        })
+                        for item in result_data.get("items", []):
+                            if item.get("name", "").lower().strip() == item_name.lower().strip():
+                                item["cubic_yards"] = lr["cubic_yards"]
+                                item["looked_up"] = True
+                                break
+
+                if lookups_done:
+                    lookups_json_str = json.dumps(lookups_done)
+                    totals = result_data.get("totals", {})
+                    item_sum = sum(
+                        it.get("cubic_yards", 0) * it.get("quantity", 1)
+                        for it in result_data.get("items", [])
+                    )
+                    if item_sum > 0:
+                        totals["cubic_yards_mid"] = round(item_sum, 1)
+                        totals["cubic_yards_low"] = round(item_sum * 0.85, 1)
+                        totals["cubic_yards_high"] = round(item_sum * 1.15, 1)
+                        result_data["totals"] = totals
 
         result_data = validate_estimate(result_data)
         result_data, spatial_notes = apply_spatial_estimate(result_data)

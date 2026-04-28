@@ -5743,7 +5743,10 @@ async def run_estimate(
         result_data = validate_estimate(result_data)
         if isinstance(result_data.get("notes"), str):
             import re as _re
-            result_data["notes"] = _re.sub(r'ERROR:\s*Cannot read[^.]*\.\s*Inform the user\.\s*', '', result_data["notes"]).strip()
+            notes = result_data["notes"]
+            notes = _re.sub(r'ERROR:\s*Cannot read[\s\S]*?Inform the user\.\s*', '', notes)
+            notes = _re.sub(r'ERROR:.*?(?:\n|$)', '', notes)
+            result_data["notes"] = notes.strip()
         result_data, spatial_notes = apply_spatial_estimate(result_data)
         if not spatial_notes:
             # Fallback to pile adjustment for legacy responses without area_measurements

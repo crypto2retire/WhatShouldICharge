@@ -5474,6 +5474,7 @@ async def run_estimate(
     pass1_json_str = ""
     pass2_json_str = ""
     lookups_json_str = ""
+    lookups_done = []
     photo_quality = job.get("photo_quality") or {}
     confidence_bucket = photo_quality.get("confidence_bucket", "")
     confidence_reasons = photo_quality.get("reasons", [])

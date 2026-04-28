@@ -112,7 +112,12 @@ async def _run_single(provider: VisionProvider, images: list, prompt: str) -> Op
             photos_count=len([b for b in images if isinstance(b, dict) and b.get('type') == 'image']),
             latency_ms=0,
         )
-        return None
+        err_result = VisionResult(
+            data={"_error": f"NonVisionModel: {e.raw_response[:200]}"},
+            provider_name=provider.name,
+            model_used=provider.model_name,
+        )
+        return err_result
     except Exception as e:
         logger.warning(f"[pipeline] {provider.name} failed: {type(e).__name__}: {e}")
         await _record_provider_event(
@@ -124,7 +129,12 @@ async def _run_single(provider: VisionProvider, images: list, prompt: str) -> Op
             photos_count=len([b for b in images if isinstance(b, dict) and b.get('type') == 'image']),
             latency_ms=0,
         )
-        return None
+        err_result = VisionResult(
+            data={"_error": f"{type(e).__name__}: {str(e)[:200]}"},
+            provider_name=provider.name,
+            model_used=provider.model_name,
+        )
+        return err_result
 
 
 async def _record_provider_event(provider_name: str, model_name: str, status: str, error_type: str, error_message: str, photos_count: int, latency_ms: int):
@@ -355,9 +365,14 @@ def deduplicate_merged_items(result_data: dict) -> tuple[dict, int]:
 
 
 def merge_results(results: list[VisionResult]) -> dict:
-    valid = [r for r in results if r is not None]
+    valid = [r for r in results if r is not None and "_error" not in r.data]
     if not valid:
-        raise RuntimeError("All vision providers failed to return results")
+        errors = []
+        for r in results:
+            if r is not None and "_error" in r.data:
+                errors.append(f"{r.provider_name}({r.model_used}): {r.data['_error']}")
+        detail = "; ".join(errors) if errors else "all providers failed"
+        raise RuntimeError(f"All vision providers failed: {detail}")
     if len(valid) == 1:
         merged = valid[0].data
         merged["_meta"] = {

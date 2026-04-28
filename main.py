@@ -4879,9 +4879,31 @@ async def cleanup_expired_jobs():
                or (v.get("status") not in ("analyzing", "looking_up")
                    and (now - v.get("created_at", now)).total_seconds() > JOB_TTL_SECONDS)]
     for k in expired:
+        job = estimate_jobs.get(k, {})
         del estimate_jobs[k]
-        asyncio.create_task(_delete_job_from_db(k))
+        if job.get("status") not in ("error",):
+            asyncio.create_task(_delete_job_from_db(k))
+        # error jobs stay in DB for admin visibility; purged after 7 days below
+    await _purge_old_error_jobs(days=7)
     asyncio.create_task(_cleanup_old_rate_limit_events())
+
+
+async def _purge_old_error_jobs(days: int = 7):
+    try:
+        async with AsyncSessionLocal() as db:
+            from models import Job
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
+            result = await db.execute(
+                select(Job).where(Job.status == "error", Job.created_at < cutoff)
+            )
+            old = result.scalars().all()
+            for j in old:
+                await db.delete(j)
+            if old:
+                await db.commit()
+                logger.info(f"[_purge_old_error_jobs] Deleted {len(old)} error jobs older than {days} days")
+    except Exception as e:
+        logger.error(f"[_purge_old_error_jobs] Failed: {e}")
 
 
 async def _upsert_job_to_db(job_id: str, user_id: int, team_member_id: int, status: str, result_json: str = "", error_message: str = "", completed_at=None):
@@ -5417,6 +5439,30 @@ async def create_estimate(
     return {"job_id": job_id}
 
 
+def _user_friendly_error(err_type: str, err_msg: str) -> str:
+    """Map exception types to user-friendly error messages."""
+    msg_lower = err_msg.lower()
+    if "nonvisionmodel" in err_type.lower() or "does not support image" in msg_lower:
+        return "Our AI service is currently unable to process images. We're working on it — please try again in a few minutes."
+    if "timeout" in msg_lower or "timed out" in msg_lower:
+        return "The AI service took too long to respond. Please try again."
+    if "json" in msg_lower or "decode" in msg_lower or "parse" in msg_lower:
+        return "The AI returned an unreadable response. We're aware of the issue — please try again."
+    if "api_key" in msg_lower or "401" in msg_lower or "unauthorized" in msg_lower:
+        return "The AI service is temporarily unavailable. Please try again in a few minutes."
+    if "429" in msg_lower or "rate" in msg_lower:
+        return "Our system is busy. Please wait a minute and try again."
+    if "connection" in msg_lower or "connect" in msg_lower:
+        return "Could not reach the AI service. Please check your connection and try again."
+    if "image" in msg_lower or "photo" in msg_lower or "pill" in msg_lower or "unidentified" in msg_lower:
+        return "One or more photos couldn't be processed. Please try clearer, well-lit photos."
+    if "credit" in msg_lower or "balance" in msg_lower:
+        return "Insufficient credits. Please purchase additional estimates."
+    if "runtimerror" in err_type.lower() or "no vision" in msg_lower:
+        return "No AI providers are currently available. Please try again in a few minutes."
+    return f"Something went wrong ({err_type}). Please try again or contact support."
+
+
 async def run_estimate(
     job_id: str,
     user,
@@ -5495,10 +5541,20 @@ async def run_estimate(
 
         except Exception as api_err:
             import traceback
-            logger.error(f"[run_estimate] Pipeline error for job {job_id}, user {user.id}: {type(api_err).__name__}: {api_err}")
-            logger.error(f"[run_estimate] Traceback: {traceback.format_exc()}")
+            err_type = type(api_err).__name__
+            err_msg = str(api_err)
+            tb_str = traceback.format_exc()
+            logger.error(f"[run_estimate] Pipeline error for job {job_id}, user {user.id}: {err_type}: {err_msg}")
+            logger.error(f"[run_estimate] Traceback: {tb_str}")
             job["status"] = "error"
-            job["message"] = f"We couldn't process your estimate. {type(api_err).__name__}: {api_err}. Check logs for provider failures."
+            job["message"] = _user_friendly_error(err_type, err_msg)
+            job["error_detail"] = json.dumps({
+                "type": err_type,
+                "message": err_msg,
+                "traceback": tb_str[:2000],
+                "user_id": user.id,
+                "photos": len(job.get("images", [])),
+            })
             job["result"] = None
             return
 
@@ -6171,9 +6227,23 @@ async def run_estimate(
 
     except Exception as e:
         import logging
-        logging.getLogger("wsic.estimate").error(f"[run_estimate] Unhandled error for job {job_id}: {type(e).__name__}: {e}")
+        import traceback as _tb
+        err_type = type(e).__name__
+        err_msg = str(e)
+        tb_str = _tb.format_exc()
+        logging.getLogger("wsic.estimate").error(f"[run_estimate] Unhandled error for job {job_id}: {err_type}: {err_msg}")
+        logging.getLogger("wsic.estimate").error(f"[run_estimate] Traceback: {tb_str}")
+
+        user_friendly = _user_friendly_error(err_type, err_msg)
         job["status"] = "error"
-        job["message"] = "An error occurred while processing your estimate. Please try again."
+        job["message"] = user_friendly
+        job["error_detail"] = json.dumps({
+            "type": err_type,
+            "message": err_msg,
+            "traceback": tb_str[:2000],
+            "user_id": user.id,
+            "photos": len(job.get("images", [])),
+        })
         job["result"] = None
         try:
             async with AsyncSessionLocal() as refund_db:
@@ -6197,7 +6267,7 @@ async def run_estimate(
                 final_job.get("team_member_id", 0),
                 final_job.get("status", "unknown"),
                 json.dumps(final_job.get("result")) if final_job.get("result") else "",
-                final_job.get("message", "") if final_job.get("status") == "error" else "",
+                final_job.get("error_detail", "") or (final_job.get("message", "") if final_job.get("status") == "error" else ""),
                 datetime.now(timezone.utc).replace(tzinfo=None) if final_job.get("status") in ("complete", "needs_review", "error") else None,
             )
 
@@ -6232,8 +6302,10 @@ async def estimate_status(request: Request, job_id: str):
         del estimate_jobs[job_id]
         await _delete_job_from_db(job_id)
     elif job["status"] == "error":
+        resp["error"] = job["message"]
+        resp["error_detail"] = job.get("error_detail", "")
         del estimate_jobs[job_id]
-        await _delete_job_from_db(job_id)
+        # Keep error jobs in DB for admin visibility — auto-cleanup after 7 days
 
     return resp
 
@@ -7922,6 +7994,22 @@ async def admin_error_report(request: Request):
             etype = ev.error_type or "unknown"
             error_by_type[etype] = error_by_type.get(etype, 0) + 1
 
+        # Failed estimate jobs (kept in DB for admin visibility)
+        from models import Job
+        failed_jobs_7d = (await db.execute(
+            select(Job)
+            .where(Job.status == "error", Job.created_at >= since_7d)
+            .order_by(Job.created_at.desc())
+            .limit(50)
+        )).scalars().all()
+
+        failed_jobs_24h_count = (await db.execute(
+            select(func.count(Job.id)).where(
+                Job.status == "error",
+                Job.created_at >= since_24h,
+            )
+        )).scalar() or 0
+
         return {
             "failed_estimates_24h": failed_estimates_24h,
             "provider_failures_24h": provider_failures_24h,
@@ -7939,6 +8027,16 @@ async def admin_error_report(request: Request):
                     "estimate_id": ev.estimate_id if ev.estimate_id else None,
                 }
                 for ev in recent_provider_errors[:10]
+            ],
+            "failed_jobs_24h": failed_jobs_24h_count,
+            "recent_failed_jobs": [
+                {
+                    "job_id": j.id,
+                    "created_at": j.created_at.isoformat() if j.created_at else None,
+                    "user_id": j.user_id,
+                    "error_message": (j.error_message or "")[:500],
+                }
+                for j in failed_jobs_7d[:25]
             ],
         }
 

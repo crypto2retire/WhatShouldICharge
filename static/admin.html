@@ -298,6 +298,7 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
     <div class="stat-card"><div class="stat-label">Success Rate (7d)</div><div class="stat-value" id="err-success-rate">--</div></div>
     <div class="stat-card"><div class="stat-label">Total Estimates (7d)</div><div class="stat-value" id="err-total-7d">--</div></div>
     <div class="stat-card"><div class="stat-label">Avg Latency (7d)</div><div class="stat-value" id="err-avg-latency">--</div></div>
+    <div class="stat-card"><div class="stat-label">Failed Jobs (24h)</div><div class="stat-value" id="err-jobs-24h">--</div></div>
   </div>
   <div class="card">
     <div class="card-title">Errors by Type</div>
@@ -310,9 +311,14 @@ td { padding: 10px; border-bottom: 1px solid rgba(46,51,82,0.4); font-size: 0.85
       <tbody id="err-recent-body"></tbody>
     </table>
   </div>
+  <div class="card">
+    <div class="card-title">Failed Estimate Jobs (7d)</div>
+    <table>
+      <thead><tr><th scope="col">Time</th><th scope="col">Job ID</th><th scope="col">User</th><th scope="col">Error</th></tr></thead>
+      <tbody id="err-failed-jobs-body"></tbody>
+    </table>
+  </div>
 </div>
-
-<!-- ============ PLANS & PRICING (credit packs) ============ -->
 <div class="section" id="sec-plans">
   <div class="page-title">Plans &amp; Pricing</div>
   <p style="font-size:0.88rem;color:var(--muted);margin-bottom:14px;max-width:720px;line-height:1.6;">
@@ -1564,6 +1570,9 @@ async function loadErrorReport() {
     $('#err-success-rate').style.color = sr >= 95 ? 'var(--green)' : sr >= 80 ? 'var(--orange)' : 'var(--red)';
     $('#err-total-7d').textContent = d.total_estimates_7d.toLocaleString();
     $('#err-avg-latency').textContent = d.avg_latency_ms_7d ? d.avg_latency_ms_7d + ' ms' : '--';
+    const jobs24h = d.failed_jobs_24h || 0;
+    $('#err-jobs-24h').textContent = jobs24h;
+    $('#err-jobs-24h').style.color = jobs24h > 3 ? 'var(--red)' : jobs24h > 0 ? 'var(--orange)' : 'var(--green)';
     $('#err-by-type-body').innerHTML = d.error_by_type.length ? d.error_by_type.map(e => `<tr><td>${esc(e.type)}</td><td>${e.count}</td></tr>`).join('') : '<tr><td colspan="2" class="empty">No errors recorded</td></tr>';
     $('#err-recent-body').innerHTML = d.recent_errors.length ? d.recent_errors.map(e => `<tr>
       <td>${fmtDate(e.created_at)}</td>
@@ -1572,35 +1581,17 @@ async function loadErrorReport() {
       <td><span class="badge badge-red">${esc(e.error_type || 'unknown')}</span></td>
       <td style="max-width:400px;white-space:normal;font-size:0.8rem">${esc(e.error_message || '')}</td>
     </tr>`).join('') : '<tr><td colspan="5" class="empty">No recent provider errors</td></tr>';
-    loaded.errors = true;
-  } catch(e) {
-    console.error('Error report load failed:', e);
-    $('#error-stats-grid').innerHTML = '<div class="empty">Failed to load error report</div>';
-    toast('Failed to load error report', 'error');
-  }
-}
-
-// ── Error Report ──
-async function loadErrorReport() {
-  try {
-    const d = await apiFetch('/api/admin/error-report');
-    $('#err-failed-24h').textContent = d.failed_estimates_24h;
-    $('#err-failed-24h').style.color = d.failed_estimates_24h > 5 ? 'var(--red)' : d.failed_estimates_24h > 0 ? 'var(--orange)' : 'var(--green)';
-    $('#err-provider-24h').textContent = d.provider_failures_24h;
-    $('#err-provider-24h').style.color = d.provider_failures_24h > 10 ? 'var(--red)' : d.provider_failures_24h > 0 ? 'var(--orange)' : 'var(--green)';
-    const sr = d.success_rate_7d;
-    $('#err-success-rate').textContent = sr + '%';
-    $('#err-success-rate').style.color = sr >= 95 ? 'var(--green)' : sr >= 80 ? 'var(--orange)' : 'var(--red)';
-    $('#err-total-7d').textContent = d.total_estimates_7d.toLocaleString();
-    $('#err-avg-latency').textContent = d.avg_latency_ms_7d ? d.avg_latency_ms_7d + ' ms' : '--';
-    $('#err-by-type-body').innerHTML = d.error_by_type.length ? d.error_by_type.map(e => `<tr><td>${esc(e.type)}</td><td>${e.count}</td></tr>`).join('') : '<tr><td colspan="2" class="empty">No errors recorded</td></tr>';
-    $('#err-recent-body').innerHTML = d.recent_errors.length ? d.recent_errors.map(e => `<tr>
-      <td>${fmtDate(e.created_at)}</td>
-      <td>${esc(e.provider || '')}</td>
-      <td>${esc(e.model || '')}</td>
-      <td><span class="badge badge-red">${esc(e.error_type || 'unknown')}</span></td>
-      <td style="max-width:400px;white-space:normal;font-size:0.8rem">${esc(e.error_message || '')}</td>
-    </tr>`).join('') : '<tr><td colspan="5" class="empty">No recent provider errors</td></tr>';
+    const fj = d.recent_failed_jobs || [];
+    $('#err-failed-jobs-body').innerHTML = fj.length ? fj.map(j => {
+      let detail = j.error_message || '';
+      try { const p = JSON.parse(detail); detail = (p.type || '') + ': ' + (p.message || ''); } catch(e) {}
+      return `<tr>
+        <td>${fmtDate(j.created_at)}</td>
+        <td style="font-family:monospace;font-size:0.78rem">${esc(j.job_id || '').substring(0,12)}&hellip;</td>
+        <td>${j.user_id || ''}</td>
+        <td style="max-width:500px;white-space:normal;font-size:0.8rem">${esc(detail)}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="4" class="empty">No failed estimate jobs in the last 7 days</td></tr>';
     loaded.errors = true;
   } catch(e) {
     console.error('Error report load failed:', e);

@@ -11,7 +11,7 @@ import re
 from typing import Optional
 from sqlalchemy import select
 
-from services.vision_providers import VisionProvider, VisionResult, VisionProviderError, GeminiProvider, VeniceProvider, OpenRouterProvider
+from services.vision_providers import VisionProvider, VisionResult, VisionProviderError, NonVisionModelError, GeminiProvider, VeniceProvider, OpenRouterProvider
 from database import AsyncSessionLocal
 from models import ProviderHealthEvent, SiteConfig
 
@@ -99,6 +99,18 @@ async def _run_single(provider: VisionProvider, images: list, prompt: str) -> Op
             error_message=e.message[:1000],
             photos_count=len([b for b in images if isinstance(b, dict) and b.get('type') == 'image']),
             latency_ms=getattr(e, 'latency_ms', 0),
+        )
+        return None
+    except NonVisionModelError as e:
+        logger.error(f"[pipeline] {provider.name} model '{e.model_name}' does not support images: {e.raw_response[:200]}")
+        await _record_provider_event(
+            provider_name=provider.name,
+            model_name=e.model_name or provider.model_name,
+            status="failure",
+            error_type="NonVisionModel",
+            error_message=f"Model does not support image input: {e.raw_response[:300]}",
+            photos_count=len([b for b in images if isinstance(b, dict) and b.get('type') == 'image']),
+            latency_ms=0,
         )
         return None
     except Exception as e:

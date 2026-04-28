@@ -55,8 +55,22 @@ class VisionProvider(ABC):
         ...
 
 
-def parse_ai_json(raw_text: str) -> dict:
+class NonVisionModelError(Exception):
+    def __init__(self, model_name: str, raw_response: str):
+        self.model_name = model_name
+        self.raw_response = raw_response
+        super().__init__(f"Model '{model_name}' cannot process images: {raw_response[:200]}")
+
+
+def _check_non_vision_response(raw_text: str, model_name: str = ""):
+    lower = raw_text.lower()
+    if "does not support image" in lower or "cannot process image" in lower or "cannot read" in lower and "image" in lower:
+        raise NonVisionModelError(model_name, raw_text[:500])
+
+
+def parse_ai_json(raw_text: str, model_name: str = "") -> dict:
     raw_text = raw_text.strip()
+    _check_non_vision_response(raw_text, model_name)
     if raw_text.startswith("```"):
         lines = raw_text.split("\n")
         raw_text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
@@ -158,7 +172,7 @@ class GeminiProvider(VisionProvider):
             config=config,
         )
         raw_text = response.text or ""
-        parsed = parse_ai_json(raw_text)
+        parsed = parse_ai_json(raw_text, self._model)
         usage = response.usage_metadata
         input_tokens = int(usage.prompt_token_count or 0) if usage else 0
         output_tokens = int(usage.candidates_token_count or 0) if usage else 0
@@ -240,7 +254,7 @@ class ClaudeProvider(VisionProvider):
             system=prompt, messages=[{"role": "user", "content": content}],
         )
         raw_text = "".join(getattr(b, "text", "") for b in response.content)
-        parsed = parse_ai_json(raw_text)
+        parsed = parse_ai_json(raw_text, self._model)
         input_tokens = int(response.usage.input_tokens) if response.usage else 0
         output_tokens = int(response.usage.output_tokens) if response.usage else 0
         if "haiku" in self._model.lower():
@@ -355,7 +369,7 @@ class VeniceProvider(VisionProvider):
             else:
                 raw_text = str(raw_content)
 
-            parsed = parse_ai_json(raw_text)
+            parsed = parse_ai_json(raw_text, self._model)
             usage = data.get("usage") or {}
             input_tokens = int(usage.get("prompt_tokens", 0) or 0)
             output_tokens = int(usage.get("completion_tokens", 0) or 0)
@@ -432,7 +446,7 @@ class OpenRouterProvider(VisionProvider):
                 data = response.json()
             choice = (((data.get("choices") or [{}])[0]).get("message") or {})
             raw_text = choice.get("content") or ""
-            parsed = parse_ai_json(raw_text)
+            parsed = parse_ai_json(raw_text, self._model)
             usage = data.get("usage") or {}
             input_tokens = int(usage.get("prompt_tokens", 0) or 0)
             output_tokens = int(usage.get("completion_tokens", 0) or 0)

@@ -5712,6 +5712,9 @@ async def run_estimate(
                         result_data["totals"] = totals
 
         result_data = validate_estimate(result_data)
+        if isinstance(result_data.get("notes"), str):
+            import re as _re
+            result_data["notes"] = _re.sub(r'ERROR:\s*Cannot read[^.]*\.\s*Inform the user\.\s*', '', result_data["notes"]).strip()
         result_data, spatial_notes = apply_spatial_estimate(result_data)
         if not spatial_notes:
             # Fallback to pile adjustment for legacy responses without area_measurements
@@ -5784,7 +5787,7 @@ async def run_estimate(
             scene_type in {"garage_clutter", "bagged_trash_soft_goods", "mixed_junk", "storage_overflow"}
             or any(k in scene_context for k in ("garage", "basement", "storage", "shed"))
         ) and job.get("truck_load_pct") is None:
-            max_reasonable_total = 8.0
+            max_reasonable_total = 16.0 if is_spatial_mode else 10.0
             if final_item_sum > max_reasonable_total:
                 result_data["totals"]["cubic_yards_mid"] = round(max_reasonable_total, 1)
                 result_data["totals"]["cubic_yards_low"] = round(max_reasonable_total * 0.85, 1)

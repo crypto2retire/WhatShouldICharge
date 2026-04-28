@@ -4875,7 +4875,7 @@ async def _periodic_cleanup():
 async def cleanup_expired_jobs():
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     expired = [k for k, v in estimate_jobs.items()
-               if v.get("status") in ("error", "retry_needed")
+               if v.get("status") in ("retry_needed",)
                or (v.get("status") not in ("analyzing", "looking_up")
                    and (now - v.get("created_at", now)).total_seconds() > JOB_TTL_SECONDS)]
     for k in expired:
@@ -4883,7 +4883,6 @@ async def cleanup_expired_jobs():
         del estimate_jobs[k]
         if job.get("status") not in ("error",):
             asyncio.create_task(_delete_job_from_db(k))
-        # error jobs stay in DB for admin visibility; purged after 7 days below
     await _purge_old_error_jobs(days=7)
     asyncio.create_task(_cleanup_old_rate_limit_events())
 

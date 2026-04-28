@@ -672,10 +672,10 @@ def apply_pile_adjustment(result_data: dict) -> tuple[dict, list[str]]:
 
     notes: list[str] = []
     pile_dims = pile.get("width_in", 0), pile.get("depth_in", 0), pile.get("height_in", 0)
-    pf = float(pile.get("packing_factor", 0.65) or 0.65)
+    pf = 1.0
     notes.append(
-        f"Pile geometry ({int(pile_dims[0])}x{int(pile_dims[1])}x{int(pile_dims[2])} in, "
-        f"packing {int(pf * 100)}%) suggests ~{pile_cy:.1f} CY, but only {item_sum:.1f} CY "
+        f"Pile geometry ({int(pile_dims[0])}x{int(pile_dims[1])}x{int(pile_dims[2])} in) "
+        f"suggests ~{pile_cy:.1f} CY, but only {item_sum:.1f} CY "
         f"of items are visible. Volume adjusted to {blended:.1f} CY to account for hidden "
         f"items behind the front layer."
     )
@@ -711,7 +711,7 @@ def apply_pile_adjustment(result_data: dict) -> tuple[dict, list[str]]:
 def apply_spatial_estimate(result_data: dict) -> tuple[dict, list[str]]:
     """Compute total CY from area_measurements (spatial-first approach).
 
-    Each area has width_in, depth_in, height_in, packing_factor, estimated_cy.
+    Each area has width_in, depth_in, height_in, estimated_cy.
     The total is the sum of all area estimated_cy values.
 
     If area_measurements is absent or empty, falls back to item-sum behavior
@@ -738,9 +738,8 @@ def apply_spatial_estimate(result_data: dict) -> tuple[dict, list[str]]:
         w = area.get("width_in", 0)
         d = area.get("depth_in", 0)
         h = area.get("height_in", 0)
-        pf = float(area.get("packing_factor", 0.65) or 0.65)
         area_details.append(
-            f"{name}: {int(w)}x{int(d)}x{int(h)} in @ {int(pf*100)}% = {cy:.2f} CY"
+            f"{name}: {int(w)}x{int(d)}x{int(h)} in = {cy:.2f} CY"
         )
 
     if total_cy <= 0:

@@ -41,28 +41,19 @@ STEP 2 — MEASURE KEY ITEMS FIRST, THEN THE AREA
 1. Use your scale references to estimate dimensions of the 3-5 largest or most visible items (couches, appliances, furniture, large boxes, visible tire piles, etc.)
 2. For each area, estimate the overall bounding box of all staged items
 3. Verify: does the bounding box make sense relative to the individual items you measured? If not, use item measurements to correct the bounding box.
-4. Apply a packing factor to the bounding box to account for air gaps.
 
 If items are spread across the floor in a single layer, depth might be 12-24in (just the item height). If items are stacked or piled, include the full stack height.
 
-STEP 3 — APPLY PACKING FACTOR
-Convert to cubic yards: (width_in × depth_in × height_in) / 46656
-Then multiply by packing factor:
-- 0.45: Very loose/soft (clothing, pillows, empty boxes — lots of air)
-- 0.55: Loose mixed (bags, soft goods, light cardboard)
-- 0.65: General mixed junk (furniture, boxes, some air gaps)
-- 0.75: Medium density (appliances, tools, moderate stacking)
-- 0.85: Dense/flat (shingles, plywood sheets, tightly packed boxes)
-- 0.90: Near-solid (dirt, gravel, concrete, construction debris)
+Convert to cubic yards: (width_in × depth_in × height_in) / 46656.
+The resulting CY is the loaded truck volume — items fill the truck roughly the same as they appear in the pile. Do NOT apply any reduction factor.
 
-The packing factor accounts for air gaps between items when loaded into a truck.
 Known item volumes to anchor your estimate:
 - 5-gallon bucket: 0.025 CY | Wooden pallet: 0.15 CY | Standard moving box (18x18x16): 0.15 CY
 - Standard trash bag (full): 0.03 CY | Mattress (twin): 0.15 CY | Mattress (queen/king): 0.35 CY
 - Standard couch: 0.25-0.6 CY | Standard refrigerator: 0.3-0.6 CY | Washing machine / dryer: 0.15-0.3 CY
 - Standard tire: 0.08 CY | Bicycle: 0.15 CY | 32-gallon trash can: 0.15 CY
 
-STEP 4 — TAG KEY ITEMS (for pricing, NOT for volume)
+STEP 3 — TAG KEY ITEMS (for pricing, NOT for volume)
 Identify only items that matter for pricing rules and customer display:
 - is_special: true for regulated disposal items (TVs, monitors, mattresses, box springs, tires, propane tanks, refrigerators/freezers, AC units, paint, chemicals, e-waste, batteries, fluorescent bulbs)
 - Also tag any large furniture or appliances for customer visibility
@@ -90,7 +81,7 @@ Return this EXACT JSON structure:
     {"name": "reference object used", "known_dimensions": "actual size", "photo_number": 1}
   ],
   "area_measurements": [
-    {"area_name": "garage", "width_in": 0, "depth_in": 0, "height_in": 0, "packing_factor": 0.65, "estimated_cy": 0.0, "photo_numbers": [1,2]}
+    {"area_name": "garage", "width_in": 0, "depth_in": 0, "height_in": 0, "estimated_cy": 0.0, "photo_numbers": [1,2]}
   ],
   "items": [
     {"name": "item name", "quantity": 1, "is_special": false, "photo_numbers": [1]}
@@ -122,7 +113,7 @@ You will receive:
 
 {{AREA_MEASUREMENTS}}
 
-Your job is to verify and correct the spatial measurements (dimensions and packing factors) for each area. Do NOT add new areas. Do NOT re-identify objects — only verify the existing measurements.
+Your job is to verify and correct the spatial measurements (dimensions) for each area. Do NOT add new areas. Do NOT re-identify objects — only verify the existing measurements.
 
 SIZING METHOD:
 1. USE REFERENCE OBJECTS FOR SCALE. Look for these FIXED background references:
@@ -138,13 +129,11 @@ SIZING METHOD:
 2. VERIFY SPATIAL MEASUREMENTS FROM PRIMARY ESTIMATE.
    - Check that the primary estimator's scale references are reasonable.
    - Verify area dimensions (width_in, depth_in, height_in) for each area.
-   - Check that packing factors match the visible material density.
-   - Recalculate: (width_in × depth_in × height_in) / 46656 × packing_factor = estimated_cy.
+   - Recalculate: (width_in × depth_in × height_in) / 46656 = estimated_cy.
 
 3. IF AN AREA MEASUREMENT LOOKS WRONG:
    - Check scale: Did the primary use the right reference object size?
    - Check dimensions: Is the bounding box too tight or too loose?
-   - Check packing factor: Is the material denser or looser than the primary thought?
    - Provide corrected values in your response.
 
 4. DO NOT CHANGE THE TOTAL by adding or removing areas. Only correct existing area measurements.
@@ -163,7 +152,7 @@ Return this EXACT JSON structure:
     {"name": "reference object used", "known_dimensions": "actual size", "photo_number": 1}
   ],
   "area_measurements": [
-    {"area_name": "garage", "width_in": 0, "depth_in": 0, "height_in": 0, "packing_factor": 0.65, "estimated_cy": 0.0, "photo_numbers": [1,2]}
+    {"area_name": "garage", "width_in": 0, "depth_in": 0, "height_in": 0, "estimated_cy": 0.0, "photo_numbers": [1,2]}
   ],
   "items": [
     {"name": "item name", "quantity": 1, "is_special": false, "photo_numbers": [1]}

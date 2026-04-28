@@ -63,8 +63,13 @@ class NonVisionModelError(Exception):
 
 
 def _check_non_vision_response(raw_text: str, model_name: str = ""):
-    lower = raw_text.lower()
-    if "does not support image" in lower or "cannot process image" in lower or "cannot read" in lower and "image" in lower:
+    stripped = raw_text.strip()
+    if stripped.startswith("{") or stripped.startswith("[") or stripped.startswith("```"):
+        return
+    lower = stripped.lower()
+    if "does not support image" in lower or "cannot process image" in lower:
+        raise NonVisionModelError(model_name, raw_text[:500])
+    if "cannot read" in lower and "image input" in lower:
         raise NonVisionModelError(model_name, raw_text[:500])
 
 
@@ -153,6 +158,8 @@ class GeminiProvider(VisionProvider):
             result = await loop.run_in_executor(None, self._sync_call, client, contents)
             result.latency_ms = int((time.perf_counter() - started) * 1000)
             return result
+        except NonVisionModelError:
+            raise
         except Exception as e:
             err = VisionProviderError(self.name, str(e))
             err.model_name = self._model
@@ -243,6 +250,8 @@ class ClaudeProvider(VisionProvider):
             result = await loop.run_in_executor(None, self._sync_call, client, prompt, content)
             result.latency_ms = int((time.perf_counter() - started) * 1000)
             return result
+        except NonVisionModelError:
+            raise
         except Exception as e:
             err = VisionProviderError(self.name, str(e))
             err.model_name = self._model
@@ -386,6 +395,8 @@ class VeniceProvider(VisionProvider):
             )
             result.latency_ms = int((time.perf_counter() - started) * 1000)
             return result
+        except NonVisionModelError:
+            raise
         except Exception as e:
             err = VisionProviderError(self.name, str(e))
             err.model_name = self._model
@@ -458,6 +469,8 @@ class OpenRouterProvider(VisionProvider):
             )
             result.latency_ms = int((time.perf_counter() - started) * 1000)
             return result
+        except NonVisionModelError:
+            raise
         except Exception as e:
             err = VisionProviderError(self.name, str(e))
             err.model_name = self._model

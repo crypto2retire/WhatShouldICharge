@@ -20,25 +20,28 @@ INDUSTRIES = {
 YOUR PRIMARY TASK: SPATIAL MEASUREMENT
 For EACH distinct area or room shown in the photos (garage, living room, driveway, etc.), estimate the overall dimensions of ALL staged items in that area combined.
 
-STEP 1 — FIND SCALE REFERENCES
-Look for 2-3 objects with known real-world dimensions to establish scale:
+STEP 1 — FIND SCALE REFERENCES (MOST IMPORTANT)
+Look for 3-4 objects with known real-world dimensions to establish accurate scale:
 - Standard interior door frame: 80inH x 36inW
 - Standard kitchen counter: 36inH
-- Standard washing machine: ~27inW x 27inD x 39inH
-- Standard refrigerator: ~36inW x 30inD x 70inH
 - Standard 5-gallon bucket: 14.5inH x 12in diameter
-- Adult human: ~66inH
-- Wooden pallet: 48in x 40in x 6in
+- Standard wooden pallet: 48in x 40in x 6in
 - Cinder block: 16x8x8 in
+- Electric outlet cover: 4.5inH x 2.75inW
+- Standard soda can: 4.83inH x 2.13in diameter
 - Chain-link fence: 48in (4ft) or 72in (6ft) tall
+- Exposed framing studs: 16in or 24in spacing
+- Exposed brick: 8x2.25x3.75 in per brick
+- Standard interior door: 80inH x 36inW
+- Adult human: ~66inH
 
-Use these to determine pixels-to-inches conversion. A staged appliance or piece of furniture CAN be used as a scale reference AND tagged as an item.
+USE THESE REFERENCES to determine pixels-to-inches conversion for the entire photo. A staged appliance or furniture item CAN be used as both a scale reference AND an item to tag.
 
-STEP 2 — MEASURE EACH AREA
-For each area/room, estimate the overall bounding box of ALL staged items:
-- width_in:  left-to-right span of all items
-- depth_in:  front-to-back depth (how far items extend from the wall/door)
-- height_in: tallest point of any item in the area
+STEP 2 — MEASURE KEY ITEMS FIRST, THEN THE AREA
+1. Use your scale references to estimate dimensions of the 3-5 largest or most visible items (couches, appliances, furniture, large boxes, visible tire piles, etc.)
+2. For each area, estimate the overall bounding box of all staged items
+3. Verify: does the bounding box make sense relative to the individual items you measured? If not, use item measurements to correct the bounding box.
+4. Apply a packing factor to the bounding box to account for air gaps.
 
 If items are spread across the floor in a single layer, depth might be 12-24in (just the item height). If items are stacked or piled, include the full stack height.
 
@@ -53,6 +56,11 @@ Then multiply by packing factor:
 - 0.90: Near-solid (dirt, gravel, concrete, construction debris)
 
 The packing factor accounts for air gaps between items when loaded into a truck.
+Known item volumes to anchor your estimate:
+- 5-gallon bucket: 0.025 CY | Wooden pallet: 0.15 CY | Standard moving box (18x18x16): 0.15 CY
+- Standard trash bag (full): 0.03 CY | Mattress (twin): 0.15 CY | Mattress (queen/king): 0.35 CY
+- Standard couch: 0.25-0.6 CY | Standard refrigerator: 0.3-0.6 CY | Washing machine / dryer: 0.15-0.3 CY
+- Standard tire: 0.08 CY | Bicycle: 0.15 CY | 32-gallon trash can: 0.15 CY
 
 STEP 4 — TAG KEY ITEMS (for pricing, NOT for volume)
 Identify only items that matter for pricing rules and customer display:
@@ -99,8 +107,9 @@ Return this EXACT JSON structure:
 }
 
 CRITICAL RULES:
-- Total CY comes from summing area_measurements ONLY. Items do NOT contribute to volume.
-- Be thorough with scale references — bad scale = bad total.
+- Total CY comes from summing area_measurements. Items are for tagging/pricing, but you MAY include approximate cubic_yards on key items as a cross-check.
+- Be thorough with scale references — bad scale = bad total. Use the 3-4 most reliable references to calibrate the entire photo.
+- Cross-check: if your area bounding box gives 10 CY but your individual item estimates sum to 3 CY, your bounding box is probably too large.
 - When in doubt about dimensions, be slightly conservative (mid-point), not aggressive.
 - Do NOT label as hoarding, whole-house, or construction debris unless clearly supported.
 - Keep your response concise. Omit null fields entirely.""",

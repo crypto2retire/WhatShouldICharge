@@ -306,17 +306,13 @@ def _lookup_item_bounds(norm_name: str) -> Optional[tuple[float, float]]:
     return None
 
 
-def _apply_item_bounds(items: list) -> int:
-    """Apply reference table bounds as a FLOOR only — never cap the AI's estimate downward.
+def _apply_item_bounds(items: list) -> tuple[int, int]:
+    """Apply reference table bounds — floor lifts underestimates, ceiling caps overestimates above 3x max.
 
-    Loaded truck volume is always >= physical geometric volume due to air gaps,
-    packaging, and handling.  The AI estimates loaded volume.  If the AI's estimate
-    falls below the reference minimum, lift it.  If it's above the reference maximum,
-    trust the AI — it may be seeing something the reference table doesn't account for.
-
-    Returns count of items that were lifted.
+    Returns (lifted_count, capped_count).
     """
     lifted = 0
+    capped = 0
     for item in items:
         if not isinstance(item, dict):
             continue
@@ -331,9 +327,48 @@ def _apply_item_bounds(items: list) -> int:
             item["cubic_yards"] = round(min_cy, 4)
             item["volume_reference_clamped"] = True
             lifted += 1
-        # Do NOT cap items that exceed max_cy — the AI's loaded-volume estimate
-        # may be correct even when above the reference table maximum.
-    return lifted
+        elif ai_cy > max_cy * 3.0:
+            logger.info("[item_bounds] Capping '%s' from %.3f to ceiling %.3f CY (3x max)", name, ai_cy, max_cy * 3.0)
+            item["cubic_yards"] = round(max_cy * 3.0, 4)
+            item["volume_reference_clamped"] = True
+            capped += 1
+    return lifted, capped
+
+
+def _compute_item_bounds_sum(items: list) -> tuple[float, float, int]:
+    """Sum per-item min/max CY from lookup tables. Returns (min_sum, max_sum, item_count)."""
+    min_sum = 0.0
+    max_sum = 0.0
+    count = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = _norm(str(item.get("name", "")))
+        bounds = _lookup_item_bounds(name)
+        if bounds:
+            qty = max(1, int(item.get("quantity", 1) or 1))
+            min_sum += bounds[0] * qty
+            max_sum += bounds[1] * qty
+            count += 1
+        else:
+            # Unrecognized items use a small default range
+            qty = max(1, int(item.get("quantity", 1) or 1))
+            min_sum += 0.1 * qty
+            max_sum += 3.0 * qty
+            count += 1
+    return min_sum, max_sum, count
+
+
+def _cleanup_phantom_misc(items: list) -> None:
+    """Remove misc items when they dominate the item list by count."""
+    non_misc = [it for it in items if isinstance(it, dict)
+                and "misc" not in _norm(str(it.get("name", "")))]
+    misc = [it for it in items if isinstance(it, dict)
+            and "misc" in _norm(str(it.get("name", "")))]
+    if len(misc) > len(non_misc) and len(non_misc) > 0:
+        for mi in misc:
+            if mi in items:
+                items.remove(mi)
 
 
 def _parse_spatial_total_cy(notes: str) -> Optional[float]:
@@ -411,19 +446,31 @@ def validate_estimate(result_data: dict) -> dict:
                 total_cy += float(area.get("estimated_cy", 0) or 0)
         if total_cy > 0:
             _sync_totals_from_target(out, round(total_cy, 2))
-            # Still clean up phantom misc items for tag cleanliness
             items = out.get("items", [])
             if isinstance(items, list):
-                non_misc = [it for it in items if isinstance(it, dict)
-                            and "misc" not in _norm(str(it.get("name", "")))]
-                misc = [it for it in items if isinstance(it, dict)
-                        and "misc" in _norm(str(it.get("name", "")))]
-                # In spatial mode items have no cubic_yards, so phantom check
-                # uses count instead of volume
-                if len(misc) > len(non_misc) and len(non_misc) > 0:
-                    for mi in misc:
-                        if mi in items:
-                            items.remove(mi)
+                _cleanup_phantom_misc(items)
+
+                # Cross-validate: build per-item CY from lookup tables + bounds
+                item_min_sum, item_max_sum, item_count = _compute_item_bounds_sum(items)
+                if item_count > 0 and item_min_sum > 0:
+                    # If spatial is wildly outside item bounds, flag it
+                    if total_cy < item_min_sum * 0.5:
+                        confidence_notes = out.setdefault("notes", "")
+                        out["notes"] = (str(confidence_notes) + "\n" if confidence_notes else "") + \
+                            f"Warning: spatial estimate ({total_cy:.1f} CY) is below item-based minimum ({item_min_sum:.1f} CY). Items may have been undercounted."
+                    elif total_cy > item_max_sum * 2.0 and item_max_sum > 0:
+                        confidence_notes = out.setdefault("notes", "")
+                        out["notes"] = (str(confidence_notes) + "\n" if confidence_notes else "") + \
+                            f"Warning: spatial estimate ({total_cy:.1f} CY) is above item-based maximum ({item_max_sum:.1f} CY). Bounding boxes may be over-generous."
+
+                # Run per-item bounds on spatial items (injects CY for validation)
+                for item in items:
+                    if isinstance(item, dict) and not item.get("cubic_yards"):
+                        name = _norm(str(item.get("name", "")))
+                        bounds = _lookup_item_bounds(name)
+                        if bounds:
+                            item["cubic_yards"] = round(bounds[1], 4)  # use max as placeholder
+
             return out
 
     # ── Legacy branch: item-sum driven (backward compatibility) ──

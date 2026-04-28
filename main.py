@@ -2795,16 +2795,32 @@ def evaluate_geometry_sanity(
     items = result_data.get("items", []) or []
     item_sum = 0.0
     bulky_count = 0
+    has_item_cy = False
     for item in items:
         try:
             item_cy = float(item.get("cubic_yards") or 0.0) * max(1, int(item.get("quantity") or 1))
         except (TypeError, ValueError):
             item_cy = 0.0
+        if item_cy > 0:
+            has_item_cy = True
         item_sum += max(0.0, item_cy)
         if item_cy >= 1.0:
             bulky_count += 1
 
+    # In spatial mode, items have no CY — compute from bounds table instead
+    if not has_item_cy and items:
+        from services.volume_lookup import _compute_item_bounds_sum
+        bounds_min, bounds_max, _ = _compute_item_bounds_sum(items)
+        if bounds_max > 0:
+            item_sum = bounds_max
+            has_item_cy = True
+
     spatial_total = _parse_spatial_total_from_notes(result_data.get("notes", ""))
+    # Also check area_measurements for spatial total
+    areas = result_data.get("area_measurements") or []
+    area_total = sum(a.get("estimated_cy", 0) for a in areas if isinstance(a, dict)) if isinstance(areas, list) else 0
+    if area_total > 0 and (not spatial_total or area_total > spatial_total):
+        spatial_total = area_total
     truck_total = None
     if truck_load_pct is not None and truck_capacity_cy:
         truck_total = round((truck_load_pct / 100.0) * truck_capacity_cy, 2)

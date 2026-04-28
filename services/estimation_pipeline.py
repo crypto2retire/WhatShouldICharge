@@ -412,7 +412,7 @@ def _merge_spatial_results(primary: dict, secondary: dict, valid: list) -> dict:
         if p_area and s_area:
             p_cy = float(p_area.get("estimated_cy", 0) or 0)
             s_cy = float(s_area.get("estimated_cy", 0) or 0)
-            merged_cy = max(p_cy, s_cy)
+            merged_cy = round((p_cy + s_cy) / 2.0, 2) if p_cy > 0 and s_cy > 0 else max(p_cy, s_cy)
             if p_cy > 0 and s_cy > 0:
                 variance = abs(p_cy - s_cy) / max(p_cy, s_cy)
                 if variance > VARIANCE_FLAG_THRESHOLD:
@@ -490,7 +490,7 @@ def _merge_legacy_results(primary: dict, secondary: dict, valid: list) -> dict:
         if p_item and s_item:
             p_cy = float(p_item.get("cubic_yards", 0))
             s_cy = float(s_item.get("cubic_yards", 0))
-            merged_cy = max(p_cy, s_cy)
+            merged_cy = round((p_cy + s_cy) / 2.0, 2) if p_cy > 0 and s_cy > 0 else max(p_cy, s_cy)
             if p_cy > 0 and s_cy > 0:
                 variance = abs(p_cy - s_cy) / max(p_cy, s_cy)
                 if variance > VARIANCE_FLAG_THRESHOLD:
@@ -828,6 +828,7 @@ async def run_batched_estimate(image_content: list, extraction_prompt: str) -> t
     )
 
     all_items: list[dict] = []
+    all_areas: list[dict] = []
     batch_count = 0
     for res in batch_results:
         if isinstance(res, Exception):
@@ -837,20 +838,30 @@ async def run_batched_estimate(image_content: list, extraction_prompt: str) -> t
             items = res.get("items", [])
             if isinstance(items, list):
                 all_items.extend(items)
+            areas = res.get("area_measurements", [])
+            if isinstance(areas, list):
+                for area in areas:
+                    if isinstance(area, dict) and not isinstance(area.get("area_name"), str):
+                        continue
+                    all_areas.append(area)
         batch_count += 1
 
-    if not all_items:
+    if not all_items and not all_areas:
         return {"items": [], "totals": {"cubic_yards_mid": 0, "cubic_yards_low": 0, "cubic_yards_high": 0}}, {"batched": True, "batches_succeeded": 0}
 
     # Cross-batch dedup
     final_items = _cross_batch_deduplicate(all_items)
     cross_dedup = len(all_items) - len(final_items)
 
-    # Sum totals
-    total_cy = sum(
-        float(it.get("cubic_yards", 0) or 0) * max(1, int(it.get("quantity", 1) or 1))
-        for it in final_items
-    )
+    # Total from area measurements if present, else item CY values
+    area_total = sum(a.get("estimated_cy", 0) for a in all_areas if isinstance(a, dict))
+    if area_total > 0:
+        total_cy = round(area_total, 2)
+    else:
+        total_cy = sum(
+            float(it.get("cubic_yards", 0) or 0) * max(1, int(it.get("quantity", 1) or 1))
+            for it in final_items
+        )
     merged = {
         "items": final_items,
         "totals": {

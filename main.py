@@ -4949,6 +4949,35 @@ async def _delete_job_from_db(job_id: str):
         logger.error(f"[_delete_job_from_db] Failed to delete job {job_id}: {type(e).__name__}: {e}")
 
 
+async def _load_job_from_db(job_id: str, user_id: int):
+    try:
+        async with AsyncSessionLocal() as db:
+            from models import Job
+            result = await db.execute(select(Job).where(Job.id == job_id))
+            row = result.scalar_one_or_none()
+            if not row or row.user_id != user_id:
+                return None
+            resp = {"status": row.status, "message": row.error_message or ""}
+            if row.status == "error":
+                resp["error"] = row.error_message or "An error occurred."
+                try:
+                    detail = json.loads(row.error_message or "{}")
+                    if isinstance(detail, dict) and "type" in detail:
+                        resp["error"] = detail.get("message", row.error_message or "An error occurred.")
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            elif row.status == "complete" and row.result_json:
+                try:
+                    resp["result"] = json.loads(row.result_json)
+                except (json.JSONDecodeError, TypeError):
+                    resp["error"] = "Result could not be loaded."
+                    resp["status"] = "error"
+            return resp
+    except Exception as e:
+        logger.error(f"[_load_job_from_db] Failed for job {job_id}: {type(e).__name__}: {e}")
+        return None
+
+
 def _build_model_eval_comparisons(job: dict) -> dict:
     comparisons = {}
     baseline_model = "claude-sonnet-4-20250514"
@@ -6282,7 +6311,10 @@ async def estimate_status(request: Request, job_id: str):
     user = await require_user(request)
     job = estimate_jobs.get(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found.")
+        job_db = await _load_job_from_db(job_id, user.id)
+        if not job_db:
+            raise HTTPException(status_code=404, detail="Job not found.")
+        return job_db
     if job["user_id"] != user.id:
         raise HTTPException(status_code=403, detail="Not authorized.")
 

@@ -5967,15 +5967,10 @@ async def run_estimate(
                 )
             else:
                 review_reason_flags.append("model_disagreement_no_overlap")
-                confidence_bucket = "low"
                 result_data["confidence"] = min(int(result_data.get("confidence", 70) or 70), 70)
-                price_low = min(primary_low, verifier_low)
-                price_high = max(primary_high, verifier_high)
-                if allow_manual_review:
-                    review_status = "needs_review"
-                    confidence_reasons.append("Two-model check did not overlap; estimate routed to manual review.")
-                else:
-                    confidence_reasons.append("Two-model check did not overlap; showing low-confidence range and clarification prompts.")
+                price_low = primary_low
+                price_high = primary_high
+                confidence_reasons.append("Two-model check did not overlap; using primary model range.")
         else:
             # Fallback to prior widening when verifier output is unusable.
             price_low, price_high, fallback_widened = widen_price_range_for_confidence(
@@ -6030,6 +6025,13 @@ async def run_estimate(
                         result_data["notes"] = (existing_notes + "\n\n" if existing_notes else "") + clarification_note
                 if "Low confidence estimate shown; answer clarification questions and retake photos if needed." not in confidence_reasons:
                     confidence_reasons.append("Low confidence estimate shown; answer clarification questions and retake photos if needed.")
+
+        # Final price range clamp: never exceed 20% spread from mid
+        price_mid = (price_low + price_high) / 2.0
+        max_half = price_mid * 0.10
+        if (price_high - price_low) / 2.0 > max_half:
+            price_low = max(min_charge, round(price_mid - max_half, 2))
+            price_high = round(price_mid + max_half, 2)
 
         # Serialize stored photos for DB persistence
         stored_photos = job.get("stored_photos", [])

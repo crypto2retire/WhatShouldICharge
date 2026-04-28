@@ -5,8 +5,8 @@ def calculate_price(result_data: dict, rate_low=35.0, rate_high=40.0, rate_premi
     items = result_data.get("items", [])
 
     cy_mid = float(totals.get("cubic_yards_mid", totals.get("cubic_yards_low", 2.0)))
-    cy_low = float(totals.get("cubic_yards_low", cy_mid * 0.8))
-    cy_high = float(totals.get("cubic_yards_high", cy_mid * 1.2))
+    cy_low = float(totals.get("cubic_yards_low", cy_mid * 0.9))
+    cy_high = float(totals.get("cubic_yards_high", cy_mid * 1.1))
 
     is_premium = (
         job_type in ("premium", "hoarder", "truck_load")
@@ -42,10 +42,8 @@ def calculate_price(result_data: dict, rate_low=35.0, rate_high=40.0, rate_premi
     price_low = max(price_low, min_charge)
     price_high = max(price_high, min_charge)
 
-    if price_high <= price_low:
-        price_high = round(price_low * 1.5, 2)
-    elif price_high < price_low * 1.15:
-        price_high = round(price_low * 1.5, 2)
+    if price_high < price_low:
+        price_high = round(price_low * 1.15, 2)
 
     special_items = [
         {"name": item.get("name", "Unknown"), "quantity": int(item.get("quantity", 1))}

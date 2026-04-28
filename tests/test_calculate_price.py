@@ -35,7 +35,7 @@ class TestCalculatePriceBasic:
             min_charge=75.0,
         )
         assert price_low == 75.0
-        assert price_high == 112.5  # min charge widens: 75 * 1.5
+        assert price_high == 75.0  # both clamped to min, no forced 1.5x spread
         assert min_applied is True
 
     def test_premium_job_uses_premium_rate(self):
@@ -102,7 +102,7 @@ class TestCalculatePriceBasic:
         assert special_items[0]["quantity"] == 2
         assert special_items[1]["quantity"] == 5
 
-    def test_narrow_range_widened(self):
+    def test_narrow_range_uses_actual_values(self):
         price_low, price_high, _, _, _ = calculate_price(
             {
                 "job_type": "standard",
@@ -114,7 +114,8 @@ class TestCalculatePriceBasic:
             rate_high=40.0,
             min_charge=75.0,
         )
-        assert price_high > price_low * 1.14
+        assert price_low == 75.0
+        assert price_high == 80.4
 
     def test_market_rates_blended(self):
         price_low, price_high, _, _, _ = calculate_price(

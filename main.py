@@ -5474,7 +5474,7 @@ def _user_friendly_error(err_type: str, err_msg: str) -> str:
         return "Our AI service is currently unable to process images. We're working on it — please try again in a few minutes."
     if "timeout" in msg_lower or "timed out" in msg_lower:
         return "The AI service took too long to respond. Please try again."
-    if "json" in msg_lower or "decode" in msg_lower or "parse" in msg_lower:
+    if "json" in msg_lower or "decode" in msg_lower or "parse" in msg_lower or "did not match the expected pattern" in msg_lower:
         return "The AI returned an unreadable response. We're aware of the issue — please try again."
     if "api_key" in msg_lower or "401" in msg_lower or "unauthorized" in msg_lower:
         return "The AI service is temporarily unavailable. Please try again in a few minutes."
@@ -5746,6 +5746,8 @@ async def run_estimate(
             notes = result_data["notes"]
             notes = _re.sub(r'ERROR:\s*Cannot read[\s\S]*?Inform the user\.\s*', '', notes)
             notes = _re.sub(r'ERROR:.*?(?:\n|$)', '', notes)
+            notes = _re.sub(r'The string did not match the expected pattern\.?\s*', '', notes)
+            notes = _re.sub(r'\[Error\].*?(?:\n|$)', '', notes)
             result_data["notes"] = notes.strip()
         result_data, spatial_notes = apply_spatial_estimate(result_data)
         if not spatial_notes:

@@ -295,7 +295,9 @@ def _merge_two_items(item_a: dict, item_b: dict) -> dict:
         if item_b.get(flag):
             merged[flag] = True
 
-    merged["quantity"] = 1
+    qty_a = int(item_a.get("quantity", 1) or 1)
+    qty_b = int(item_b.get("quantity", 1) or 1)
+    merged["quantity"] = qty_a + qty_b
     merged["fuzzy_deduped"] = True
     return merged
 

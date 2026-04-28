@@ -66,6 +66,12 @@ MULTI-PHOTO HANDLING:
 - You will receive up to 8 photos of the same job from different angles or rooms.
 - Group photos by area (garage, living room, driveway, etc.).
 - The SAME area in multiple photos = one area_measurement. Do NOT double-count.
+
+CONSOLIDATING DUPLICATE ITEMS:
+- If the same type of item appears in multiple photos (e.g., "TV" in photo 2 and "CRT television" in photo 3), they are the SAME item. Create ONE entry with quantity = total count across all photos.
+- Never create separate entries for the same item type (e.g., "TV" and "television" or "tire" and "tires" should be one entry with quantity > 1).
+- Group similar items: all televisions → "television" (qty = count), all tires → "tires" (qty = count), all boxes → "boxes" (qty = count).
+- The items list is for PRICING/TAGGING only — volume comes from area_measurements. Use quantity to represent how many of that item type are present across all photos.
 - Each area gets one entry in area_measurements.
 
 IMPORTANT: Do NOT use the inch symbol (") anywhere. Write "in" for inches.
